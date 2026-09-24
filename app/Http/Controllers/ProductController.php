@@ -181,10 +181,12 @@ class ProductController extends Controller
         try {
             // Soft delete: chỉ đánh dấu deleted_at, KHÔNG xóa ảnh/variants
             // để có thể khôi phục sản phẩm sau này (xem restore()).
+            // Không có chức năng xóa vĩnh viễn: order_items.product_id có FK
+            // cascade nên xóa cứng sẽ làm mất dòng hàng trong các đơn cũ.
             $product->delete();
 
             return redirect()->route('products.index')
-                ->with('success', 'Đã chuyển sản phẩm vào thùng rác. Có thể khôi phục trong 30 ngày.');
+                ->with('success', 'Đã chuyển sản phẩm vào thùng rác. Có thể khôi phục bất cứ lúc nào.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi khi xóa sản phẩm: ' . $e->getMessage());
         }
@@ -208,37 +210,6 @@ class ProductController extends Controller
         $product->restore();
 
         return redirect()->route('products.trashed')->with('success', 'Đã khôi phục sản phẩm.');
-    }
-
-    /**
-     * Xóa vĩnh viễn: xóa cứng khỏi DB kèm toàn bộ file ảnh liên quan.
-     * Chỉ dùng cho sản phẩm đã ở trong thùng rác.
-     */
-    public function forceDelete($id)
-    {
-        $product = Product::onlyTrashed()->with('variants')->findOrFail($id);
-
-        try {
-            DB::beginTransaction();
-
-            if ($product->main_image) {
-                Storage::disk('public')->delete($product->main_image);
-            }
-
-            foreach ($product->variants as $variant) {
-                if ($variant->image) {
-                    Storage::disk('public')->delete($variant->image);
-                }
-            }
-
-            $product->forceDelete();
-
-            DB::commit();
-            return redirect()->route('products.trashed')->with('success', 'Đã xóa vĩnh viễn sản phẩm.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Lỗi khi xóa vĩnh viễn: ' . $e->getMessage());
-        }
     }
 
     /**

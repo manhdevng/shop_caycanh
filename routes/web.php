@@ -184,10 +184,9 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'admin'])->group(functio
     Route::resource('categories', CategoryController::class);
     Route::resource('products', ProductController::class);
 
-    // Thùng rác sản phẩm (soft delete)
+    // Thùng rác sản phẩm (soft delete + khôi phục; không hỗ trợ xóa vĩnh viễn)
     Route::get('/products-trashed', [ProductController::class, 'trashed'])->name('products.trashed');
     Route::patch('/products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
-    Route::delete('/products/{id}/force-delete', [ProductController::class, 'forceDelete'])->name('products.forceDelete');
 
     // Thêm route cho các mục mới trên Sidebar
     Route::get('/orders', [AdminOrderController::class, 'index'])->name('orders.index');
