@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use App\Models\Product;
 use App\Services\LoyaltyService;
+use App\Services\OrderCancellationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -52,11 +52,12 @@ class GHNWebhookController extends Controller
         'cancel' => 'cancelled',
     ];
 
-    // Các trạng thái nội bộ coi là "đã hủy" -> đồng bộ luôn orders.status +
-    // hoàn tồn kho, mirror đúng hành vi AdminOrderController::cancel().
+    // Các trạng thái nội bộ coi là "đã hủy" -> huỷ đơn qua
+    // OrderCancellationService (đồng bộ orders.status, hoàn kho, trả voucher,
+    // đồng bộ thanh toán) giống AdminOrderController::cancel().
     private const CANCELLED_STATUSES = ['cancelled'];
 
-    public function handle(Request $request)
+    public function handle(Request $request, OrderCancellationService $cancellation)
     {
         $payload = $request->all();
 
@@ -94,7 +95,7 @@ class GHNWebhookController extends Controller
             return response()->json(['message' => 'Received']);
         }
 
-        $this->applyStatus($ghnOrderCode, $ghnStatus, $internalStatus);
+        $this->applyStatus($ghnOrderCode, $ghnStatus, $internalStatus, $cancellation);
 
         return response()->json(['message' => 'Received']);
     }
@@ -138,9 +139,9 @@ class GHNWebhookController extends Controller
     // chung Order::SHIPPING_STAGE_GROUPS với AdminOrderController), rồi cập
     // nhật. Bọc trong transaction + lockForUpdate để idempotent khi GHN gọi
     // lại webhook nhiều lần cho cùng một sự kiện.
-    private function applyStatus(string $ghnOrderCode, string $ghnStatus, string $internalStatus): void
+    private function applyStatus(string $ghnOrderCode, string $ghnStatus, string $internalStatus, OrderCancellationService $cancellation): void
     {
-        DB::transaction(function () use ($ghnOrderCode, $ghnStatus, $internalStatus) {
+        DB::transaction(function () use ($ghnOrderCode, $ghnStatus, $internalStatus, $cancellation) {
             $order = Order::where('ghn_order_code', $ghnOrderCode)->lockForUpdate()->first();
 
             if (! $order) {
@@ -175,27 +176,22 @@ class GHNWebhookController extends Controller
                 return;
             }
 
-            $updates = ['shipping_status' => $internalStatus];
-
-            if (in_array($internalStatus, self::CANCELLED_STATUSES, true)
-                && ! in_array($order->status, ['cancelled'], true)) {
-                // Đơn bị huỷ phía GHN (ví dụ huỷ trên app/web GHN) -> đồng bộ
-                // orders.status + hoàn tồn kho, mirror đúng hành vi của
-                // AdminOrderController::cancel() để không "kẹt" đơn (đã
-                // shipping_status=cancelled nhưng chưa hoàn kho, và nút huỷ
-                // tay của admin sẽ không còn cho huỷ lại vì đã ở trạng thái
-                // cancelled).
-                $updates['status'] = 'cancelled';
-
-                $order->loadMissing('items');
-                foreach ($order->items as $item) {
-                    if ($item->product_id) {
-                        Product::whereKey($item->product_id)->increment('stock', (int) $item->quantity);
-                    }
-                }
+            if (in_array($internalStatus, self::CANCELLED_STATUSES, true)) {
+                // Đơn bị huỷ phía GHN (ví dụ huỷ trên app/web GHN) -> huỷ đơn
+                // qua service để không "kẹt" đơn (đã shipping_status=cancelled
+                // nhưng chưa hoàn kho). Không áp luật chặn của admin vì GHN đã
+                // xác nhận vận đơn bị huỷ; service tự bỏ qua nếu đơn đã huỷ
+                // trước đó (không hoàn kho 2 lần). Đọc lại đơn sau khi service
+                // cập nhật để phần phía dưới không ghi đè bằng dữ liệu cũ.
+                $cancellation->cancel($order, 'GHN báo hủy vận đơn.', enforceAdminRules: false);
+                $order->refresh();
             }
 
-            $order->update($updates);
+            // Đơn đã huỷ trước đó nhưng shipping_status chưa khớp (hoặc trạng
+            // thái không phải huỷ) -> chỉ cập nhật shipping_status.
+            if ($order->shipping_status !== $internalStatus) {
+                $order->update(['shipping_status' => $internalStatus]);
+            }
 
             // Cộng điểm thành viên (nếu đủ điều kiện) ngay khi GHN báo đơn đã
             // giao thành công — service tự kiểm tra idempotent (points_awarded),

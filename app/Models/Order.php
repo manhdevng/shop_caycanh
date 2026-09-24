@@ -106,6 +106,76 @@ class Order extends Model
     ];
 
     /**
+     * Các orders.status được coi là "đã thanh toán hoặc COD" — chỉ những đơn
+     * này mới được admin đánh dấu shipping_status = delivered (tránh cộng
+     * điểm thành viên cho đơn chưa trả tiền). Gồm cả 2 trạng thái cũ
+     * paid_momo, cod_paid vẫn còn trong dữ liệu.
+     */
+    const PAID_OR_COD_STATUSES = ['paid', 'paid_momo', 'cod_ordered', 'cod_paid'];
+
+    /**
+     * Các shipping_status thuộc luồng hoàn hàng của GHN.
+     */
+    const SHIPPING_RETURN_STATUSES = ['return', 'returning', 'returned', 'return_transporting', 'return_sorting'];
+
+    /**
+     * Luật chuyển shipping_status khi ADMIN đổi tay (AdminOrderController::updateStatus()).
+     * Trả về thông báo lỗi tiếng Việt nếu không được phép, NULL nếu được phép.
+     * Giữ nguyên trạng thái hiện tại (không đổi) luôn được phép.
+     *
+     * Luật:
+     * - Không cho chọn "cancelled" ở đây: huỷ đơn phải qua nút "Hủy đơn"
+     *   (OrderCancellationService lo hoàn kho, voucher, thanh toán, GHN).
+     * - Đơn đã hủy (status hoặc shipping_status = cancelled): không đổi gì nữa.
+     * - Đơn đã "delivered": trạng thái cuối, không đổi gì nữa (hoàn hàng của
+     *   GHN xảy ra trước khi giao thành công nên không cần mở ngoại lệ).
+     * - Chỉ đơn đã thanh toán / COD (PAID_OR_COD_STATUSES) mới được đặt "delivered".
+     * - Không lùi giai đoạn trong SHIPPING_STAGE_GROUPS; đang ở luồng hoàn
+     *   hàng thì không quay lại các giai đoạn giao đi (chỉ đổi qua lại giữa
+     *   các trạng thái hoàn hàng).
+     *
+     * Webhook GHN không dùng hàm này (GHN là nguồn chuẩn), chỉ dùng
+     * SHIPPING_STAGE_GROUPS để chặn lùi.
+     */
+    public function shippingTransitionError(string $newStatus): ?string
+    {
+        $current = $this->shipping_status;
+
+        if ($newStatus === 'cancelled') {
+            return 'Không thể hủy đơn bằng cách đổi trạng thái vận chuyển. Vui lòng dùng nút "Hủy đơn".';
+        }
+
+        if ($this->status === 'cancelled' || $current === 'cancelled') {
+            return 'Đơn hàng đã hủy, không thể thay đổi trạng thái vận chuyển.';
+        }
+
+        if ($newStatus === $current) {
+            return null;
+        }
+
+        if ($current === 'delivered') {
+            return 'Đơn hàng đã giao thành công, không thể thay đổi trạng thái vận chuyển.';
+        }
+
+        if ($newStatus === 'delivered' && ! in_array($this->status, self::PAID_OR_COD_STATUSES, true)) {
+            return 'Đơn hàng chưa được thanh toán, không thể đánh dấu giao hàng thành công.';
+        }
+
+        $currentStage = self::SHIPPING_STAGE_GROUPS[$current] ?? null;
+        $newStage = self::SHIPPING_STAGE_GROUPS[$newStatus] ?? null;
+
+        if ($currentStage !== null && $newStage !== null && $newStage < $currentStage) {
+            return 'Không thể chuyển trạng thái vận chuyển lùi về giai đoạn trước đó.';
+        }
+
+        if (in_array($current, self::SHIPPING_RETURN_STATUSES, true) && $newStage !== null) {
+            return 'Đơn đang trong luồng hoàn hàng, không thể chuyển lại trạng thái giao hàng.';
+        }
+
+        return null;
+    }
+
+    /**
      * Nhãn tiếng Việt cho status; nếu giá trị thô không có trong
      * STATUS_LABELS thì trả về chính giá trị thô (không throw, không rỗng).
      */
