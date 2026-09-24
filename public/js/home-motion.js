@@ -43,6 +43,7 @@
     mm.add('(prefers-reduced-motion: no-preference)', function () {
       var lay = createLay();
       // Tạo theo thứ tự xuất hiện trên trang (trên -> dưới) để refresh đúng.
+      gardenLeaves(root, lay);
       growGrids(root);
       vines(root, lay);
       return lay.kill;
@@ -92,6 +93,48 @@
       },
       kill: function () { if (settle) settle.kill(); }
     };
+  }
+
+  /* ------------------------------------------------------------ Vén lá --
+     Gate-garden: .gg-leaf cắm cuống ở mép khung, CSS vẽ sẵn thế ĐÃ VÉN
+     (data-rot). Ở đây kéo lá về thế che kín (data-from) rồi để cuộn vén
+     dần. ScrollCraft vẫn ghim khung (sticky); trigger này chỉ đo cùng quãng
+     ghim, không pin thêm. Thứ tự vén: lá gần trước, lá xa sau — giống tay
+     gạt lớp lá ngoài cùng trước. Vén xong trước p ~ 0.42, đúng lúc chữ
+     (cue 0.40) bắt đầu hiện. Điện thoại quãng ghim ngắn (span 1.2), nên bắt
+     đầu vén sớm hơn, từ lúc khung còn đang trượt lên. */
+  function gardenLeaves(root, lay) {
+    var gate = root.querySelector('.sc-gate--garden');
+    if (!gate) return;
+    var leaves = gsap.utils.toArray(gate.querySelectorAll('.gg-leaf'));
+    if (!leaves.length) return;
+    var photo = gate.querySelector('.sc-gate__frame img');
+
+    var tl = gsap.timeline({
+      defaults: { ease: M.sway },
+      scrollTrigger: {
+        trigger: gate,
+        start: function () { return window.innerWidth <= 860 ? 'top 35%' : 'top top'; },
+        end: 'bottom bottom',
+        scrub: M.scrub,
+        invalidateOnRefresh: true
+      }
+    });
+
+    if (photo) tl.fromTo(photo, { scale: 1.1 }, { scale: 1, duration: 0.45, ease: 'power1.out' }, 0);
+
+    leaves.forEach(function (leaf) {
+      var d = parseFloat(leaf.dataset.depth) || 1;
+      tl.fromTo(leaf,
+        { rotation: parseFloat(leaf.dataset.from), scale: 1 + 0.16 * d },
+        { rotation: parseFloat(leaf.dataset.rot), scale: 1, duration: 0.3 },
+        0.03 + 0.09 * (1 - d) / 0.6);
+      var sway = leaf.querySelector('.gg-leaf__sway');
+      if (sway) lay.add(sway, { k: 0.3 + 0.5 * d, sunTilt: 4 });
+    });
+
+    // Giữ tổng độ dài = 1 để vị trí trên timeline khớp tiến độ ghim.
+    tl.set({}, {}, 1);
   }
 
   /* ---------------------------------------------------------- Thân dây --
