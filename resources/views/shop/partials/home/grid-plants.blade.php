@@ -1,5 +1,5 @@
 @if($newestPlants->isNotEmpty())
-<section id="luoi-san-pham" data-sc-act="flow" style="max-width:1400px;margin:0 auto;padding:clamp(56px,8vw,100px) 24px 0">
+<section id="luoi-san-pham" style="max-width:1400px;margin:0 auto;padding:clamp(56px,8vw,100px) 24px 0">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:28px;gap:16px;flex-wrap:wrap">
         <h2 style="font-family:'Anton',sans-serif;font-size:clamp(22px,3vw,30px);letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0">Cây cảnh mới nhập</h2>
         <a href="{{ route('shop.index', ['type' => 'plant', 'sort' => 'featured']) }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66">Xem tất cả &rarr;</a>

@@ -1,11 +1,12 @@
 {{--
-    home-motion.blade.php — nạp lớp chuyển động hữu cơ "Mọc · Lay · Hướng sáng"
-    (public/js/home-motion.js) chạy bằng GSAP + ScrollTrigger.
+    home-motion.blade.php — nạp toàn bộ chuyển động cuộn của trang chủ
+    (public/js/home-motion.js), chạy bằng GSAP + ScrollTrigger — engine DUY
+    NHẤT của trang chủ (ScrollCraft JS không còn được nạp ở đây; file CSS của
+    nó vẫn dùng cho .sc-leaf / .sc-scrim).
 
-    Phải include SAU home-boot: cả ba script đều defer nên chạy theo thứ tự
-    xuất hiện, sau scrollcraft.js — xem giải thích thời điểm chạy ở đầu
-    home-motion.js. GSAP tự host trong public/vendor/gsap (bản 3.15.0) giống
-    cách trang tự host ScrollCraft, không phụ thuộc CDN.
+    Ba script đều defer nên chạy theo đúng thứ tự dưới đây, trước
+    DOMContentLoaded. GSAP tự host trong public/vendor/gsap (bản 3.15.0),
+    không phụ thuộc CDN.
 --}}
 @push('scripts')
     <script src="{{ asset('vendor/gsap/gsap.min.js') }}" defer></script>

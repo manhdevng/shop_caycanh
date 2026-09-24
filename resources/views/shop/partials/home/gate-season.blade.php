@@ -11,8 +11,10 @@
         : route('shop.index', ['type' => 'plant']);
 @endphp
 
-<section class="sc-gate sc-gate--season" data-sc-act="flow" style="width:100%;aspect-ratio:16/6;position:relative;margin-top:clamp(56px,8vw,100px);overflow:hidden">
-    <img src="{{ asset('images/back_flow.webp') }}" alt="Lối đi lát đá giữa khóm hồng leo và hoa cam trong vườn" data-sc-parallax="0.6" style="position:absolute;left:0;top:-40px;width:100%;height:calc(100% + 80px);object-fit:cover;display:block">
+<section class="sc-gate sc-gate--season">
+    <div class="sc-gate-season__frame">
+        <img src="{{ asset('images/back_flow.webp') }}" alt="Lối đi lát đá giữa khóm hồng leo và hoa cam trong vườn" loading="lazy" decoding="async">
+    </div>
 
     <div class="sc-scrim sc-scrim--left" aria-hidden="true"></div>
 
@@ -25,16 +27,44 @@
 </section>
 
 <style>
-/* Khối F — cổng nghỉ. KHÔNG pin, KHÔNG cắt, chỉ ảnh trôi 60px sau khung đứng
-   yên (BẪY 6.5: ảnh cao dư 80px / lệch -40px mỗi đầu để không hở mép trắng
-   khi parallax kéo). Cổng có chữ tĩnh (đứng yên, không parallax) nói về cây
-   sân vườn, đặt bên trái, phía trên một scrim tối phủ ~45% bề ngang — lối đi
-   lát đá và khóm hồng bên phải vẫn lộ rõ. */
-/* min-height khai báo ở đây, KHÔNG phải inline style trên <section>: inline
-   style thắng mọi rule stylesheet dù không có !important, nên nếu để
-   min-height trong style="" thì @media (max-width:860px) bên dưới sẽ
-   không bao giờ ghi đè được -> điện thoại luôn kẹt ở 320px. */
-.sc-home .sc-gate--season { overflow: hidden; min-height: 320px; }
+/* Khối F — "Mở cửa ra vườn". Cảnh ghim thứ hai của trang.
+   Tĩnh (không JS / giảm chuyển động): một dải ảnh 16:6, chữ bên trái trên
+   scrim tối. Có chuyển động (.sc-home.motion-on, do home-motion.js gắn):
+   khối cao đúng một màn hình và được ghim; ảnh bắt đầu là một khung CỬA VÒM
+   nhỏ đứng trên nền trắng — cùng mô-típ với căn phòng ở gate-garden vừa thu
+   lại thành cửa vòm — rồi mở rộng ra tràn màn hình như bước qua cửa ra vườn;
+   chữ hiện khi cửa đã mở hết (hàm seasonScene).
+   Mọi kích thước đặt ở đây chứ không inline, vì inline style thắng mọi rule
+   stylesheet — .motion-on và @media bên dưới sẽ không ghi đè được. */
+.sc-home .sc-gate--season {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 6;
+    min-height: 320px;
+    margin-top: clamp(56px, 8vw, 100px);
+    overflow: hidden;
+    background: #FFFFFF;
+}
+.sc-home.motion-on .sc-gate--season {
+    aspect-ratio: auto;
+    height: 100vh;
+    height: 100svh;
+}
+.sc-home .sc-gate-season__frame {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+.sc-home .sc-gate-season__frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.sc-home.motion-on .sc-gate-season__frame {
+    clip-path: inset(var(--ct, 0%) var(--cs, 0%) 0% var(--cs, 0%) round var(--cr, 0px) var(--cr, 0px) 0px 0px);
+}
+.sc-home.motion-on .sc-gate-season__frame img { will-change: transform; }
 
 /* BẪY 1: .sc-scrim mặc định dựng từ --sc-canvas, mà .sc-home khai --sc-canvas
    là #FFFFFF (trang nền sáng) -> gradient trắng sau chữ trắng sẽ vô hình. Retint
@@ -47,13 +77,9 @@
         transparent 45%);
 }
 
-/* BẪY 2: scrim là ANH EM của .sc-gate-season__copy (cả hai đều anh em của
-   <img data-sc-parallax>), không phải con/::before — chữ không trôi theo ảnh. */
-/* Chữ đứng yên (đã bỏ data-sc-in: fade-trượt-lên trên mọi tiêu đề là kiểu
-   mặc định, chuyển động của khối này nằm ở ảnh parallax phía sau). Căn giữa
-   dọc bằng flexbox (top/bottom:0 + justify-content:center), không dùng
-   transform — nếu sau này gắn lại data-sc-in, engine sẽ ghi đè transform
-   của chính phần tử này. */
+/* Scrim là ANH EM của .sc-gate-season__copy (không phải con/::before) để
+   chữ và scrim tắt/bật độc lập. Khối chữ căn giữa dọc bằng flexbox; GSAP chỉ
+   dịch từng dòng con bên trong, không đụng transform của chính khối này. */
 .sc-home .sc-gate-season__copy {
     position: absolute;
     z-index: 2;
@@ -107,6 +133,7 @@
 
 @media (max-width: 860px) {
     .sc-home .sc-gate--season { min-height: 460px; }
+    .sc-home.motion-on .sc-gate--season { min-height: 0; }
 
     /* Chuyển scrim sang từ đáy lên, phủ ~60% chiều cao, phần trên dải hoa
        vẫn lộ rõ. */
