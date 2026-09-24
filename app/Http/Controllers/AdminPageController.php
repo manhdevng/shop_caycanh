@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Page;
+use App\Support\HtmlSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -51,6 +52,13 @@ class AdminPageController extends Controller
     {
         $validated = $this->validateData($request, $page);
 
+        // Trang mặc định: footer link cứng theo slug, đổi slug sẽ làm link chết.
+        if (in_array($page->slug, self::PROTECTED_SLUGS, true) && $validated['slug'] !== $page->slug) {
+            throw ValidationException::withMessages([
+                'slug' => 'Không thể đổi đường dẫn của trang mặc định hệ thống (đang được liên kết ở footer).',
+            ]);
+        }
+
         $page->update($validated);
 
         return redirect()->route('admin.pages.index')
@@ -98,6 +106,8 @@ class AdminPageController extends Controller
         ]);
 
         $validated['is_published'] = $request->boolean('is_published');
+        // Lọc HTML theo allowlist ngay khi lưu (chống stored XSS).
+        $validated['content'] = HtmlSanitizer::clean($validated['content']);
 
         return $validated;
     }

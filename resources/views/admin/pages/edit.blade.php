@@ -28,8 +28,13 @@
         <div class="grid grid-cols-1 gap-6">
             <div>
                 <label class="block text-sm font-semibold text-text-primary mb-2 mono">Đường dẫn (slug) <span class="text-red-500">*</span></label>
-                <input type="text" name="slug" value="{{ old('slug', $page->slug) }}" placeholder="vd: gioi-thieu" class="w-full rounded-xl border-green-border/50 border px-4 py-3 focus:ring-2 focus:ring-green-primary focus:border-green-primary outline-none transition-all text-text-primary bg-[#f8f9f5]" required>
-                <p class="text-xs text-text-secondary mt-1">Chỉ chữ thường, số và dấu gạch ngang, ví dụ: gioi-thieu</p>
+                @php($isProtected = in_array($page->slug, \App\Http\Controllers\AdminPageController::PROTECTED_SLUGS, true))
+                <input type="text" name="slug" value="{{ $isProtected ? $page->slug : old('slug', $page->slug) }}" placeholder="vd: gioi-thieu" class="w-full rounded-xl border-green-border/50 border px-4 py-3 focus:ring-2 focus:ring-green-primary focus:border-green-primary outline-none transition-all text-text-primary bg-[#f8f9f5] {{ $isProtected ? 'opacity-70 cursor-not-allowed' : '' }}" required {{ $isProtected ? 'readonly' : '' }}>
+                @if ($isProtected)
+                    <p class="text-xs text-text-secondary mt-1">Trang mặc định của hệ thống (được liên kết ở footer) — không thể đổi đường dẫn.</p>
+                @else
+                    <p class="text-xs text-text-secondary mt-1">Chỉ chữ thường, số và dấu gạch ngang, ví dụ: gioi-thieu</p>
+                @endif
                 @error('slug')
                     <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
                 @enderror
