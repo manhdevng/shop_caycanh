@@ -3,11 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use App\Models\PaymentTransaction;
-use App\Models\Product;
-use App\Models\Voucher;
 use App\Services\GHNOrderService;
 use App\Services\LoyaltyService;
+use App\Services\OrderCancellationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -132,24 +130,37 @@ class AdminOrderController extends Controller
     public function updateStatus(Request $request, Order $order)
     {
         $validated = $request->validate([
-            'shipping_status' => ['required', Rule::in(array_keys(Order::SHIPPING_LABELS))],
+            // Không cho chọn "cancelled" ở đây — huỷ đơn phải qua cancel().
+            'shipping_status' => ['required', Rule::in(array_diff(array_keys(Order::SHIPPING_LABELS), ['cancelled']))],
         ], [
             'shipping_status.required' => 'Vui lòng chọn trạng thái vận chuyển.',
-            'shipping_status.in' => 'Trạng thái vận chuyển không hợp lệ.',
+            'shipping_status.in' => 'Trạng thái vận chuyển không hợp lệ. Muốn hủy đơn vui lòng dùng nút "Hủy đơn".',
         ]);
 
         $newStatus = $validated['shipping_status'];
-        $currentStage = Order::SHIPPING_STAGE_GROUPS[$order->shipping_status] ?? null;
-        $newStage = Order::SHIPPING_STAGE_GROUPS[$newStatus] ?? null;
 
-        // Chỉ chặn lùi khi cả trạng thái hiện tại lẫn trạng thái mới đều nằm
-        // trong 4 nhóm mốc tiến trình giao hàng thông thường. Các trạng thái
-        // ngoại lệ (huỷ, hoàn hàng...) không nằm trong nhóm này nên luôn được phép.
-        if ($currentStage !== null && $newStage !== null && $newStage < $currentStage) {
-            return back()->with('error', 'Không thể chuyển trạng thái vận chuyển lùi về giai đoạn trước đó.');
+        // Khoá dòng đơn để kiểm tra + cập nhật trên dữ liệu mới nhất, tránh
+        // đua với webhook GHN cùng đổi shipping_status. Luật chuyển trạng
+        // thái nằm tập trung ở Order::shippingTransitionError().
+        $error = DB::transaction(function () use ($order, $newStatus) {
+            $locked = Order::whereKey($order->id)->lockForUpdate()->first();
+
+            if (! $locked) {
+                return 'Không tìm thấy đơn hàng.';
+            }
+
+            $error = $locked->shippingTransitionError($newStatus);
+
+            if ($error === null && $locked->shipping_status !== $newStatus) {
+                $locked->update(['shipping_status' => $newStatus]);
+            }
+
+            return $error;
+        });
+
+        if ($error !== null) {
+            return back()->with('error', $error);
         }
-
-        $order->update(['shipping_status' => $newStatus]);
 
         // Cộng điểm thành viên (nếu đủ điều kiện) ngay khi đơn chuyển sang
         // "delivered" — service tự kiểm tra idempotent (points_awarded).
@@ -158,28 +169,16 @@ class AdminOrderController extends Controller
         return back()->with('success', 'Đã cập nhật trạng thái vận chuyển.');
     }
 
-    // Hủy đơn hàng nếu đơn chưa bước vào giai đoạn giao hàng/đã hoàn tất/đã hủy trước đó.
-    // Đồng thời hoàn lại tồn kho và huỷ vận đơn GHN (nếu có) tương ứng.
-    public function cancel(Order $order, GHNOrderService $ghnOrderService)
+    // Hủy đơn hàng nếu đơn chưa bước vào giai đoạn giao hàng/hoàn hàng/đã hoàn tất/đã hủy trước đó.
+    // Phần dữ liệu nội bộ (hoàn kho, trả voucher, đồng bộ thanh toán) do
+    // OrderCancellationService xử lý; sau đó huỷ vận đơn GHN (nếu có).
+    public function cancel(Order $order, GHNOrderService $ghnOrderService, OrderCancellationService $cancellation)
     {
-        $blocked = ['delivering', 'picked', 'storing', 'transporting', 'sorting', 'delivered', 'cancelled'];
+        $result = $cancellation->cancel($order, 'Admin hủy đơn hàng.');
 
-        if (in_array($order->shipping_status, $blocked, true)) {
-            return back()->with('error', 'Không thể hủy đơn đang giao hoặc đã hoàn tất/đã hủy.');
+        if (! $result['success']) {
+            return back()->with('error', $result['message']);
         }
-
-        DB::transaction(function () use ($order) {
-            $order->loadMissing('items');
-
-            // Hoàn lại tồn kho cho từng sản phẩm trong đơn khi huỷ đơn.
-            foreach ($order->items as $item) {
-                if ($item->product_id) {
-                    Product::whereKey($item->product_id)->increment('stock', (int) $item->quantity);
-                }
-            }
-
-            $order->update(['status' => 'cancelled', 'shipping_status' => 'cancelled']);
-        });
 
         // Huỷ vận đơn GHN sau khi phần dữ liệu nội bộ đã huỷ thành công.
         // cancelForOrder() không bao giờ ném exception (đã try/catch bên trong).
@@ -205,7 +204,7 @@ class AdminOrderController extends Controller
     // MoMo đã thanh toán (MomoController::completePayment()): set trạng thái
     // trong transaction trước, rồi tạo vận đơn GHN SAU khi đã commit (GHN là
     // gọi mạng ngoài, không nên giữ khoá DB trong lúc chờ).
-    public function confirmTransfer(Request $request, Order $order, GHNOrderService $ghnOrderService)
+    public function confirmTransfer(Request $request, Order $order, GHNOrderService $ghnOrderService, OrderCancellationService $cancellation)
     {
         $request->validate([
             'admin_note' => 'nullable|string|max:255',
@@ -218,7 +217,7 @@ class AdminOrderController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($order) {
+            DB::transaction(function () use ($order, $cancellation) {
                 // Khoá lại đơn để đọc trạng thái mới nhất, tránh 2 request xử
                 // lý (ví dụ admin bấm 2 lần / 2 tab) cùng xác nhận một đơn.
                 $locked = Order::whereKey($order->id)->lockForUpdate()->first();
@@ -240,7 +239,7 @@ class AdminOrderController extends Controller
                 // ở đó COALESCE ưu tiên đọc từ payment_transactions.status).
                 // Dùng đúng cách chọn dòng mà subquery $paymentId trong
                 // index() đang dùng để cập nhật ĐÚNG dòng admin sẽ nhìn thấy.
-                $transaction = $this->latestPaymentTransactionFor($locked->id);
+                $transaction = $cancellation->latestPaymentTransactionFor($locked->id);
 
                 if ($transaction) {
                     $transaction->update([
@@ -278,11 +277,10 @@ class AdminOrderController extends Controller
     }
 
     // Admin TỪ CHỐI đơn "bank_transfer" đang chờ chuyển khoản (ví dụ không
-    // nhận được tiền sau thời hạn): huỷ đơn, hoàn kho, trả lại lượt dùng
-    // voucher (nếu có) — mirror phần hoàn kho của cancel() ở trên, đồng thời
-    // hoàn tác đúng những gì store() đã làm khi tạo đơn (tăng used_count +
-    // đánh dấu voucher đã dùng trong ví khách).
-    public function rejectTransfer(Request $request, Order $order, GHNOrderService $ghnOrderService)
+    // nhận được tiền sau thời hạn): huỷ đơn qua OrderCancellationService (hoàn
+    // kho, trả lại lượt dùng voucher, đồng bộ giao dịch thanh toán) với điều
+    // kiện bổ sung là đơn đã khoá vẫn phải đang ở "awaiting_transfer".
+    public function rejectTransfer(Request $request, Order $order, GHNOrderService $ghnOrderService, OrderCancellationService $cancellation)
     {
         $request->validate([
             'admin_note' => 'nullable|string|max:255',
@@ -290,56 +288,20 @@ class AdminOrderController extends Controller
             'admin_note.max' => 'Ghi chú không được vượt quá 255 ký tự.',
         ]);
 
+        $notAwaitingMessage = 'Đơn hàng không ở trạng thái chờ chuyển khoản nên không thể từ chối.';
+
         if ($order->status !== 'awaiting_transfer') {
-            return back()->with('error', 'Đơn hàng không ở trạng thái chờ chuyển khoản nên không thể từ chối.');
+            return back()->with('error', $notAwaitingMessage);
         }
 
-        try {
-            DB::transaction(function () use ($order) {
-                $locked = Order::whereKey($order->id)->lockForUpdate()->first();
+        $result = $cancellation->cancel(
+            $order,
+            'Admin từ chối - không nhận được chuyển khoản.',
+            guard: fn (Order $locked) => $locked->status !== 'awaiting_transfer' ? $notAwaitingMessage : null,
+        );
 
-                if (! $locked || $locked->status !== 'awaiting_transfer') {
-                    throw new \RuntimeException('Đơn hàng không ở trạng thái chờ chuyển khoản nên không thể từ chối.');
-                }
-
-                $locked->loadMissing('items');
-
-                // Hoàn lại tồn kho cho từng sản phẩm trong đơn — mirror
-                // AdminOrderController::cancel().
-                foreach ($locked->items as $item) {
-                    if ($item->product_id) {
-                        Product::whereKey($item->product_id)->increment('stock', (int) $item->quantity);
-                    }
-                }
-
-                // Trả lại lượt dùng voucher (nếu đơn có áp mã) — hoàn tác
-                // đúng thao tác store() đã làm lúc tạo đơn: giảm used_count
-                // và gỡ dấu "đã dùng" khỏi ví khách để mã có thể dùng lại.
-                if ($locked->voucher_id) {
-                    Voucher::whereKey($locked->voucher_id)->decrement('used_count');
-
-                    DB::table('user_voucher')
-                        ->where('voucher_id', $locked->voucher_id)
-                        ->where('order_id', $locked->id)
-                        ->update(['used_at' => null, 'order_id' => null, 'updated_at' => now()]);
-                }
-
-                $locked->update(['status' => 'cancelled', 'shipping_status' => 'cancelled']);
-
-                // Đồng bộ dòng payment_transactions (nếu có) sang 'cancelled'
-                // cho nhất quán với orders.status — cùng lý do và cách chọn
-                // dòng như trong confirmTransfer().
-                $transaction = $this->latestPaymentTransactionFor($locked->id);
-
-                if ($transaction) {
-                    $transaction->update([
-                        'status' => 'cancelled',
-                        'message' => 'Admin từ chối - không nhận được chuyển khoản.',
-                    ]);
-                }
-            });
-        } catch (\RuntimeException $e) {
-            return back()->with('error', $e->getMessage());
+        if (! $result['success']) {
+            return back()->with('error', $result['message']);
         }
 
         // Huỷ vận đơn GHN (nếu có) sau khi phần dữ liệu nội bộ đã huỷ thành
@@ -359,24 +321,5 @@ class AdminOrderController extends Controller
         }
 
         return back()->with('success', 'Đã từ chối và hủy đơn hàng chuyển khoản #' . $order->id . '.');
-    }
-
-    /**
-     * Lấy đúng dòng payment_transactions mà index() sẽ hiển thị cho đơn này
-     * — dùng CÙNG thứ tự ưu tiên với subquery $paymentId trong index() (ưu
-     * tiên dòng có status thuộc paid/refund_pending/refunded, nếu không có
-     * thì lấy dòng mới nhất theo id) để không cập nhật nhầm dòng khác dòng
-     * admin đang nhìn thấy. Luôn gọi bên trong DB::transaction() đang giữ
-     * khoá đơn hàng nên khoá thêm dòng này (lockForUpdate) cho an toàn.
-     * Trả về null nếu đơn không có dòng transaction nào (dữ liệu cũ/bất
-     * thường) — caller PHẢI tự kiểm tra null, không được giả định luôn có.
-     */
-    private function latestPaymentTransactionFor(int $orderId): ?PaymentTransaction
-    {
-        return PaymentTransaction::where('order_id', $orderId)
-            ->orderByRaw("CASE WHEN status IN ('paid', 'refund_pending', 'refunded') THEN 0 ELSE 1 END")
-            ->orderByDesc('id')
-            ->lockForUpdate()
-            ->first();
     }
 }

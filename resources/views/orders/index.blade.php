@@ -192,7 +192,8 @@
                                     @csrf
                                     @method('PATCH')
                                     <select name="shipping_status" onchange="this.form.submit()" class="rounded-xl border-green-border/50 border px-3 py-2 bg-white focus:ring-2 focus:ring-green-primary focus:border-green-primary outline-none text-xs text-text-primary">
-                                        @foreach($shippingLabels as $value => $label)
+                                        {{-- Không cho chọn "Đã hủy" ở đây — hủy đơn phải qua nút "Hủy đơn" bên cạnh. --}}
+                                        @foreach(\Illuminate\Support\Arr::except($shippingLabels, ['cancelled']) as $value => $label)
                                             <option value="{{ $value }}" {{ $order->shipping_status === $value ? 'selected' : '' }}>{{ $label }}</option>
                                         @endforeach
                                     </select>
