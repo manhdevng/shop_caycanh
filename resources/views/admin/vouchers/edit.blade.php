@@ -78,10 +78,10 @@
                     <label class="block text-sm font-semibold text-text-primary mb-2 mono">Chọn sản phẩm áp dụng</label>
                     <select name="product_ids[]" multiple size="6" class="w-full rounded-xl border-green-border/50 border px-4 py-3 focus:ring-2 focus:ring-green-primary focus:border-green-primary outline-none transition-all text-text-primary bg-[#f8f9f5]">
                         @foreach(($allProducts ?? collect()) as $p)
-                            <option value="{{ $p->id }}" @selected(in_array($p->id, old('product_ids', $selectedProductIds ?? [])))>{{ $p->name }}</option>
+                            <option value="{{ $p->id }}" @selected(in_array($p->id, old('product_ids', $selectedProductIds ?? [])))>{{ $p->name }}@if($p->deleted_at) (đã xoá)@elseif(!$p->is_active) (ngừng bán)@endif</option>
                         @endforeach
                     </select>
-                    <p class="text-xs text-text-secondary mt-1">Giữ Ctrl/Cmd để chọn nhiều sản phẩm.</p>
+                    <p class="text-xs text-text-secondary mt-1">Giữ Ctrl/Cmd để chọn nhiều sản phẩm. Sản phẩm "(ngừng bán)" / "(đã xoá)" chỉ hiện vì đang được gán cho mã này — bỏ chọn nếu muốn gỡ khỏi phạm vi.</p>
                     @error('product_ids')
                         <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
                     @enderror
