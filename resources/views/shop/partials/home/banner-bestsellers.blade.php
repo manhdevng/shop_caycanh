@@ -1,7 +1,7 @@
 {{-- Dải CTA "Sản phẩm bán chạy" — chỉ ở trang chủ mặc định (không lọc/tìm kiếm).
      Controller index() không truyền $products bán chạy/$soldCounts nên không thể
      vẽ lưới sản phẩm ở đây; dùng banner dẫn sang route riêng shop.bestSellers. --}}
-<section data-sc-act="flow" style="max-width:1400px;margin:0 auto;padding:clamp(56px,8vw,100px) 24px 0">
+<section style="max-width:1400px;margin:0 auto;padding:clamp(56px,8vw,100px) 24px 0">
     <div style="background:#F7F4EF;border-radius:20px;padding:clamp(32px,5vw,52px);display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap">
         <div style="max-width:560px">
             <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#5C2323;margin:0 0 12px">Được yêu thích nhất</p>

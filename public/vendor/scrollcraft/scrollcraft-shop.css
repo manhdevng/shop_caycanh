@@ -14,6 +14,12 @@
    thêm SAU khi `ScrollCraft.mount()` chạy thành công. Nếu JS lỗi/bị chặn,
    class không được thêm (hoặc bị gỡ trong catch) và toàn bộ nội dung hiện đủ,
    bấm được — trang vẫn bán được hàng.
+
+   CẬP NHẬT: trang chủ không còn nạp scrollcraft.js — GSAP (public/js/
+   home-motion.js) là engine duy nhất và gắn `.motion-on` thay cho
+   `.sc-engine-on`. Các quy tắc gắn với `.sc-engine-on` / [data-sc-*] dưới đây
+   vì thế không còn hiệu lực; phần còn dùng là token, `.sc-scrim` và
+   "Hướng sáng" (`.sc-leaf`, --sc-sun giờ do home-motion.js ghi).
    ========================================================================== */
 
 /* ---------------------------------------------------------------- token -- */

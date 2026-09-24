@@ -63,10 +63,6 @@
 @push('styles')
     <link rel="stylesheet" href="{{ asset('vendor/scrollcraft/scrollcraft-shop.css') }}">
 @endpush
-@push('scripts')
-    <script src="{{ asset('vendor/scrollcraft/scrollcraft.js') }}" defer></script>
-@endpush
-@include('shop.partials.home.home-boot')
 @include('shop.partials.home.home-motion')
 
 <div class="sc-home">
@@ -236,7 +232,10 @@
      danh mục/tìm kiếm vì $faqs được controller tính sẵn không phụ thuộc
      $showFeatured (P3.1). --}}
 @if($faqs->isNotEmpty())
-<section style="max-width:900px;margin:0 auto;padding:0 24px clamp(64px,8vw,100px)">
+{{-- Trang chủ: FAQ đứng ngay sau khối CTA nền be -> cần khoảng thở phía trên,
+     nếu không tiêu đề dính sát mép khối be như bị đè. Trang danh mục đã có
+     khoảng trống đáy của lưới sản phẩm nên giữ 0. --}}
+<section style="max-width:900px;margin:0 auto;padding:{{ $showFeatured ? 'clamp(56px,7vw,96px)' : '0' }} 24px clamp(64px,8vw,100px)">
     <h2 style="font-family:'Anton',sans-serif;font-size:clamp(20px,2.6vw,26px);letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 24px">Câu hỏi thường gặp</h2>
     <div style="border-top:1px solid #E5E2DC">
         @foreach($faqs as $faq)

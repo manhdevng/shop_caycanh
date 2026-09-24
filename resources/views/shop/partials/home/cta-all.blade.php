@@ -2,7 +2,7 @@
      Act flow, không pin. Đứng ngay sau một act "pin" (#giftSection) nên theo
      devices.md mục 8, padding-top phải giảm so với padding-bottom để tránh
      cộng dồn khoảng trống với phần đuôi của khối pin liền trước. --}}
-<section data-sc-act="flow" style="background:#F7F4EF;padding:clamp(40px,5vw,72px) 24px clamp(64px,9vw,120px);text-align:center">
+<section style="background:#F7F4EF;padding:clamp(40px,5vw,72px) 24px clamp(64px,9vw,120px);text-align:center">
     <div style="max-width:720px;margin:0 auto">
         <p style="font-family:'Space Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#5C2323;margin:0 0 16px">Chưa tìm được cây ưng ý?</p>
         <h2 style="font-family:'Anton',sans-serif;font-size:clamp(26px,3.6vw,42px);line-height:1.2;text-transform:uppercase;color:#1C1C1A;margin:0 0 18px">Cả khu vườn đang chờ bạn</h2>

@@ -15,7 +15,7 @@
     banner đó cũng đứng yên, không quét ngang.
 --}}
 @if($homeBestSellers->isNotEmpty())
-<section data-sc-act="flow" id="ban-chay">
+<section id="ban-chay">
     <div style="background:#F7F4EF">
         <div style="max-width:1400px;margin:0 auto;padding:clamp(32px,4vw,56px) 24px clamp(56px,8vw,100px)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:28px;gap:16px;flex-wrap:wrap">

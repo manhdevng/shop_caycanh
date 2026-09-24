@@ -2,13 +2,14 @@
      khối DUY NHẤT được phép rậm rạp.
      Tám chiếc lá thật (ảnh tách nền, public/images/foliage) cắm cuống ở mép
      khung. Lúc khung vừa ghim, lá chĩa vào giữa, che kín căn phòng; cuộn tới
-     đâu lá xoay quanh cuống vén ra hai bên tới đó (public/js/home-motion.js,
-     hàm gardenLeaves — ScrollCraft vẫn giữ việc ghim). Lá gần xoay nhiều và
-     sáng hơn lá xa. Vén xong, lá còn lại ở mép làm khung, lay theo tốc độ
-     cuộn và nghiêng theo nắng. Sau đó dải nắng mềm quét ngang tự lái từ
-     --sc-p; chữ chỉ hiện khi lá đã vén gần hết (cue mở ở p=0.40), đặt lên mảng
-     tường bê tông tối giữa ảnh, có một tấm scrim riêng (không phải ::before,
-     không lồng trong khối chữ) để giữ tương phản trên nền ảnh sáng.
+     đâu lá xoay quanh cuống vén ra hai bên tới đó. Lá gần xoay nhiều và sáng
+     hơn lá xa. Vén xong, lá còn lại ở mép làm khung, lay theo tốc độ cuộn và
+     nghiêng theo nắng; dải nắng mềm quét ngang theo --sc-p; chữ hiện khi lá
+     đã vén gần hết, đặt lên mảng tường bê tông tối giữa ảnh, có một tấm scrim
+     riêng để giữ tương phản trên nền ảnh sáng. Cuối cảnh, căn phòng thu lại
+     thành một khung cửa vòm và nền đổi sang màu của khối kế tiếp — bước ra
+     khỏi phòng. Toàn bộ do public/js/home-motion.js (hàm gardenScene) lái:
+     GSAP ghim khối, ghi --sc-p (0 -> 1) lên section theo tiến độ ghim.
 
      CSS dưới đây vẽ lá ở trạng thái ĐÃ VÉN. JS chỉ kéo lá về thế che kín khi
      chuyển động được phép, nên không JS / giảm chuyển động -> ảnh và chữ hiện
@@ -34,11 +35,8 @@
         ['src' => 'monstera', 'ox' => 65.4, 'flip' => false, 'ax' => 58,  'ay' => 118, 'w' => 56, 'rot' => 86,   'from' => -4,   'depth' => 1],
     ];
 @endphp
-<section class="sc-gate sc-gate--garden"
-         data-sc-act="pin" data-sc-span="2.2"
-         data-sc-span-mobile="1.2" data-sc-span-reduced="1.0"
-         data-sc-dwell="0.3">
-    <div data-sc-stage class="sc-gate__stage">
+<section class="sc-gate sc-gate--garden">
+    <div class="sc-gate__stage">
         <div class="sc-gate__frame">
             <img src="{{ asset('images/lifestyle-hero.webp') }}"
                  alt="Phòng khách ngập nắng với những chậu cây lưỡi hổ, phát tài núi và sung lá vĩ cầm đặt quanh sofa, tạo thành một khu vườn trong nhà."
@@ -60,7 +58,7 @@
             @endforeach
         </div>
         <div class="sc-gate__plate" aria-hidden="true"></div>
-        <div class="sc-gate__copy" data-sc-cue="0.40 1 0.22 0.06">
+        <div class="sc-gate__copy">
             <p class="sc-gate__label">Cây trong nhà</p>
             <h2 class="sc-gate__title">Một góc xanh cho mỗi căn phòng</h2>
             <p class="sc-gate__desc">Lưỡi hổ bên cửa kính, phát tài cạnh sofa, sung lá vĩ cầm nơi góc tường. Những loại cây ưa bóng râm, ít cần chăm, giữ cho căn nhà trong lành và dịu lại sau một ngày dài.</p>
@@ -73,13 +71,11 @@
     /* Nền cổng mang tiếp màu tối của khối B — nhát cắt cứng, không nội suy. */
     .sc-home .sc-gate--garden { background: var(--sc-ground-dark); }
 
-    /* Khớp lại mechanics của .sc-stage (infra) ngay trên class dự án, để
-       khung tối + khe sáng hoạt động đúng cả khi JS chưa kịp gắn class
-       "sc-stage" (engine tự thêm khi mount) lẫn sau khi đã gắn — hai đằng
-       cùng giá trị nên không có xung đột cascade. */
+    /* --sc-p tĩnh = 0.6: không JS thì scrim chữ đã đầy, dải nắng đứng giữa.
+       GSAP ghim cả section (pin spacer lo quãng cuộn) và ghi --sc-p từ 0. */
+    .sc-home .sc-gate--garden { --sc-p: 0.6; }
     .sc-home .sc-gate__stage {
-        position: sticky;
-        top: 0;
+        position: relative;
         height: 100vh;
         height: 100svh;
         overflow: clip;
@@ -89,6 +85,11 @@
     .sc-home .sc-gate__frame {
         position: absolute;
         inset: 0;
+    }
+    /* Cửa vòm khi rời cảnh: clip-path dựng từ biến, GSAP nội suy biến
+       (home-motion.js, OPEN / arch). Mặc định 0 = khung mở hết. */
+    .sc-home.motion-on .sc-gate__frame {
+        clip-path: inset(var(--ct, 0%) var(--cs, 0%) 0% var(--cs, 0%) round var(--cr, 0px) var(--cr, 0px) 0px 0px);
     }
     .sc-home .sc-gate__frame img {
         width: 100%;
@@ -134,8 +135,8 @@
     }
     .sc-home .gg-leaf--flip img { transform: scaleX(-1); }
 
-    /* Dải nắng — tự lái hoàn toàn từ --sc-p do engine ghi trên chính
-       [data-sc-act], kế thừa xuống phần tử con này. Chỉ animate
+    /* Dải nắng — tự lái hoàn toàn từ --sc-p do GSAP ghi trên section,
+       kế thừa xuống phần tử con này. Chỉ animate
        transform/opacity, mềm, ấm, không phải neon glow. */
     .sc-home .sc-gate__beam {
         position: absolute;
@@ -162,13 +163,10 @@
         );
     }
 
-    /* Tấm scrim của khối chữ. BẮT BUỘC là anh em của .sc-gate__copy (không
-       phải ::before của nó, không lồng bên trong): engine ẩn mọi phần tử
-       mang [data-sc-cue] cùng con cháu bằng visibility:hidden khi đo
-       contrast, và visibility:hidden ẩn luôn pseudo-element — scrim gắn vào
-       khối chữ sẽ biến mất đúng lúc bị đo, khiến contrast luôn tính trên ảnh
-       thô. Đặt riêng phần tử này ngoài .sc-gate__copy để nó không bao giờ bị
-       ẩn cùng chữ.
+    /* Tấm scrim của khối chữ. Là anh em của .sc-gate__copy (không phải
+       ::before của nó): GSAP ẩn/hiện khối chữ bằng autoAlpha (visibility),
+       mà visibility:hidden ẩn luôn pseudo-element — scrim phải sống riêng để
+       không tắt theo chữ.
        .sc-scrim của trang này (scrollcraft-shop.css) build từ --sc-canvas,
        mà .sc-home khai --sc-canvas:#FFFFFF (nền sáng của cả trang) -> nếu
        dùng nguyên .sc-scrim ở đây sẽ ra vệt TRẮNG sau chữ TRẮNG. Nên viết hẳn
@@ -196,8 +194,8 @@
             rgba(10, 10, 8, .58) 0%,
             rgba(10, 10, 8, .34) 45%,
             rgba(10, 10, 8, 0) 78%);
-        /* Lên trước chữ một nhịp trong cùng act "pin" (--sc-p do engine ghi
-           trên [data-sc-act], kế thừa xuống mọi con): plate đã đầy trước khi
+        /* Lên trước chữ một nhịp (--sc-p do GSAP ghi trên section, kế thừa
+           xuống mọi con): plate đã đầy trước khi
            chữ (cue mở ở p=0.40) chạm opacity tối đa (~p=0.53), và không tắt
            trước chữ — giữ nguyên suốt phần đọc rồi nhạt cùng lúc chữ nhạt. */
         opacity: calc(min(1, max(0, (var(--sc-p, 0) - 0.30) * 5)) * 0.9);
@@ -247,16 +245,10 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-        /* Engine tắt clip-path (ảnh hiện nguyên) và home-boot hạ span xuống
-           1.0. Dải nắng đứng im giữa ảnh sẽ trông như lỗi — ẩn hẳn. */
+        /* Giảm chuyển động: không ghim, không chạy GSAP -> dải nắng đứng im
+           giữa ảnh sẽ trông như lỗi, ẩn hẳn. Chữ và scrim đã hiện sẵn nhờ
+           --sc-p tĩnh 0.6. */
         .sc-home .sc-gate__beam { display: none; }
-
-        /* Chữ phải hiện sẵn, đứng yên, đọc và bấm được ngay. Engine vẫn lái
-           opacity theo cue kể cả khi reduced (chỉ bỏ transform), và còn ghi
-           thẳng style.pointerEvents="none" (inline) lên phần tử có cue khi
-           cue chưa mở -> phải !important để thắng inline style đó. */
-        .sc-home .sc-gate--garden .sc-gate__copy { opacity: 1 !important; transform: none !important; pointer-events: auto !important; }
-        .sc-home .sc-gate--garden .sc-gate__plate { opacity: .62; }
     }
 
     @media (max-width: 860px) {

@@ -1,4 +1,4 @@
-<section data-sc-act="flow" style="background:#FFFFFF;padding:clamp(56px,8vw,120px) 24px">
+<section style="background:#FFFFFF;padding:clamp(56px,8vw,120px) 24px">
     <div style="max-width:1200px;margin:0 auto">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:40px">
             @php
