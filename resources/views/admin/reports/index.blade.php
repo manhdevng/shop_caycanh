@@ -52,7 +52,8 @@
 
 <!-- Doanh thu theo danh mục -->
 <div class="bg-white rounded-[32px] p-8 border border-green-border shadow-sm mb-8">
-    <h3 class="text-2xl font-medium gloock text-text-primary mb-6">Doanh thu theo danh mục</h3>
+    <h3 class="text-2xl font-medium gloock text-text-primary mb-2">Doanh thu theo danh mục</h3>
+    <p class="text-sm text-text-secondary mb-6">Mỗi sản phẩm chỉ tính vào một nhóm danh mục gốc (Cây / Hoa); sản phẩm chưa thuộc nhóm nào nằm ở "Chưa phân loại".</p>
 
     <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
@@ -66,7 +67,7 @@
             <tbody class="divide-y divide-green-border/20">
                 @forelse ($categoryRevenue as $row)
                 <tr>
-                    <td class="py-4 pr-4 text-text-primary font-medium">{{ $row->category_name ?? 'Không xác định' }}</td>
+                    <td class="py-4 pr-4 text-text-primary font-medium">{{ $row->category_id === null ? 'Chưa phân loại' : ($row->category_name ?? 'Danh mục #'.$row->category_id) }}</td>
                     <td class="py-4 pr-4 text-text-primary mono">{{ number_format($row->total_qty, 0, ',', '.') }}</td>
                     <td class="py-4 text-text-primary font-medium text-right">{{ number_format($row->total_revenue, 0, ',', '.') }} đ</td>
                 </tr>

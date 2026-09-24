@@ -19,7 +19,9 @@ class AdminReportController extends Controller
 
         return Order::query()->where('orders.created_at', '<=', now())
             ->where('orders.status', '!=', 'cancelled')
-            ->whereNotIn('orders.shipping_status', ['cancelled', 'return', 'returned'])
+            // Loại cả đơn đã huỷ vận chuyển và MỌI trạng thái thuộc luồng hoàn hàng
+            // GHN (returning, return_transporting, ...), không chỉ 'return'/'returned'.
+            ->whereNotIn('orders.shipping_status', array_merge(['cancelled'], Order::SHIPPING_RETURN_STATUSES))
             ->where(function (Builder $query) use ($paymentStatus) {
                 $query->where($paymentStatus, 'paid')
                     ->orWhere(function (Builder $legacy) {
@@ -29,16 +31,38 @@ class AdminReportController extends Controller
             });
     }
 
+    /**
+     * Doanh thu theo nhóm danh mục gốc.
+     *
+     * Mỗi order_item chỉ được tính vào ĐÚNG MỘT nhóm: nhóm gốc (parent_id NULL)
+     * có scope 'plant' hoặc 'flower' mà sản phẩm thuộc về (trực tiếp hoặc qua
+     * danh mục con). Nhóm 'both' là tag lọc dùng chung nên bị bỏ qua. Nếu sản
+     * phẩm thuộc nhiều nhóm gốc hợp lệ thì lấy nhóm có id nhỏ nhất để kết quả
+     * ổn định. Trước đây join thẳng category_product nên sản phẩm gắn nhiều
+     * danh mục bị cộng doanh thu nhiều lần (tổng biểu đồ tròn > doanh thu thật).
+     *
+     * Sản phẩm không thuộc nhóm plant/flower nào (hoặc đã bị xoá hẳn) được gom
+     * vào mục "Chưa phân loại" (category_id = null) để tổng các dòng luôn bằng
+     * tổng doanh thu order_items của đơn đã thanh toán.
+     */
     private function categoryRevenue(): Collection
     {
+        $productRoot = DB::table('category_product as cp')
+            ->join('categories as c', 'c.id', '=', 'cp.category_id')
+            ->join('categories as root', 'root.id', '=', DB::raw('COALESCE(c.parent_id, c.id)'))
+            ->whereNull('root.parent_id')
+            ->whereIn('root.scope', ['plant', 'flower'])
+            ->select('cp.product_id')
+            ->selectRaw('MIN(root.id) as root_id')
+            ->groupBy('cp.product_id');
+
         return DB::table('order_items')
-            ->join('products', 'order_items.product_id', '=', 'products.id')
-            ->join('category_product', 'products.id', '=', 'category_product.product_id')
-            ->leftJoin('categories', 'category_product.category_id', '=', 'categories.id')
+            ->leftJoinSub($productRoot, 'product_root', 'product_root.product_id', '=', 'order_items.product_id')
+            ->leftJoin('categories as root_category', 'root_category.id', '=', 'product_root.root_id')
             ->whereIn('order_items.order_id', $this->paidOrders()->select('orders.id'))
-            ->select('categories.id as category_id', 'categories.name as category_name')
+            ->select('root_category.id as category_id', 'root_category.name as category_name')
             ->selectRaw('SUM(order_items.price * order_items.quantity) as total_revenue, SUM(order_items.quantity) as total_qty')
-            ->groupBy('categories.id', 'categories.name')
+            ->groupBy('root_category.id', 'root_category.name')
             ->orderByDesc('total_revenue')->get();
     }
 
@@ -91,7 +115,9 @@ class AdminReportController extends Controller
     public function charts()
     {
         $categories = $this->categoryRevenue();
-        $catLabels = $categories->map(fn ($row) => $row->category_name ?? 'Danh mục #'.$row->category_id)->all();
+        $catLabels = $categories->map(fn ($row) => $row->category_id === null
+            ? 'Chưa phân loại'
+            : ($row->category_name ?? 'Danh mục #'.$row->category_id))->all();
         $catRevenue = $categories->pluck('total_revenue')->map(fn ($value) => (float) $value)->all();
 
         $daily = $this->dailyRevenue();
