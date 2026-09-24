@@ -82,17 +82,18 @@
 
 <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-[260px] bg-black/60 backdrop-blur-xl border-r border-white/10 flex flex-col">
+    <aside class="w-[260px] shrink-0 bg-black/60 backdrop-blur-xl border-r border-white/10 flex flex-col">
         <!-- Logo -->
-        <div class="p-6">
+        <div class="p-6 shrink-0">
             <h1 class="text-white text-2xl font-display flex items-center gap-3">
                 <span class="w-8 h-8 rounded-lg bg-green-primary flex items-center justify-center text-white font-bold text-lg">A</span>
                 Admin Portal
             </h1>
         </div>
 
-        <!-- Navigation -->
-        <nav class="flex-1 px-4 space-y-2 mt-4">
+        <!-- Navigation: cuộn riêng khi menu dài hơn màn hình để khối Đăng xuất
+             bên dưới luôn hiển thị (sidebar cao cố định h-screen, không cuộn). -->
+        <nav class="flex-1 min-h-0 overflow-y-auto px-4 space-y-2 mt-4 pb-4">
             <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.dashboard') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
             </a>
@@ -137,8 +138,8 @@
             </a>
         </nav>
 
-        <!-- User info + Đăng xuất -->
-        <div class="p-4 border-t border-white/10">
+        <!-- User info + Đăng xuất (luôn ghim ở đáy sidebar) -->
+        <div class="p-4 border-t border-white/10 shrink-0">
             <div class="text-white/60 text-xs mb-2 px-2">{{ Auth::user()->name ?? '' }}</div>
             <form action="{{ route('logout') }}" method="POST">
                 @csrf
