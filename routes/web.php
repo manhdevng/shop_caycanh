@@ -244,7 +244,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'admin'])->group(functio
 // ----------------------------------------------------
 // Báo cáo giao dịch thanh toán - Finance
 // ----------------------------------------------------
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
     Route::get('/finance/transactions', [FinanceController::class, 'transactions'])->name('finance.transactions');
     Route::patch('/finance/{order}/status', [FinanceController::class, 'updateStatus'])->name('finance.update-status');

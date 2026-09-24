@@ -38,8 +38,12 @@ class AuthController extends Controller
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
-                'role' => 'customer', // Mặc định role là customer
             ]);
+
+            // 'role' không nằm trong $fillable của User (chống mass-assignment
+            // nâng quyền) nên phải gán trực tiếp rồi save().
+            $user->role = 'customer'; // Mặc định role là customer
+            $user->save();
 
             // Gửi email xác thực
             $user->sendEmailVerificationNotification();
