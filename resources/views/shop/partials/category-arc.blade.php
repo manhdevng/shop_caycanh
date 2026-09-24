@@ -35,7 +35,7 @@
     <img class="cat-arc-bg" src="{{ asset('images/bg-la-monstera.webp') }}" alt="" aria-hidden="true" loading="lazy" decoding="async">
     <div class="cat-arc-bg-veil" aria-hidden="true"></div>
 
-    <div class="cat-arc-head" data-sc-in data-sc-stagger="70">
+    <div class="cat-arc-head">
         <p class="cat-arc-kicker">Khám phá theo nhu cầu</p>
         <h2 id="catArcTitle" class="cat-arc-title">Danh mục cây cảnh &amp; hoa</h2>
         <div class="cat-arc-nav">
@@ -47,7 +47,7 @@
 
     <div id="catArcStage" class="cat-arc-stage" tabindex="0" role="region" aria-label="Danh mục, kéo ngang để xem"></div>
 
-    <div class="cat-arc-foot" data-sc-in>
+    <div class="cat-arc-foot">
         <a href="{{ route('shop.index', ['type' => 'plant']) }}" data-open-mega="plant" class="cat-arc-more">Xem thêm cây cảnh</a>
         @if($flowerGroups->isNotEmpty())
             <a href="{{ route('shop.index', ['type' => 'flower']) }}" data-open-mega="flower" class="cat-arc-more">Xem thêm hoa</a>

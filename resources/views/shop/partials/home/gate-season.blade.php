@@ -16,7 +16,7 @@
 
     <div class="sc-scrim sc-scrim--left" aria-hidden="true"></div>
 
-    <div class="sc-gate-season__copy" data-sc-in data-sc-stagger="70">
+    <div class="sc-gate-season__copy">
         <p class="sc-gate-season__label">Cây sân vườn</p>
         <h2 class="sc-gate-season__title">Khu vườn nở theo mùa</h2>
         <p class="sc-gate-season__desc">Hồng leo, dâm bụt và những khóm hoa cam rực nắng bên lối đi lát đá. Cây sân vườn ưa sáng, bền với nắng mưa, cho khoảng sân nhà bạn đổi màu qua từng tháng.</p>
@@ -49,12 +49,11 @@
 
 /* BẪY 2: scrim là ANH EM của .sc-gate-season__copy (cả hai đều anh em của
    <img data-sc-parallax>), không phải con/::before — chữ không trôi theo ảnh. */
-/* BẪY 6.2: phần tử này mang data-sc-in, engine áp
-   `.sc-home.sc-engine-on [data-sc-in]{transform:translate3d(0,14px,0)}` rồi
-   `...sc-in{transform:none}` với độ đặc hiệu cao hơn bất kỳ rule nào ở đây
-   -> KHÔNG được đặt transform trên chính phần tử này (translateY sẽ luôn bị
-   engine ghi đè, vô hiệu). Căn giữa dọc bằng flexbox (top/bottom:0 +
-   justify-content:center), không dùng transform. */
+/* Chữ đứng yên (đã bỏ data-sc-in: fade-trượt-lên trên mọi tiêu đề là kiểu
+   mặc định, chuyển động của khối này nằm ở ảnh parallax phía sau). Căn giữa
+   dọc bằng flexbox (top/bottom:0 + justify-content:center), không dùng
+   transform — nếu sau này gắn lại data-sc-in, engine sẽ ghi đè transform
+   của chính phần tử này. */
 .sc-home .sc-gate-season__copy {
     position: absolute;
     z-index: 2;

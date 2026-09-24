@@ -194,18 +194,17 @@
       batch = batch.filter(function (c) { return !c._grown; });
       if (!batch.length) return;
       batch.forEach(function (c) { c._grown = true; });
-      var pics = [], imgs = [], rest = [];
-      batch.forEach(function (card) {
+      var tl = gsap.timeline();
+      // Nhịp stagger tính theo THẺ, không theo từng dòng chữ: một loạt 8 thẻ
+      // (nhảy anchor) vẫn hiện đủ chữ trong ~1.7s.
+      batch.forEach(function (card, i) {
         var p = parts(card);
-        if (p.pic) pics.push(p.pic);
-        if (p.img) imgs.push(p.img);
-        rest = rest.concat(p.rest);
+        var at = i * M.stagger;
+        tl.to(card, { y: 0, duration: M.growDur, ease: M.grow, clearProps: 'transform' }, at);
+        if (p.pic) tl.to(p.pic, { clipPath: 'inset(0% 0% 0% 0%)', duration: 1.0, ease: M.unfurl, clearProps: 'clipPath' }, at);
+        if (p.img) tl.to(p.img, { scale: 1, duration: 1.6, ease: 'power2.out', clearProps: 'transform' }, at);
+        if (p.rest.length) tl.to(p.rest, { autoAlpha: 1, duration: 0.6, ease: 'power1.out' }, at + 0.4);
       });
-      gsap.timeline()
-        .to(batch, { y: 0, duration: M.growDur, ease: M.grow, stagger: M.stagger, clearProps: 'transform' }, 0)
-        .to(pics, { clipPath: 'inset(0% 0% 0% 0%)', duration: 1.0, ease: M.unfurl, stagger: M.stagger, clearProps: 'clipPath' }, 0)
-        .to(imgs, { scale: 1, duration: 1.6, ease: 'power2.out', stagger: M.stagger, clearProps: 'transform' }, 0)
-        .to(rest, { autoAlpha: 1, duration: 0.6, ease: 'power1.out', stagger: M.stagger / 2 }, 0.4);
     }
 
     ScrollTrigger.batch(cards, {

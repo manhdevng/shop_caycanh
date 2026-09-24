@@ -176,10 +176,12 @@
 /* ====================================================== "Hướng sáng" ==
    Signature move của build này. `home-boot.blade.php` ghi --sc-sun (0 -> 1)
    theo tiến độ cuộn của CẢ TRANG lên .sc-home. Agent #3/#4 chỉ gắn
-   class="sc-leaf" lên <a> bọc ảnh sản phẩm; toàn bộ hành vi định nghĩa ở đây. */
+   class="sc-leaf" lên <a> bọc ảnh sản phẩm; toàn bộ hành vi định nghĩa ở đây.
+   Biên độ ±2° (bản đầu ±1.1° gần như không ai nhận ra). Lá thật trong
+   public/js/home-motion.js nghiêng cùng chiều theo cùng tiến độ trang. */
 .sc-home .sc-leaf {
   transform-origin: 50% 100%;
-  transform: rotate(calc((var(--sc-sun) - 0.5) * 2.2deg));
+  transform: rotate(calc((var(--sc-sun) - 0.5) * 4deg));
   will-change: transform;
   /* bóng đổ lệch NGƯỢC hướng nắng: --sc-sun=0 (nắng trái) -> bóng ngả phải,
      --sc-sun=1 (nắng phải) -> bóng ngả trái. Biên độ tối đa ~6px, tint theo
