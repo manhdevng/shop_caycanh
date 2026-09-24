@@ -53,30 +53,41 @@
         <div class="flex items-center gap-3 mb-4">
             <i data-lucide="circle-dollar-sign" class="w-5 h-5 text-green-primary"></i>
             <span class="text-sm font-semibold text-text-secondary mono uppercase tracking-wider">Tổng doanh thu</span>
+            <span class="text-xs text-text-secondary">(chỉ tính đơn đã thanh toán)</span>
         </div>
         <div class="text-4xl font-display text-text-primary">{{ number_format($summary->total_amount ?? 0) }} ₫</div>
+        <div class="text-xs text-text-secondary mt-1">từ {{ number_format($summary->paid_count ?? 0) }} đơn đã thanh toán</div>
     </div>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <!-- Báo cáo theo kênh -->
     <div class="bg-white/60 backdrop-blur-md rounded-[24px] border border-white/40 p-6 shadow-sm">
-        <h3 class="text-lg font-display mb-4 flex items-center gap-2 text-text-primary"><i data-lucide="pie-chart" class="w-5 h-5"></i> Theo kênh thanh toán</h3>
+        <h3 class="text-lg font-display mb-1 flex items-center gap-2 text-text-primary"><i data-lucide="pie-chart" class="w-5 h-5"></i> Theo kênh thanh toán</h3>
+        <p class="text-xs text-text-secondary mb-4">Doanh thu chỉ tính đơn đã thanh toán; số đơn gồm mọi trạng thái.</p>
         <div class="space-y-4">
             @foreach($methods as $key => $name)
                 @php 
                     $stat = $methodTotals->get($key); 
                     $count = $stat ? $stat->order_count : 0;
-                    $amount = $stat ? $stat->total_amount : 0;
+                    // Doanh thu theo kênh = chỉ đơn đã thanh toán (khớp với "Tổng doanh thu").
+                    $amount = $stat ? $stat->paid_amount : 0;
+                    $paidCount = $stat ? $stat->paid_count : 0;
+                    $dotColor = match($key) {
+                        'momo' => 'bg-[#A50064]',
+                        'bank_transfer' => 'bg-blue-500',
+                        'unknown' => 'bg-gray-400',
+                        default => 'bg-green-primary',
+                    };
                 @endphp
                 <div class="flex items-center justify-between p-4 rounded-[16px] bg-white/40 border border-white/20">
                     <div class="flex items-center gap-3">
-                        <span class="w-2 h-2 rounded-full {{ $key == 'momo' ? 'bg-[#A50064]' : 'bg-green-primary' }}"></span>
+                        <span class="w-2 h-2 rounded-full {{ $dotColor }}"></span>
                         <span class="font-medium text-text-primary">{{ $name }}</span>
                     </div>
                     <div class="text-right">
                         <div class="text-sm font-semibold text-text-primary">{{ number_format($amount) }} ₫</div>
-                        <div class="text-xs text-text-secondary">{{ number_format($count) }} đơn</div>
+                        <div class="text-xs text-text-secondary">{{ number_format($paidCount) }}/{{ number_format($count) }} đơn đã thanh toán</div>
                     </div>
                 </div>
             @endforeach
@@ -94,7 +105,10 @@
                 @endphp
                 <div class="flex items-center justify-between py-2 border-b border-green-border/50 last:border-0">
                     <span class="text-sm text-text-secondary">{{ $name }}</span>
-                    <span class="font-mono text-sm font-medium text-text-primary">{{ number_format($stat->order_count) }} đơn</span>
+                    <div class="text-right">
+                        <div class="font-mono text-sm font-medium text-text-primary">{{ number_format($stat->order_count) }} đơn</div>
+                        <div class="text-xs text-text-secondary">Giá trị đơn: {{ number_format($stat->total_amount ?? 0) }} ₫</div>
+                    </div>
                 </div>
             @endforeach
         </div>
