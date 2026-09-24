@@ -29,7 +29,7 @@
 
 <section style="max-width:900px;margin:0 auto;padding:0 24px clamp(64px,8vw,96px)">
     <div class="page-content" style="font-size:15px;line-height:1.8;color:#2B2B28">
-        {!! $page->content !!}
+        {!! \App\Support\HtmlSanitizer::clean($page->content) !!}
     </div>
 </section>
 

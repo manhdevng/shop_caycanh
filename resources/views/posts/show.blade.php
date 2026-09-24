@@ -34,7 +34,7 @@
 
 <section style="max-width:900px;margin:0 auto;padding:24px 24px clamp(64px,8vw,96px)">
     <div class="page-content" style="font-size:15px;line-height:1.8;color:#2B2B28">
-        {!! $post->content !!}
+        {!! \App\Support\HtmlSanitizer::clean($post->content) !!}
     </div>
 
     <a href="{{ route('posts.index') }}" style="display:inline-flex;align-items:center;gap:6px;margin-top:32px;font-size:14px;color:#5C2323;font-weight:600;text-decoration:none">

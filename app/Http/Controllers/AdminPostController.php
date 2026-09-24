@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Post;
+use App\Support\HtmlSanitizer;
 use Illuminate\Http\Request;
 
 class AdminPostController extends Controller
@@ -95,6 +96,8 @@ class AdminPostController extends Controller
         ]);
 
         $validated['is_published'] = $request->boolean('is_published');
+        // Lọc HTML theo allowlist ngay khi lưu (chống stored XSS).
+        $validated['content'] = HtmlSanitizer::clean($validated['content']);
 
         return $validated;
     }
