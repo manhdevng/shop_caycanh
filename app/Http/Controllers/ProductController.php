@@ -7,8 +7,10 @@ use App\Models\Product;
 use App\Models\Category;
 use App\Models\ProductVariant;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
@@ -20,7 +22,8 @@ class ProductController extends Controller
         $query = Product::with('categories');
 
         if ($request->has('categories')) {
-            $categoryIds = array_filter($request->categories);
+            // Ép kiểu mảng: tránh TypeError khi query string dạng ?categories=1.
+            $categoryIds = array_filter((array) $request->input('categories', []));
             if (!empty($categoryIds)) {
                 foreach ($categoryIds as $categoryId) {
                     $query->whereHas('categories', function($q) use ($categoryId) {
@@ -52,7 +55,7 @@ class ProductController extends Controller
             ->get();
 
         // Danh sách loại cây đang được chọn lọc (để hiển thị dạng "chip" + tô sáng trong menu)
-        $activeCategoryIds = array_filter($request->input('categories', []));
+        $activeCategoryIds = array_filter((array) $request->input('categories', []));
         $activeCategories = Category::whereIn('id', $activeCategoryIds)->get();
 
         return view('products.index', compact('products', 'categories', 'activeCategories', 'type', 'search'));
@@ -77,10 +80,17 @@ class ProductController extends Controller
 
         $validated = $validator->validate();
 
+        // File mới upload trong lúc xử lý — nếu transaction rollback thì xoá
+        // để không để lại ảnh mồ côi trên disk.
+        $storedFiles = [];
+
         try {
             DB::beginTransaction();
 
             $data = $this->extractProductData($request);
+            if (!empty($data['main_image'])) {
+                $storedFiles[] = $data['main_image'];
+            }
 
             $product = Product::create($data);
 
@@ -99,6 +109,7 @@ class ProductController extends Controller
 
                     if ($request->hasFile("variants.{$index}.image")) {
                         $variantRecord['image'] = $request->file("variants.{$index}.image")->store('products/variants', 'public');
+                        $storedFiles[] = $variantRecord['image'];
                     }
 
                     $product->variants()->create($variantRecord);
@@ -110,9 +121,12 @@ class ProductController extends Controller
             DB::commit();
             return redirect()->route('products.index')->with('success', 'Thêm sản phẩm thành công.');
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi khi thêm sản phẩm: ' . $e->getMessage())->withInput();
+            $this->deleteFiles($storedFiles);
+            Log::error('Lỗi khi thêm sản phẩm', ['exception' => $e]);
+
+            return back()->with('error', 'Lỗi khi thêm sản phẩm, vui lòng thử lại.')->withInput();
         }
     }
 
@@ -141,6 +155,12 @@ class ProductController extends Controller
 
         $validated = $validator->validate();
 
+        // $storedFiles: file mới upload — xoá nếu rollback.
+        // $filesToDelete: ảnh cũ cần bỏ — CHỈ xoá sau khi commit thành công,
+        // tránh DB (sau rollback) vẫn trỏ tới file đã mất.
+        $storedFiles = [];
+        $filesToDelete = [];
+
         try {
             DB::beginTransaction();
 
@@ -148,9 +168,10 @@ class ProductController extends Controller
 
             if ($request->hasFile('main_image')) {
                 if ($product->main_image) {
-                    Storage::disk('public')->delete($product->main_image);
+                    $filesToDelete[] = $product->main_image;
                 }
                 $data['main_image'] = $request->file('main_image')->store('products', 'public');
+                $storedFiles[] = $data['main_image'];
             }
 
             $product->update($data);
@@ -159,21 +180,33 @@ class ProductController extends Controller
             $product->categories()->sync($request->categories);
 
             if ($request->input('pricing_mode') === 'variants') {
-                $this->syncVariants($request, $product);
+                $filesToDelete = array_merge(
+                    $filesToDelete,
+                    $this->syncVariants($request, $product, $storedFiles)
+                );
                 $this->syncBasePriceFromVariants($product);
             } else {
-                // "Một giá": xoá toàn bộ phân loại cũ (và ảnh của chúng) —
+                // "Một giá": xoá toàn bộ phân loại cũ (ảnh xoá sau commit) —
                 // base_price đã lấy trực tiếp từ request ở extractProductData().
-                $this->deleteVariants($product->variants()->get());
+                $filesToDelete = array_merge(
+                    $filesToDelete,
+                    $this->deleteVariants($product->variants()->get())
+                );
             }
 
             DB::commit();
-            return redirect()->route('products.index')->with('success', 'Cập nhật sản phẩm thành công.');
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi khi cập nhật sản phẩm: ' . $e->getMessage())->withInput();
+            $this->deleteFiles($storedFiles);
+            Log::error('Lỗi khi cập nhật sản phẩm', ['product_id' => $product->id, 'exception' => $e]);
+
+            return back()->with('error', 'Lỗi khi cập nhật sản phẩm, vui lòng thử lại.')->withInput();
         }
+
+        // Transaction đã commit thành công → giờ mới xoá ảnh cũ.
+        $this->deleteFiles($filesToDelete);
+
+        return redirect()->route('products.index')->with('success', 'Cập nhật sản phẩm thành công.');
     }
 
     public function destroy(Product $product)
@@ -188,7 +221,9 @@ class ProductController extends Controller
             return redirect()->route('products.index')
                 ->with('success', 'Đã chuyển sản phẩm vào thùng rác. Có thể khôi phục bất cứ lúc nào.');
         } catch (\Exception $e) {
-            return back()->with('error', 'Lỗi khi xóa sản phẩm: ' . $e->getMessage());
+            Log::error('Lỗi khi xóa sản phẩm', ['product_id' => $product->id, 'exception' => $e]);
+
+            return back()->with('error', 'Lỗi khi xóa sản phẩm, vui lòng thử lại.');
         }
     }
 
@@ -242,7 +277,12 @@ class ProductController extends Controller
         if ($request->input('pricing_mode') === 'variants') {
             $rules['variants'] = 'required|array|min:1';
             if ($product) {
-                $rules['variants.*.id'] = 'nullable|exists:product_variants,id';
+                // Chỉ chấp nhận id phân loại thuộc chính sản phẩm này — tránh
+                // find() trả null trong syncVariants() (hoặc sửa nhầm SP khác).
+                $rules['variants.*.id'] = [
+                    'nullable',
+                    Rule::exists('product_variants', 'id')->where('product_id', $product->id),
+                ];
             }
             $rules['variants.*.variant_name'] = 'required|string|max:255';
             $rules['variants.*.price'] = 'required|numeric|min:1000';
@@ -342,11 +382,15 @@ class ProductController extends Controller
 
     /**
      * Đồng bộ phân loại khi update: cập nhật/tạo mới theo dữ liệu submit,
-     * xoá các phân loại không còn trong form (kèm ảnh) — giữ nguyên luồng
-     * xoá ảnh đã có, chỉ thêm weight/sort_order.
+     * xoá các phân loại không còn trong form. KHÔNG xoá file ở đây: trả về
+     * danh sách ảnh cũ cần xoá để caller xoá sau khi commit; file mới upload
+     * được ghi vào $storedFiles để caller dọn nếu rollback.
+     *
+     * @return string[] Đường dẫn ảnh cũ cần xoá sau commit.
      */
-    private function syncVariants(Request $request, Product $product): void
+    private function syncVariants(Request $request, Product $product, array &$storedFiles): array
     {
+        $filesToDelete = [];
         $submittedVariantIds = [];
 
         foreach ($request->input('variants', []) as $index => $variantData) {
@@ -363,9 +407,10 @@ class ProductController extends Controller
 
                 if ($request->hasFile("variants.{$index}.image")) {
                     if ($variantModel->image) {
-                        Storage::disk('public')->delete($variantModel->image);
+                        $filesToDelete[] = $variantModel->image;
                     }
                     $variantRecord['image'] = $request->file("variants.{$index}.image")->store('products/variants', 'public');
+                    $storedFiles[] = $variantRecord['image'];
                 }
 
                 $variantModel->update($variantRecord);
@@ -374,6 +419,7 @@ class ProductController extends Controller
                 // Create new variant
                 if ($request->hasFile("variants.{$index}.image")) {
                     $variantRecord['image'] = $request->file("variants.{$index}.image")->store('products/variants', 'public');
+                    $storedFiles[] = $variantRecord['image'];
                 }
                 $newVariant = $product->variants()->create($variantRecord);
                 $submittedVariantIds[] = $newVariant->id;
@@ -382,20 +428,40 @@ class ProductController extends Controller
 
         // Delete removed variants
         $variantsToDelete = $product->variants()->whereNotIn('id', $submittedVariantIds)->get();
-        $this->deleteVariants($variantsToDelete);
+
+        return array_merge($filesToDelete, $this->deleteVariants($variantsToDelete));
     }
 
     /**
-     * Xoá 1 tập phân loại kèm ảnh của chúng. `order_items.variant_id` dùng
+     * Xoá 1 tập phân loại (chỉ bản ghi DB). `order_items.variant_id` dùng
      * nullOnDelete nên đơn cũ vẫn giữ được variant_name snapshot (F13/TC14).
+     * Ảnh KHÔNG xoá ở đây — trả về danh sách để caller xoá sau khi commit.
+     *
+     * @return string[] Đường dẫn ảnh của các phân loại đã xoá.
      */
-    private function deleteVariants(iterable $variants): void
+    private function deleteVariants(iterable $variants): array
     {
+        $images = [];
+
         foreach ($variants as $variant) {
             if ($variant->image) {
-                Storage::disk('public')->delete($variant->image);
+                $images[] = $variant->image;
             }
             $variant->delete();
+        }
+
+        return $images;
+    }
+
+    /**
+     * Xoá các file trên disk public (bỏ qua giá trị rỗng/trùng).
+     */
+    private function deleteFiles(array $paths): void
+    {
+        $paths = array_values(array_unique(array_filter($paths)));
+
+        if (!empty($paths)) {
+            Storage::disk('public')->delete($paths);
         }
     }
 }
