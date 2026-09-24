@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class AdminChatController extends Controller
@@ -15,67 +17,57 @@ class AdminChatController extends Controller
     // admin nào không phải người "sở hữu" hội thoại sẽ không thấy được khách đã nhắn tin.
     public function getUsers()
     {
-        $adminIds = User::where('role', 'admin')->pluck('id');
+        $adminIds = User::where('role', 'admin')->pluck('id')->all();
 
-        if ($adminIds->isEmpty()) {
+        if (empty($adminIds)) {
             return response()->json([]);
         }
 
-        // Các dòng tin nhắn mà một bên là admin, bên kia không phải admin (tức là khách hàng).
-        // Với mỗi dòng, xác định cột nào chứa id khách hàng bằng CASE, rồi gom nhóm theo khách đó.
-        $rows = Message::query()
-            ->whereIn('sender_id', $adminIds)
-            ->orWhereIn('receiver_id', $adminIds)
-            ->get(['sender_id', 'receiver_id', 'is_read', 'created_at']);
+        // Gom nhóm hoàn toàn bằng SQL thay vì tải toàn bộ tin nhắn vào PHP (endpoint được gọi lại
+        // nhiều lần khi admin mở/làm mới khung chat, bảng messages càng lớn càng chậm và tốn RAM).
+        // Placeholder "?" cho danh sách admin => id được bind an toàn, không nối chuỗi trực tiếp.
+        $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
 
-        $stats = []; // [customer_id => ['last_message_at' => ..., 'unread_count' => int]]
+        // Với mỗi dòng: nếu người gửi là admin thì khách là người nhận, ngược lại khách là người gửi.
+        // is_unread = 1 khi khách nhắn cho admin (người gửi không phải admin) mà đội admin chưa ai đọc.
+        $conversationRows = Message::query()
+            ->toBase()
+            ->selectRaw("CASE WHEN sender_id IN ({$placeholders}) THEN receiver_id ELSE sender_id END AS customer_id", $adminIds)
+            ->addSelect('created_at')
+            ->selectRaw("CASE WHEN sender_id IN ({$placeholders}) THEN 0 WHEN is_read = 0 THEN 1 ELSE 0 END AS is_unread", $adminIds)
+            // Chỉ lấy tin nhắn mà ĐÚNG MỘT bên là admin (bỏ qua admin nhắn với admin).
+            ->where(function ($query) use ($adminIds) {
+                $query->where(function ($q) use ($adminIds) {
+                    $q->whereIn('sender_id', $adminIds)->whereNotIn('receiver_id', $adminIds);
+                })->orWhere(function ($q) use ($adminIds) {
+                    $q->whereNotIn('sender_id', $adminIds)->whereIn('receiver_id', $adminIds);
+                });
+            });
 
-        foreach ($rows as $row) {
-            $senderIsAdmin = $adminIds->contains($row->sender_id);
-            $receiverIsAdmin = $adminIds->contains($row->receiver_id);
+        $rows = DB::query()
+            ->fromSub($conversationRows, 'conversation_rows')
+            ->join('users', 'users.id', '=', 'conversation_rows.customer_id')
+            ->select('users.id', 'users.name', 'users.email')
+            ->selectRaw('MAX(conversation_rows.created_at) AS last_message_at')
+            ->selectRaw('SUM(conversation_rows.is_unread) AS unread_count')
+            ->groupBy('users.id', 'users.name', 'users.email')
+            ->orderByDesc('last_message_at')
+            ->get();
 
-            // Bỏ qua tin nhắn giữa admin với admin (không phải hội thoại với khách hàng).
-            if ($senderIsAdmin && $receiverIsAdmin) {
-                continue;
-            }
-
-            $customerId = $senderIsAdmin ? $row->receiver_id : $row->sender_id;
-
-            if (! isset($stats[$customerId])) {
-                $stats[$customerId] = [
-                    'last_message_at' => $row->created_at,
-                    'unread_count' => 0,
-                ];
-            }
-
-            if ($row->created_at && (! $stats[$customerId]['last_message_at'] || $row->created_at->gt($stats[$customerId]['last_message_at']))) {
-                $stats[$customerId]['last_message_at'] = $row->created_at;
-            }
-
-            // Khách nhắn cho admin (sender = khách, receiver = admin) mà đội admin chưa ai đọc.
-            if (! $senderIsAdmin && $receiverIsAdmin && ! $row->is_read) {
-                $stats[$customerId]['unread_count']++;
-            }
-        }
-
-        if (empty($stats)) {
+        if ($rows->isEmpty()) {
             return response()->json([]);
         }
 
-        $users = User::whereIn('id', array_keys($stats))
-            ->select('id', 'name', 'email')
-            ->get()
-            ->map(function ($user) use ($stats) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'last_message_at' => optional($stats[$user->id]['last_message_at'])->toIso8601String(),
-                    'unread_count' => $stats[$user->id]['unread_count'],
-                ];
-            })
-            ->sortByDesc('last_message_at')
-            ->values();
+        // MAX() trả về chuỗi thô => parse lại để giữ đúng định dạng ISO8601 như trước.
+        $users = $rows->map(function ($row) {
+            return [
+                'id' => (int) $row->id,
+                'name' => $row->name,
+                'email' => $row->email,
+                'last_message_at' => $row->last_message_at ? Carbon::parse($row->last_message_at)->toIso8601String() : null,
+                'unread_count' => (int) $row->unread_count,
+            ];
+        })->values();
 
         return response()->json($users);
     }
@@ -109,7 +101,7 @@ class AdminChatController extends Controller
     {
         $request->validate([
             'receiver_id' => 'required|exists:users,id',
-            'content' => ['required', 'string', function ($attribute, $value, $fail) {
+            'content' => ['required', 'string', 'max:2000', function ($attribute, $value, $fail) {
                 if (trim($value) === '') {
                     $fail('Nội dung tin nhắn không được để trống.');
                 }
@@ -119,6 +111,7 @@ class AdminChatController extends Controller
             'receiver_id.exists' => 'Người nhận không tồn tại.',
             'content.required' => 'Vui lòng nhập nội dung tin nhắn.',
             'content.string' => 'Nội dung tin nhắn không hợp lệ.',
+            'content.max' => 'Nội dung tin nhắn không được vượt quá 2000 ký tự.',
         ]);
 
         // Chặn admin lỡ gửi tin cho một admin khác qua API này (chỉ dùng để nhắn cho khách hàng).
@@ -150,7 +143,9 @@ class AdminChatController extends Controller
     {
         $adminIds = User::where('role', 'admin')->pluck('id');
 
+        // Chỉ đếm tin do khách gửi (loại tin admin nhắn cho admin), khớp với getUsers().
         $count = Message::whereIn('receiver_id', $adminIds)
+            ->whereNotIn('sender_id', $adminIds)
             ->where('is_read', false)
             ->count();
 
