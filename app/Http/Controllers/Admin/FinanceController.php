@@ -18,6 +18,11 @@ class FinanceController extends Controller
         'cancelled' => 'Đã hủy', 'refund_pending' => 'Chờ hoàn tiền', 'refunded' => 'Đã hoàn tiền',
     ];
 
+    // Kênh thanh toán dùng chung cho bộ lọc và thống kê (cả trang tổng quan lẫn danh sách giao dịch).
+    private const METHODS = [
+        'cod' => 'COD', 'momo' => 'MoMo', 'bank_transfer' => 'Chuyển khoản ngân hàng', 'unknown' => 'Chưa xác định',
+    ];
+
     private const COD_TRANSITIONS = [
         'pending' => ['pending', 'paid', 'failed'],
         'failed' => ['failed', 'pending', 'paid'],
@@ -37,8 +42,9 @@ class FinanceController extends Controller
         $orders = DB::table('orders')->leftJoin('payment_transactions as payment', function ($join) use ($paymentId) {
             $join->on('payment.order_id', '=', 'orders.id')->where('payment.id', '=', $paymentId);
         })->select('orders.*', 'payment.id as payment_id', 'payment.paid_at')
-            ->selectRaw("COALESCE(payment.gateway, CASE WHEN orders.status IN ('cod_ordered', 'cod_paid') THEN 'cod' WHEN orders.status IN ('paid', 'paid_momo') THEN 'momo' ELSE 'unknown' END) as gateway")
-            ->selectRaw("COALESCE(payment.status, CASE WHEN orders.status = 'cod_ordered' THEN 'pending' WHEN orders.status IN ('cod_paid', 'paid_momo') THEN 'paid' ELSE orders.status END) as payment_status");
+            // Đơn cũ chưa có payment_transactions: suy ra kênh/trạng thái từ orders.status (giống AdminOrderController::index()).
+            ->selectRaw("COALESCE(payment.gateway, CASE WHEN orders.status IN ('cod_ordered', 'cod_paid') THEN 'cod' WHEN orders.status = 'awaiting_transfer' THEN 'bank_transfer' WHEN orders.status IN ('paid', 'paid_momo') THEN 'momo' ELSE 'unknown' END) as gateway")
+            ->selectRaw("COALESCE(payment.status, CASE WHEN orders.status IN ('cod_ordered', 'awaiting_transfer') THEN 'pending' WHEN orders.status IN ('cod_paid', 'paid_momo') THEN 'paid' ELSE orders.status END) as payment_status");
 
         return DB::query()->fromSub($orders, 'finance_orders');
     }
@@ -51,7 +57,7 @@ class FinanceController extends Controller
             'date_to' => ['nullable', 'date_format:Y-m-d', ...($request->filled('date_from') ? ['after_or_equal:date_from'] : [])],
             'min_amount' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
             'max_amount' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99', ...($request->filled('min_amount') ? ['gte:min_amount'] : [])],
-            'gateway' => ['nullable', Rule::in(['cod', 'momo', 'unknown'])],
+            'gateway' => ['nullable', Rule::in(array_keys(self::METHODS))],
             'payment_status' => ['nullable', Rule::in(array_keys(self::STATUSES))],
             'sort' => ['nullable', Rule::in(['newest', 'oldest', 'amount_asc', 'amount_desc'])],
             'page' => ['nullable', 'integer', 'min:1'],
@@ -99,20 +105,26 @@ class FinanceController extends Controller
         [$query, $filters] = $this->filteredOrders($request);
 
         // Thống kê toàn bộ kết quả lọc; mỗi đơn chỉ tính một lần.
-        $summary = (clone $query)->selectRaw('COUNT(*) as order_count, COALESCE(SUM(total_price), 0) as total_amount')->first();
+        // Doanh thu chỉ tính đơn đã thanh toán thành công (payment_status = 'paid');
+        // đơn hủy/thất bại/chưa thu tiền và đơn chờ hoàn/đã hoàn tiền không được tính.
+        $summary = (clone $query)->selectRaw('COUNT(*) as order_count')
+            ->selectRaw("SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) as paid_count")
+            ->selectRaw("COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total_price ELSE 0 END), 0) as total_amount")
+            ->first();
         $statusTotals = (clone $query)->select('payment_status')
             ->selectRaw('COUNT(*) as order_count, SUM(total_price) as total_amount')
             ->groupBy('payment_status')->get()->keyBy('payment_status');
         $methodTotals = (clone $query)->select('gateway')
             ->selectRaw('COUNT(*) as order_count, SUM(total_price) as total_amount')
             ->selectRaw("SUM(CASE WHEN payment_status = 'paid' THEN total_price ELSE 0 END) as paid_amount")
+            ->selectRaw("SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) as paid_count")
             ->groupBy('gateway')->get()->keyBy('gateway');
 
         return view('admin.finance.index', [
             'filters' => $filters, 'summary' => $summary,
             'statusTotals' => $statusTotals, 'methodTotals' => $methodTotals,
             'statuses' => self::STATUSES,
-            'methods' => ['cod' => 'COD', 'momo' => 'MoMo', 'unknown' => 'Chưa xác định'],
+            'methods' => self::METHODS,
         ]);
     }
 
@@ -129,7 +141,7 @@ class FinanceController extends Controller
         return view('admin.finance.transactions', [
             'orders' => $orders, 'filters' => $filters,
             'statuses' => self::STATUSES, 'codTransitions' => self::COD_TRANSITIONS,
-            'methods' => ['cod' => 'COD', 'momo' => 'MoMo', 'unknown' => 'Chưa xác định'],
+            'methods' => self::METHODS,
         ]);
     }
 
