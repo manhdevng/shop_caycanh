@@ -112,7 +112,7 @@
         <form action="{{ route('admin.tickets.reply', $ticket) }}" method="POST">
             @csrf
             <label for="message" class="block text-sm font-semibold text-text-primary mb-2 mono">Trả lời khách hàng</label>
-            <textarea name="message" id="message" rows="4" placeholder="Nhập nội dung trả lời..." required
+            <textarea name="message" id="message" rows="4" placeholder="Nhập nội dung trả lời..." required maxlength="5000"
                       class="w-full rounded-xl border-green-border/50 border px-4 py-3 focus:ring-2 focus:ring-green-primary focus:border-green-primary outline-none transition-all text-text-primary bg-[#f8f9f5]">{{ old('message') }}</textarea>
             @error('message')
                 <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
