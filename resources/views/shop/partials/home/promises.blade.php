@@ -17,12 +17,26 @@
                     'service' => 'Dịch vụ tận tâm',
                     'materials' => 'Chất liệu cao cấp',
                 ];
+                // Lá ở đầu thân dây mỗi cột: ảnh thật đã tách nền, cuống chĩa
+                // xuống. ox = vị trí cuống theo % chiều ngang ảnh — lá xoay
+                // quanh đúng điểm này (xem public/images/foliage/README.md).
+                $vineLeaves = [
+                    'curated' => ['src' => 'la-gan', 'ox' => 48.9],
+                    'service' => ['src' => 'monstera', 'ox' => 65.4],
+                    'materials' => ['src' => 'la-gan', 'ox' => 48.9],
+                ];
             @endphp
             @foreach(['curated', 'service', 'materials'] as $i => $slug)
                 @php $feature = $homeFeatures->get($slug); @endphp
                 <div style="text-align:center">
-                    <span class="sc-rule"></span>
-                    <div data-sc-in data-sc-stagger="60">
+                    @php $leaf = $vineLeaves[$slug]; @endphp
+                    <span class="sc-rule" data-vine aria-hidden="true">
+                        <i class="sc-rule__line"></i>
+                        <span class="sc-rule__leaf" style="--ox:{{ $leaf['ox'] }}%;--oxf:{{ $leaf['ox'] / 100 }}">
+                            <img src="{{ asset('images/foliage/' . $leaf['src'] . '-160.webp') }}" alt="" width="160" height="{{ $leaf['src'] === 'monstera' ? 250 : 286 }}" loading="lazy" decoding="async">
+                        </span>
+                    </span>
+                    <div>
                         <h3 style="font-family:'Anton',sans-serif;font-size:22px;letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 20px">{{ $feature->title ?? $featureTitles[$slug] }}</h3>
                         @if($feature && $feature->media_path)
                             <div style="aspect-ratio:1/1;border-radius:12px;overflow:hidden;margin-bottom:20px">
@@ -50,15 +64,42 @@
 </section>
 
 <style>
-/* Khối H — đường kẻ cấu trúc tĩnh (không reveal — H và G liền kề nhau nên
-   không được trùng device family `reveal`; điều đáng nhớ ở H là nội dung cam
-   kết nâng lên bằng `in`/`stagger`, đường kẻ chỉ là khung, không phải khoảnh
-   khắc) thay cho border-top cũ, rồi nội dung cột nâng lên theo sau. */
+/* Khối H — thân dây mọc. Đường kẻ trên đầu mỗi cột là một thân dây: khi cuộn
+   tới, thân dài dần từ trái sang phải (scrub, có độ trễ) và mang theo một
+   chiếc lá thật ở ngọn; lá nhú ra từ cuống rồi lay theo tốc độ cuộn
+   (public/js/home-motion.js, hàm vines). Nội dung cột đứng yên — chuyển động
+   của khối nằm ở thân dây, không nâng chữ lên nữa.
+
+   Trạng thái tĩnh (không JS / giảm chuyển động): thân dài đủ, lá đứng ở ngọn,
+   hơi nghiêng — vẫn là một hình hoàn chỉnh, không có gì chờ được hiện ra. */
 .sc-home .sc-rule {
+    position: relative;
     display: block;
     height: 1px;
-    background: var(--sc-hairline);
     width: 100%;
-    margin-bottom: 24px;
+    margin: 44px 0 24px;
+}
+.sc-home .sc-rule__line {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #C9D8C0, #3F5B45);
+    transform-origin: 0 50%;
+}
+.sc-home .sc-rule__leaf {
+    position: absolute;
+    bottom: 0;
+    left: 100%;
+    width: 34px;
+    margin-left: calc(-34px * var(--oxf)); /* đặt cuống lá đúng ngọn thân */
+    transform-origin: var(--ox) 100%;
+    pointer-events: none;
+}
+.sc-home .sc-rule__leaf img {
+    display: block;
+    width: 100%;
+    height: auto;
+    transform-origin: var(--ox) 100%;
+    transform: rotate(-8deg);
+    filter: drop-shadow(0 3px 3px rgba(28, 28, 26, .18));
 }
 </style>

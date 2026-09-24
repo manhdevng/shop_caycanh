@@ -41,13 +41,81 @@
 
     var mm = gsap.matchMedia();
     mm.add('(prefers-reduced-motion: no-preference)', function () {
+      var lay = createLay();
       // Tạo theo thứ tự xuất hiện trên trang (trên -> dưới) để refresh đúng.
       growGrids(root);
+      vines(root, lay);
+      return lay.kill;
     });
 
     // Ảnh/phông nạp xong làm đổi chiều cao trang -> đo lại vị trí trigger.
     if (document.readyState === 'complete') ScrollTrigger.refresh();
     else window.addEventListener('load', function () { ScrollTrigger.refresh(); }, { once: true });
+  }
+
+  /* --------------------------------------------------- Lay + Hướng sáng --
+     Một ScrollTrigger phủ cả trang đọc hai thứ: tiến độ trang (nắng, 0 -> 1,
+     cùng nghĩa với --sc-sun) và vận tốc cuộn. Mỗi lá đăng ký qua lay.add():
+       góc = base + (nắng - 0.5) * sunTilt + k * độ lay theo vận tốc
+     Lá nghiêng về phía nắng; cuộn nhanh thì lá bị kéo lệch, dừng tay 0.14s
+     thì lắng về góc theo nắng bằng elastic nhỏ. Chỉ một listener cho mọi lá. */
+  function createLay() {
+    var items = [];
+    var sun = 0.5;
+    var settle = null;
+
+    function target(it, v) { return it.base + (sun - 0.5) * it.sunTilt + it.k * v; }
+    function push(v) { for (var i = 0; i < items.length; i++) items[i].to(target(items[i], v)); }
+
+    var st = ScrollTrigger.create({
+      start: 0,
+      end: 'max',
+      onUpdate: function (self) {
+        sun = self.progress;
+        push(gsap.utils.clamp(-10, 10, self.getVelocity() / -160));
+        if (settle) settle.kill();
+        settle = gsap.delayedCall(0.14, function () { push(0); });
+      }
+    });
+
+    return {
+      add: function (el, opts) {
+        var it = {
+          base: opts.base || 0,
+          k: opts.k == null ? 1 : opts.k,
+          sunTilt: opts.sunTilt == null ? 8 : opts.sunTilt,
+          to: gsap.quickTo(el, 'rotation', { duration: 1.4, ease: M.settle })
+        };
+        sun = st.progress;
+        gsap.set(el, { rotation: target(it, 0) });
+        items.push(it);
+      },
+      kill: function () { if (settle) settle.kill(); }
+    };
+  }
+
+  /* ---------------------------------------------------------- Thân dây --
+     Khối cam kết: [data-vine] > .sc-rule__line + .sc-rule__leaf. Thân dài dần
+     theo cuộn (scrub, có độ trễ), lá đi theo ngọn: nhú ra từ cuống ở đầu thân
+     rồi được ngọn mang tới cuối. Ảnh lá bên trong đăng ký Lay để lay theo cuộn
+     và nghiêng theo nắng — tách hai lớp để scrub (wrapper) và lay (ảnh) không
+     tranh nhau cùng một thuộc tính rotation. */
+  function vines(root, lay) {
+    gsap.utils.toArray(root.querySelectorAll('[data-vine]')).forEach(function (rule) {
+      var line = rule.querySelector('.sc-rule__line');
+      var leaf = rule.querySelector('.sc-rule__leaf');
+      var img = leaf ? leaf.querySelector('img') : null;
+      var tl = gsap.timeline({
+        defaults: { ease: 'none' },
+        scrollTrigger: { trigger: rule, start: 'top 88%', end: 'top 45%', scrub: M.scrub, invalidateOnRefresh: true }
+      });
+      tl.fromTo(line, { scaleX: 0 }, { scaleX: 1, duration: 1 }, 0);
+      if (leaf) {
+        tl.fromTo(leaf, { x: function () { return -rule.offsetWidth; } }, { x: 0, duration: 1 }, 0)
+          .fromTo(leaf, { scale: 0, rotation: -40 }, { scale: 1, rotation: 0, duration: 0.35, ease: M.grow }, 0.04);
+      }
+      if (img) lay.add(img, { base: -8 });
+    });
   }
 
   /* ---------------------------------------------------------------- Mọc --
