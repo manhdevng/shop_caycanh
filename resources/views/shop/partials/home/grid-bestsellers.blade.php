@@ -9,14 +9,14 @@
     - $priceLineFor, $specLineFor, $wishlistedIds (closure/mảng khai báo trong
       @php ở đầu shop/index.blade.php).
 
-    Có dữ liệu -> vẽ lưới 4 thẻ sản phẩm bán chạy thật (device flow + reveal="left").
+    Có dữ liệu -> vẽ lưới 4 thẻ sản phẩm bán chạy thật; thẻ "mọc" từ đáy lên
+    qua [data-grow] (public/js/home-motion.js), tấm nền đứng yên.
     Không có dữ liệu -> rơi về banner-bestsellers.blade.php (đã có sẵn từ trước),
-    banner đó tự mang cùng device nên vị trí trong bảng score không đổi dù hiện
-    hình thái nào.
+    banner đó cũng đứng yên, không quét ngang.
 --}}
 @if($homeBestSellers->isNotEmpty())
 <section data-sc-act="flow" id="ban-chay">
-    <div data-sc-reveal="left" data-sc-reveal-at="0.02 0.34" style="background:#F7F4EF">
+    <div style="background:#F7F4EF">
         <div style="max-width:1400px;margin:0 auto;padding:clamp(32px,4vw,56px) 24px clamp(56px,8vw,100px)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:28px;gap:16px;flex-wrap:wrap">
                 <div>
@@ -26,7 +26,7 @@
                 </div>
                 <a href="{{ route('shop.bestSellers') }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66">Xem tất cả &rarr;</a>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 24px" class="grid grid-cols-2 md:grid-cols-4">
+            <div data-grow style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 24px" class="grid grid-cols-2 md:grid-cols-4">
                 @foreach($homeBestSellers as $item)
                     <div>
                         <div style="position:relative">

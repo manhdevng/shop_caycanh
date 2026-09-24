@@ -1,14 +1,14 @@
 <section data-sc-act="flow" style="max-width:1400px;margin:0 auto;padding:clamp(56px,8vw,100px) 24px 0">
-    <div data-sc-in style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:28px;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:28px;gap:16px;flex-wrap:wrap">
         <h2 style="font-family:'Anton',sans-serif;font-size:clamp(22px,3vw,30px);letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0">Hoa mới nhập</h2>
         <a href="{{ route('shop.index', ['type' => 'flower', 'sort' => 'featured']) }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66">Xem tất cả &rarr;</a>
     </div>
     @if($newestFlowers->isNotEmpty())
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 24px" class="grid grid-cols-2 md:grid-cols-4">
+        <div data-grow style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 24px" class="grid grid-cols-2 md:grid-cols-4">
             @foreach($newestFlowers as $i => $item)
                 <div>
                     <div style="position:relative">
-                        <a href="{{ route('shop.show', $item->id) }}" class="sc-leaf" data-sc-reveal="up" data-sc-reveal-at="{{ 0.05 + $i*0.07 }} {{ 0.35 + $i*0.07 }}" style="position:relative;display:block;aspect-ratio:1/1">
+                        <a href="{{ route('shop.show', $item->id) }}" class="sc-leaf" style="position:relative;display:block;aspect-ratio:1/1">
                             @include('shop.partials.badge', ['product' => $item, 'bestSellerIds' => $bestSellerIds])
                             @if($item->main_image)
                                 <img src="{{ asset('storage/' . $item->main_image) }}" alt="{{ $item->name }}" style="width:100%;height:100%;object-fit:cover;display:block">
@@ -20,7 +20,7 @@
                         </a>
                         @include('shop.partials.wishlist-button', ['product' => $item, 'wishlistedIds' => $wishlistedIds])
                     </div>
-                    <div data-sc-in>
+                    <div>
                         <p style="font-size:15px;font-weight:500;color:#1C1C1A;margin:14px 0 6px">{{ $item->name }}</p>
                         <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66;margin:0 0 8px">{{ $specLineFor($item) }}</p>
                         <p style="font-size:15px;font-weight:600;color:#1C1C1A;margin:0 0 10px">
@@ -42,7 +42,7 @@
             @endforeach
         </div>
     @else
-        <div data-sc-in style="border:1px dashed #E5E2DC;border-radius:16px;padding:56px 24px;text-align:center">
+        <div style="border:1px dashed #E5E2DC;border-radius:16px;padding:56px 24px;text-align:center">
             <p style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#8A8680;margin:0">Sắp ra mắt &mdash; thêm sản phẩm vào danh mục "Hoa" trong trang quản trị để hiển thị tại đây</p>
         </div>
     @endif

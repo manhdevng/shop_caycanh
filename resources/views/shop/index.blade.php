@@ -67,6 +67,7 @@
     <script src="{{ asset('vendor/scrollcraft/scrollcraft.js') }}" defer></script>
 @endpush
 @include('shop.partials.home.home-boot')
+@include('shop.partials.home.home-motion')
 
 <div class="sc-home">
 @include('shop.partials.home.hero')
