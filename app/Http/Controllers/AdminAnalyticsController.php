@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Order;
 use App\Models\Product;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -66,13 +67,17 @@ class AdminAnalyticsController extends Controller
             ->select('product_id')
             ->selectRaw('COUNT(*) as view_count')
             ->groupBy('product_id')
-            ->having('view_count', '>=', 3)
+            // Dùng biểu thức thay vì alias: PostgreSQL không cho HAVING tham chiếu alias SELECT.
+            ->havingRaw('COUNT(*) >= ?', [3])
             ->get()
             ->keyBy('product_id');
 
         $purchaseCounts = DB::table('order_items')
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->whereIn('orders.status', ['paid', 'cod_ordered'])
+            // Đủ mọi trạng thái đã thanh toán / COD (gồm cả cod_paid, paid_momo),
+            // bỏ đơn đã huỷ vận chuyển hoặc đang/đã hoàn hàng.
+            ->whereIn('orders.status', Order::PAID_OR_COD_STATUSES)
+            ->whereNotIn('orders.shipping_status', array_merge(['cancelled'], Order::SHIPPING_RETURN_STATUSES))
             ->select('order_items.product_id')
             ->selectRaw('COUNT(*) as purchase_count')
             ->groupBy('order_items.product_id')
