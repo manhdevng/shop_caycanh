@@ -70,7 +70,6 @@ class SocialAuthController extends Controller
                     // cột password NOT NULL nên tạo một mật khẩu ngẫu nhiên,
                     // không sử dụng để đăng nhập thường.
                     'password' => bcrypt(Str::random(32)),
-                    'role' => 'customer', // Mặc định role là customer, giống đăng ký thường
                 ]);
 
                 // 'email_verified_at' không nằm trong $fillable của User (có
@@ -79,6 +78,9 @@ class SocialAuthController extends Controller
                 // mảng create() ở trên — nếu không, Eloquent sẽ âm thầm bỏ
                 // qua field này và user mới sẽ bị middleware 'verified' chặn
                 // ngay sau khi đăng nhập Google, dù Google đã xác thực hộ.
+                // Tương tự, 'role' cũng không nằm trong $fillable (chống
+                // mass-assignment nâng quyền) nên gán trực tiếp ở đây.
+                $newUser->role = 'customer'; // Mặc định role là customer, giống đăng ký thường
                 $newUser->email_verified_at = now();
                 $newUser->save();
 
