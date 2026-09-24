@@ -37,13 +37,6 @@
                                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Khôi phục
                                 </button>
                             </form>
-                            <form action="{{ route('products.forceDelete', $product->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Xóa VĨNH VIỄN sản phẩm này? Toàn bộ ảnh và phân loại sẽ mất, không thể khôi phục.');">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-pill text-sm font-medium hover:bg-red-50 transition-colors flex items-center gap-1">
-                                    <i data-lucide="trash-2" class="w-4 h-4"></i> Xóa vĩnh viễn
-                                </button>
-                            </form>
                         </div>
                     </td>
                 </tr>
