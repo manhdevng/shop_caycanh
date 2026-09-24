@@ -1,0 +1,221 @@
+/* ============================================================================
+   scrollcraft-shop.css — build cay-canh-home
+   ----------------------------------------------------------------------------
+   Trích PHẦN CƠ CHẾ (device layer) từ
+   `.agents/skills/scroll-craft/engine/scrollcraft.css` của skill scroll-craft.
+   KHÔNG chép nguyên file gốc: file gốc có một khối reset toàn cục (`body`,
+   `html{scroll-behavior:smooth}`, `img,video,canvas,svg{display:block}`,
+   `:focus-visible`, `::selection`, `:root`...) sẽ làm vỡ header cố định,
+   mega-menu và icon lucide sẵn có của "Cây Cảnh Shop". Mọi selector dưới đây
+   được bọc trong `.sc-home` để không rò ra ngoài phạm vi trang chủ.
+
+   Cổng an toàn: mọi quy tắc ẩn nội dung (opacity:0 khi chưa vào khung) chỉ có
+   hiệu lực dưới `.sc-home.sc-engine-on` — class này do `home-boot.blade.php`
+   thêm SAU khi `ScrollCraft.mount()` chạy thành công. Nếu JS lỗi/bị chặn,
+   class không được thêm (hoặc bị gỡ trong catch) và toàn bộ nội dung hiện đủ,
+   bấm được — trang vẫn bán được hàng.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- token -- */
+.sc-home {
+  --sc-canvas: #FFFFFF;
+  --sc-surface: #F7F4EF;
+  --sc-ink: #1C1C1A;
+  --sc-ink-soft: #6B6B66;
+  --sc-accent: #5C2323;
+  --sc-ground-dark: #1C1C1A;
+  --sc-hairline: #E5E2DC;
+  --sc-gutter: 24px;
+  --sc-ease-out: cubic-bezier(.23, 1, .32, 1);
+  --sc-z-stage: 0;
+  --sc-z-copy: 2;
+  --sc-header-h: 76px;
+  --sc-sun: 0.5;
+}
+
+/* ================================================================ DEVICES ==
+   Cơ chế do engine điều khiển. Không restyle các selector này để hợp thẩm mỹ
+   — đó là việc của markup riêng (`.sc-gate`, `.sc-rule`, `.sc-leaf`...) do
+   agent #2/#3/#4 dựng ở từng khối. */
+
+.sc-home .sc-act--pinned { position: relative; }
+.sc-home .sc-stage {
+  position: sticky; top: 0;
+  height: 100vh; height: 100svh;
+  overflow: clip;
+  z-index: var(--sc-z-stage);
+  /* Header #siteHeader là fixed, cao --sc-header-h, z-index:100, luôn nổi
+     trên .sc-stage (z-index:0). Mọi nội dung có nghĩa (chữ, CTA) đặt BÊN
+     TRONG .sc-stage phải tự chừa khoảng này bằng var(--sc-safe-top), ví dụ
+     `padding-top: var(--sc-safe-top)` hoặc `top: var(--sc-safe-top)` trên
+     phần tử con — không ép padding thẳng lên .sc-stage vì sẽ vỡ ảnh
+     full-bleed của các cổng (C, F). */
+  --sc-safe-top: var(--sc-header-h);
+}
+
+/* scrub / sequence media — giữ đủ cơ chế dù build này không dùng scrub
+   (grammar "Luống vườn" cấm scrub) để không vỡ nếu một stage nào lỡ có
+   video[data-sc-scrub] hoặc .sc-stage__poster. */
+.sc-home .sc-stage :is(video[data-sc-scrub], canvas[data-sc-sequence], .sc-stage__poster) {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.sc-home video[data-sc-scrub] { opacity: 0; transition: opacity 380ms var(--sc-ease-out); }
+.sc-home .sc-has-clip video[data-sc-scrub] { opacity: 1; }
+.sc-home .sc-stage__poster { z-index: 0; transition: opacity 380ms var(--sc-ease-out); }
+.sc-home .sc-has-clip .sc-stage__poster { opacity: 0; }
+
+/* scrim. CẢNH BÁO khi dùng: nền của gradient dựng từ --sc-canvas, mà .sc-home
+   khai --sc-canvas:#FFFFFF (trang này nền sáng) -> .sc-scrim nguyên bản cho ra
+   vệt TRẮNG. Chữ trên hai cổng C/F là chữ trắng, nên khối nào dùng .sc-scrim
+   đều phải tự retint (đặt --sc-canvas tối ngay trên phần tử scrim) hoặc viết
+   hẳn gradient tối riêng — xem gate-season.blade.php.
+   Và scrim phải là ANH EM của khối chữ, không bao giờ là con hay ::before:
+   harness đo contrast ẩn [data-sc-cue] cùng con cháu bằng visibility:hidden,
+   thứ này ẩn luôn pseudo-element, nên scrim đặt sai chỗ sẽ biến mất đúng lúc
+   bị đo (references/verify.md, mục "The scrim has to be a SIBLING of the copy").
+   (Cập nhật 24/09/2026: bản đầu ghi "cổng C/F không có chữ nên không dùng
+   scrim" — không còn đúng, cả hai cổng đã có chữ.) */
+.sc-home .sc-scrim {
+  position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: linear-gradient(
+    var(--sc-scrim-angle, 180deg),
+    color-mix(in oklab, var(--sc-canvas) var(--sc-scrim-a, 78%), transparent) 0%,
+    color-mix(in oklab, var(--sc-canvas) 30%, transparent) 42%,
+    transparent 68%);
+}
+.sc-home .sc-scrim--bottom { --sc-scrim-angle: 0deg; }
+.sc-home .sc-scrim--left   { --sc-scrim-angle: 90deg; }
+.sc-home .sc-scrim--right  { --sc-scrim-angle: 270deg; }
+.sc-home .sc-scrim--lead {
+  background: linear-gradient(to top right,
+    color-mix(in oklab, var(--sc-canvas) 94%, transparent) 0%,
+    color-mix(in oklab, var(--sc-canvas) 72%, transparent) 30%,
+    color-mix(in oklab, var(--sc-canvas) 30%, transparent) 52%,
+    transparent 72%);
+}
+.sc-home .sc-scrim--trail {
+  background: linear-gradient(to top left,
+    color-mix(in oklab, var(--sc-canvas) 94%, transparent) 0%,
+    color-mix(in oklab, var(--sc-canvas) 72%, transparent) 30%,
+    color-mix(in oklab, var(--sc-canvas) 30%, transparent) 52%,
+    transparent 72%);
+}
+.sc-home .sc-scrim--band {
+  background: linear-gradient(to top,
+    color-mix(in oklab, var(--sc-canvas) 94%, transparent) 0%,
+    color-mix(in oklab, var(--sc-canvas) 74%, transparent) 22%,
+    color-mix(in oklab, var(--sc-canvas) 30%, transparent) 42%,
+    transparent 58%);
+}
+.sc-home .sc-scrim--vignette {
+  background: radial-gradient(120% 90% at 50% 45%, transparent 40%,
+              color-mix(in oklab, var(--sc-canvas) 70%, transparent) 100%);
+}
+
+/* copy trên một stage */
+.sc-home .sc-copy {
+  position: absolute; z-index: var(--sc-z-copy);
+  inset-inline: var(--sc-gutter);
+  max-width: min(46rem, 76vw);
+  will-change: opacity, transform;
+}
+.sc-home .sc-copy--lead   { left: var(--sc-gutter); bottom: clamp(3rem, 12vh, 9rem); }
+.sc-home .sc-copy--center { inset-inline: auto; left: 50%; top: 50%; translate: -50% -50%; text-align: center; }
+.sc-home .sc-copy--trail  { inset-inline: auto; right: var(--sc-gutter); bottom: clamp(3rem, 12vh, 9rem); text-align: right; }
+
+/* kinetic split (vocabulary — grammar không dùng ở build này) */
+.sc-home .sc-split { display: inline-block; overflow: hidden; vertical-align: top; }
+.sc-home .sc-split--line { display: block; padding-bottom: 0.14em; margin-bottom: -0.14em; }
+.sc-home .sc-split__i { display: inline-block; will-change: transform, opacity; }
+.sc-home .sc-is-split { opacity: 1 !important; }
+
+/* horizontal rail (không dùng ở build này, giữ cơ chế) */
+.sc-home [data-sc-pan] { display: flex; will-change: transform; }
+
+/* reveal + parallax — chỉ báo hiệu thuộc tính đang được engine đọc */
+.sc-home [data-sc-reveal] { will-change: clip-path; }
+.sc-home [data-sc-parallax] { will-change: transform; }
+
+/* pointer devices — vocabulary, cấm dùng theo grammar (không che nút mua) */
+.sc-home [data-sc-tilt] { transform-style: preserve-3d; will-change: transform; }
+.sc-home [data-sc-magnet] { will-change: transform; }
+.sc-home [data-sc-spotlight] { isolation: isolate; }
+:where(.sc-home [data-sc-spotlight]) { position: relative; }
+.sc-home [data-sc-spotlight]::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+  background: radial-gradient(
+    28rem 28rem at calc(var(--sc-mx, 0.5) * 100%) calc(var(--sc-my, 0.5) * 100%),
+    color-mix(in oklab, var(--sc-accent) 16%, transparent), transparent 70%);
+  opacity: 0; transition: opacity 420ms var(--sc-ease-out);
+}
+.sc-home [data-sc-spotlight]:hover::after { opacity: 1; }
+
+/* ------------------------------------------------------------ cổng an toàn --
+   [data-sc-cue], [data-sc-in], [data-sc-stagger] > * chỉ bắt đầu ẩn khi JS đã
+   chạy thật (.sc-engine-on được home-boot thêm SAU khi mount() không văng lỗi).
+   Không có .sc-engine-on -> mọi thứ hiện đầy đủ ngay từ CSS tĩnh, không phụ
+   thuộc JS. Đây là điều khoản sống còn của một trang bán hàng. */
+.sc-home.sc-engine-on [data-sc-cue] { opacity: 0; will-change: opacity, transform; }
+.sc-home.sc-engine-on [data-sc-in],
+.sc-home.sc-engine-on [data-sc-stagger] > * {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition: opacity 620ms var(--sc-ease-out), transform 620ms var(--sc-ease-out);
+}
+.sc-home.sc-engine-on [data-sc-in].sc-in,
+.sc-home.sc-engine-on [data-sc-stagger] > .sc-in {
+  opacity: 1;
+  transform: none;
+}
+/* engine thêm .sc-ready lên <html> sau lần read() đầu -> tắt transition để
+   trạng thái mở đầu không "nháy" chuyển động trước khi có toạ độ cuộn thật. */
+.sc-ready .sc-home [data-sc-cue] { transition: none; }
+
+/* ====================================================== "Hướng sáng" ==
+   Signature move của build này. `home-boot.blade.php` ghi --sc-sun (0 -> 1)
+   theo tiến độ cuộn của CẢ TRANG lên .sc-home. Agent #3/#4 chỉ gắn
+   class="sc-leaf" lên <a> bọc ảnh sản phẩm; toàn bộ hành vi định nghĩa ở đây. */
+.sc-home .sc-leaf {
+  transform-origin: 50% 100%;
+  transform: rotate(calc((var(--sc-sun) - 0.5) * 2.2deg));
+  will-change: transform;
+  /* bóng đổ lệch NGƯỢC hướng nắng: --sc-sun=0 (nắng trái) -> bóng ngả phải,
+     --sc-sun=1 (nắng phải) -> bóng ngả trái. Biên độ tối đa ~6px, tint theo
+     --sc-ink (không dùng đen thuần). */
+  filter: drop-shadow(calc((0.5 - var(--sc-sun)) * 12px) 5px 6px color-mix(in srgb, var(--sc-ink) 22%, transparent));
+}
+
+/* ------------------------------------------------------- reduced motion -- */
+@media (prefers-reduced-motion: reduce) {
+  .sc-home.sc-engine-on [data-sc-in],
+  .sc-home.sc-engine-on [data-sc-stagger] > * { transform: none; transition-duration: 220ms; }
+  .sc-home [data-sc-parallax],
+  .sc-home [data-sc-pan],
+  .sc-home .sc-split__i { transform: none !important; }
+  .sc-home [data-sc-reveal] { clip-path: none !important; }
+  .sc-home [data-sc-spotlight]::after { display: none; }
+
+  /* --sc-sun chốt ở mặc định 0.5 (script không gắn listener khi reduced) nên
+     lá không nghiêng và bóng đứng yên đúng giữa — khai báo tường minh ở đây
+     để không có khung hình nào lệch trước khi script kịp chạy. */
+  .sc-home .sc-leaf {
+    transform: none;
+    filter: drop-shadow(0 5px 6px color-mix(in srgb, var(--sc-ink) 22%, transparent));
+  }
+}
+
+/* --------------------------------------------------------------- mobile -- */
+@media (max-width: 860px) {
+  .sc-home .sc-copy { inset-inline: var(--sc-gutter); max-width: none; }
+  .sc-home .sc-copy--trail { text-align: left; }
+  .sc-home .sc-stage { height: 100svh; }
+  .sc-home .sc-scrim--trail {
+    background: linear-gradient(to top,
+      color-mix(in oklab, var(--sc-canvas) 94%, transparent) 0%,
+      color-mix(in oklab, var(--sc-canvas) 74%, transparent) 22%,
+      color-mix(in oklab, var(--sc-canvas) 30%, transparent) 42%,
+      transparent 58%);
+  }
+}
