@@ -173,7 +173,7 @@ class FinanceController extends Controller
             if ($newStatus === $currentStatus) {
                 return;
             }
-            if (in_array($newStatus, ['pending', 'paid'], true) && ($order->status === 'cancelled' || in_array($order->shipping_status, ['cancelled', 'return', 'returned'], true))) {
+            if (in_array($newStatus, ['pending', 'paid'], true) && ($order->status === 'cancelled' || in_array($order->shipping_status, array_merge(['cancelled'], Order::SHIPPING_RETURN_STATUSES), true))) {
                 throw ValidationException::withMessages(['payment_status' => 'Không thể xác nhận thu tiền cho đơn đã hủy hoặc hoàn hàng.']);
             }
             $attributes = [
