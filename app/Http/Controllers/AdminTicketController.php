@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Ticket;
 use App\Models\TicketReply;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class AdminTicketController extends Controller
@@ -40,19 +41,29 @@ class AdminTicketController extends Controller
     // Admin trả lời ticket, đồng thời đánh dấu đã trả lời.
     public function reply(Request $request, Ticket $ticket)
     {
+        // Không cho trả lời ticket đã đóng (tránh vô tình mở lại thành "answered").
+        // Admin muốn tiếp tục thì đổi trạng thái về "open" trước.
+        if ($ticket->status === 'closed') {
+            return back()->with('error', 'Ticket đã đóng, hãy mở lại trước khi trả lời.');
+        }
+
         $validated = $request->validate([
-            'message' => 'required|string',
+            'message' => 'required|string|max:5000',
         ], [
             'message.required' => 'Vui lòng nhập nội dung trả lời.',
+            'message.max' => 'Nội dung trả lời không được vượt quá 5000 ký tự.',
         ]);
 
-        TicketReply::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => auth()->id(),
-            'message' => $validated['message'],
-        ]);
+        // Tạo reply và cập nhật trạng thái trong cùng transaction để không bị lệch dữ liệu.
+        DB::transaction(function () use ($ticket, $validated) {
+            TicketReply::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => auth()->id(),
+                'message' => $validated['message'],
+            ]);
 
-        $ticket->update(['status' => 'answered']);
+            $ticket->update(['status' => 'answered']);
+        });
 
         return back()->with('success', 'Đã trả lời ticket.');
     }
