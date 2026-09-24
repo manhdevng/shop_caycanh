@@ -186,6 +186,13 @@ class CategoryController extends Controller
             unset($validated['scope']);
         }
 
+        // Phạm vi hiệu lực MỚI của danh mục sau khi lưu: danh mục con lấy
+        // theo nhóm cha mới, nhóm gốc lấy scope mới gửi lên. Chặn nếu việc
+        // đổi phạm vi làm các sản phẩm đang gắn bị lệch product_type.
+        $newParent = $request->filled('parent_id') ? Category::find($request->parent_id) : null;
+        $newScope = $newParent ? $newParent->scope : $validated['scope'];
+        $this->guardAgainstScopeMismatch($category, $newScope, $newParent ? 'parent_id' : 'scope');
+
         if ($request->hasFile('image')) {
             if ($category->image) {
                 Storage::disk('public')->delete($category->image);
@@ -333,6 +340,48 @@ class CategoryController extends Controller
                 'parent_id' => 'Danh mục cha phải là một nhóm gốc. Hệ thống chỉ hỗ trợ tối đa 2 cấp danh mục (nhóm gốc → danh mục con).',
             ]);
         }
+    }
+
+    /**
+     * Chặn đổi phạm vi (đổi scope nhóm gốc, chuyển con sang nhóm cha khác
+     * scope, đổi gốc ↔ con) khi các sản phẩm đang gắn sẽ bị lệch phạm vi so
+     * với product_type của chúng — cùng quy tắc với
+     * ProductController::validateCategoryScope(). Đổi sang 'both' luôn hợp lệ.
+     */
+    private function guardAgainstScopeMismatch(Category $category, string $newScope, string $errorField): void
+    {
+        if ($newScope === 'both') {
+            return;
+        }
+
+        // Phạm vi không đổi thì không kiểm tra lại — tránh chặn việc sửa
+        // tên/ảnh chỉ vì dữ liệu cũ đã lệch sẵn từ trước.
+        if ($newScope === $category->effectiveScope()) {
+            return;
+        }
+
+        // Nhóm gốc: các danh mục con kế thừa scope của nó nên cũng bị ảnh
+        // hưởng, phải kiểm tra cả sản phẩm gắn vào con.
+        $categoryIds = [$category->id];
+        if ($category->parent_id === null) {
+            $categoryIds = array_merge($categoryIds, $category->children()->pluck('id')->all());
+        }
+
+        $mismatchQuery = Product::whereHas('categories', fn ($q) => $q->whereIn('categories.id', $categoryIds))
+            ->where('product_type', '!=', $newScope);
+
+        $mismatchCount = (clone $mismatchQuery)->count();
+        if ($mismatchCount === 0) {
+            return;
+        }
+
+        $sampleNames = $mismatchQuery->orderBy('name')->limit(5)->pluck('name')->all();
+        $sampleText = '"' . implode('", "', $sampleNames) . '"' . ($mismatchCount > 5 ? ', ...' : '');
+        $scopeLabel = Category::SCOPES[$newScope] ?? $newScope;
+
+        throw \Illuminate\Validation\ValidationException::withMessages([
+            $errorField => "Không thể đổi phạm vi danh mục sang \"{$scopeLabel}\": có {$mismatchCount} sản phẩm đang gắn (vào danh mục này hoặc danh mục con) không thuộc loại \"{$scopeLabel}\" — {$sampleText}. Hãy chuyển các sản phẩm này sang danh mục khác trước.",
+        ]);
     }
 
     /**

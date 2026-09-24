@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Voucher;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class AdminVoucherController extends Controller
@@ -31,9 +32,12 @@ class AdminVoucherController extends Controller
     {
         $validated = $this->validateData($request);
 
-        $voucher = Voucher::create($validated);
-
-        $this->syncScopeRelations($voucher, $request);
+        // Tạo voucher + gắn phạm vi trong cùng 1 transaction: lỗi giữa chừng
+        // không để lại voucher thiếu phạm vi (vd scope 'products' nhưng trống).
+        DB::transaction(function () use ($validated, $request) {
+            $voucher = Voucher::create($validated);
+            $this->syncScopeRelations($voucher, $request);
+        });
 
         return redirect()->route('admin.vouchers.index')
             ->with('success', 'Đã tạo mã giảm giá.');
@@ -41,9 +45,19 @@ class AdminVoucherController extends Controller
 
     public function edit(Voucher $voucher)
     {
-        $allProducts = Product::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        // Sản phẩm ĐANG gắn với voucher (kể cả đã ngừng bán hoặc đã xoá mềm)
+        // phải luôn có mặt trong form — nếu không, lưu form sẽ sync() mất
+        // chúng khỏi phạm vi áp dụng mà admin không hề chủ động bỏ chọn.
+        $attachedProducts = $voucher->products()->withTrashed()->get(['products.id', 'products.name', 'products.is_active', 'products.deleted_at']);
+
+        $allProducts = Product::where('is_active', true)
+            ->get(['id', 'name', 'is_active', 'deleted_at'])
+            ->concat($attachedProducts)
+            ->unique('id')
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
         $allCategories = Category::orderBy('name')->get(['id', 'name']);
-        $selectedProductIds = $voucher->products->pluck('id')->all();
+        $selectedProductIds = $attachedProducts->pluck('id')->all();
         $selectedCategoryIds = $voucher->categories->pluck('id')->all();
 
         return view('admin.vouchers.edit', compact(
@@ -59,9 +73,10 @@ class AdminVoucherController extends Controller
     {
         $validated = $this->validateData($request, $voucher);
 
-        $voucher->update($validated);
-
-        $this->syncScopeRelations($voucher, $request);
+        DB::transaction(function () use ($voucher, $validated, $request) {
+            $voucher->update($validated);
+            $this->syncScopeRelations($voucher, $request);
+        });
 
         return redirect()->route('admin.vouchers.index')
             ->with('success', 'Đã cập nhật mã giảm giá.');
@@ -166,6 +181,14 @@ class AdminVoucherController extends Controller
         if ($validated['scope_type'] === 'categories' && empty($request->input('category_ids'))) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'category_ids' => 'Vui lòng chọn ít nhất 1 danh mục áp dụng.',
+            ]);
+        }
+
+        // Không cho đặt giới hạn lượt dùng thấp hơn số lượt đã dùng thực tế —
+        // mã sẽ ở trạng thái "vượt giới hạn" vô nghĩa, số liệu khó hiểu.
+        if ($voucher && isset($validated['usage_limit']) && (int) $validated['usage_limit'] < (int) $voucher->used_count) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'usage_limit' => "Giới hạn lượt dùng phải lớn hơn hoặc bằng số lượt đã dùng ({$voucher->used_count} lần).",
             ]);
         }
 
