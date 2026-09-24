@@ -91,50 +91,67 @@
             </h1>
         </div>
 
+        @php
+            // Menu admin gom theo nhóm chức năng để sidebar gọn hơn. Mỗi mục:
+            // [route, pattern routeIs() để tô sáng, icon lucide, nhãn].
+            $adminNavGroups = [
+                ['label' => 'Bán hàng', 'icon' => 'shopping-bag', 'items' => [
+                    ['orders.index', ['orders.index', 'admin.orders.*'], 'package-open', 'Đơn hàng'],
+                    ['admin.vouchers.index', ['admin.vouchers.*'], 'tag', 'Mã giảm giá'],
+                ]],
+                ['label' => 'Sản phẩm', 'icon' => 'package', 'items' => [
+                    ['products.index', ['products.*'], 'package', 'Sản phẩm'],
+                    ['categories.index', ['categories.*'], 'folder-tree', 'Danh mục'],
+                ]],
+                ['label' => 'Báo cáo & Tài chính', 'icon' => 'bar-chart-3', 'items' => [
+                    ['admin.reports.index', ['admin.reports.*'], 'bar-chart-3', 'Báo cáo doanh thu'],
+                    ['admin.finance.index', ['admin.finance.*'], 'circle-dollar-sign', 'Tài chính'],
+                    ['admin.analytics.index', ['admin.analytics.*'], 'activity', 'Phân tích hành vi'],
+                ]],
+                ['label' => 'Nội dung', 'icon' => 'file-text', 'items' => [
+                    ['admin.pages.index', ['admin.pages.*'], 'file-text', 'Trang tĩnh'],
+                    ['admin.posts.index', ['admin.posts.*'], 'rss', 'Blog'],
+                    ['admin.faqs.index', ['admin.faqs.*'], 'help-circle', 'FAQ'],
+                ]],
+                ['label' => 'Khách hàng', 'icon' => 'users', 'items' => [
+                    ['admin.users.index', ['admin.users.*'], 'users', 'Người dùng'],
+                    ['admin.tickets.index', ['admin.tickets.*'], 'life-buoy', 'Ticket hỗ trợ'],
+                ]],
+            ];
+            $navActive = 'text-white bg-white/10 border border-white/20';
+            $navIdle = 'text-white/70 hover:text-white hover:bg-white/10';
+        @endphp
+
         <!-- Navigation: cuộn riêng khi menu dài hơn màn hình để khối Đăng xuất
              bên dưới luôn hiển thị (sidebar cao cố định h-screen, không cuộn). -->
-        <nav class="flex-1 min-h-0 overflow-y-auto px-4 space-y-2 mt-4 pb-4">
-            <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.dashboard') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
+        <nav class="flex-1 min-h-0 overflow-y-auto px-4 space-y-1 mt-4 pb-4">
+            <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.dashboard') ? $navActive : $navIdle }} transition-all duration-300 text-sm font-medium no-underline">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
             </a>
-            <a href="{{ route('products.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('products.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="package" class="w-5 h-5"></i> Sản phẩm
-            </a>
-            <a href="{{ route('categories.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('categories.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="folder-tree" class="w-5 h-5"></i> Danh mục
-            </a>
-            <a href="{{ route('orders.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('orders.index') || request()->routeIs('admin.orders.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="package-open" class="w-5 h-5"></i> Đơn hàng
-            </a>
-            <a href="{{ route('settings.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('settings.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
+
+            @foreach($adminNavGroups as $group)
+                @php
+                    // Nhóm chứa trang đang mở thì tự bung ra.
+                    $groupActive = collect($group['items'])->contains(fn ($item) => request()->routeIs(...$item[1]));
+                @endphp
+                <details class="group" @if($groupActive) open @endif>
+                    <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex items-center gap-3 px-4 py-3 rounded-full {{ $groupActive ? 'text-white' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium select-none">
+                        <i data-lucide="{{ $group['icon'] }}" class="w-5 h-5"></i>
+                        <span class="flex-1">{{ $group['label'] }}</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 transition-transform duration-300 group-open:rotate-180"></i>
+                    </summary>
+                    <div class="mt-1 ml-5 pl-3 border-l border-white/10 space-y-1">
+                        @foreach($group['items'] as [$routeName, $patterns, $icon, $label])
+                            <a href="{{ route($routeName) }}" class="flex items-center gap-3 px-4 py-2 rounded-full {{ request()->routeIs(...$patterns) ? $navActive : $navIdle }} transition-all duration-300 text-sm no-underline">
+                                <i data-lucide="{{ $icon }}" class="w-4 h-4"></i> {{ $label }}
+                            </a>
+                        @endforeach
+                    </div>
+                </details>
+            @endforeach
+
+            <a href="{{ route('settings.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('settings.*') ? $navActive : $navIdle }} transition-all duration-300 text-sm font-medium no-underline">
                 <i data-lucide="settings" class="w-5 h-5"></i> Cài đặt
-            </a>
-            <a href="{{ route('admin.reports.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.reports.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Báo cáo
-            </a>
-            <a href="{{ route('admin.finance.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.finance.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="circle-dollar-sign" class="w-5 h-5"></i> Tài chính
-            </a>
-            <a href="{{ route('admin.pages.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.pages.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="file-text" class="w-5 h-5"></i> Trang tĩnh (CMS)
-            </a>
-            <a href="{{ route('admin.faqs.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.faqs.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="help-circle" class="w-5 h-5"></i> FAQ
-            </a>
-            <a href="{{ route('admin.vouchers.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.vouchers.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="tag" class="w-5 h-5"></i> Mã giảm giá
-            </a>
-            <a href="{{ route('admin.posts.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.posts.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="rss" class="w-5 h-5"></i> Blog (CMS)
-            </a>
-            <a href="{{ route('admin.tickets.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.tickets.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="life-buoy" class="w-5 h-5"></i> Ticket hỗ trợ
-            </a>
-            <a href="{{ route('admin.analytics.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.analytics.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="activity" class="w-5 h-5"></i> Phân tích hành vi
-            </a>
-            <a href="{{ route('admin.users.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-full {{ request()->routeIs('admin.users.*') ? 'text-white bg-white/10 border border-white/20' : 'text-white/70 hover:text-white hover:bg-white/10' }} transition-all duration-300 text-sm font-medium no-underline">
-                <i data-lucide="users" class="w-5 h-5"></i> Người dùng
             </a>
         </nav>
 
