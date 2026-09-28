@@ -35,13 +35,16 @@
                         <span style="display:inline-block;padding:5px 12px;border-radius:999px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;background:#FFFFFF;border:1px solid #E5E2DC;color:#6B6B66">{{ $order->shipping_label }}</span>
                     </div>
 
-                    @if(in_array($order->status, ['pending', 'payment_failed']))
-                        <div class="relative z-10" style="display:flex;align-items:center;gap:8px">
+                    @if($order->canRetryMomo())
+                        <div class="relative z-10" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                             <a href="{{ route('momo.pay', ['order' => $order, 'type' => 'atm']) }}" class="hover:opacity-90" style="display:inline-flex;align-items:center;gap:4px;background:#D82D8B;color:#FFFFFF;font-size:12px;font-weight:600;padding:8px 14px;border-radius:999px;text-decoration:none">
                                 🏧 Nội địa
                             </a>
                             <a href="{{ route('momo.pay', ['order' => $order, 'type' => 'cc']) }}" class="hover:bg-pink-50" style="display:inline-flex;align-items:center;gap:4px;background:#FFFFFF;border:1px solid #F4A8CF;color:#D82D8B;font-size:12px;font-weight:600;padding:8px 14px;border-radius:999px;text-decoration:none">
                                 🌍 Quốc tế
+                            </a>
+                            <a href="{{ route('momo.pay', ['order' => $order, 'type' => 'wallet']) }}" class="hover:bg-pink-50" style="display:inline-flex;align-items:center;gap:4px;background:#FFFFFF;border:1px solid #F4A8CF;color:#D82D8B;font-size:12px;font-weight:600;padding:8px 14px;border-radius:999px;text-decoration:none">
+                                📱 Ví MoMo
                             </a>
                         </div>
                     @endif

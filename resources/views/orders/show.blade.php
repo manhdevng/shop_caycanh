@@ -69,23 +69,32 @@
             </div>
         @endif
 
-        @if(in_array($order->status, ['pending', 'payment_failed']))
-            <div style="background:#FDF2F8;border:1px solid #F4A8CF;border-radius:12px;padding:16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-                <p style="font-size:14px;color:#D82D8B;margin:0">
-                    @if($order->status === 'payment_failed')
-                        Thanh toán MoMo trước đó không thành công.
-                    @else
-                        Đơn hàng đang chờ thanh toán qua MoMo.
-                    @endif
-                </p>
-                <div style="display:flex;align-items:center;gap:8px">
-                    <a href="{{ route('momo.pay', ['order' => $order, 'type' => 'atm']) }}" class="hover:opacity-90" style="display:inline-flex;align-items:center;gap:4px;background:#D82D8B;color:#FFFFFF;font-size:13px;font-weight:600;padding:8px 16px;border-radius:999px;text-decoration:none">
-                        🏧 Thẻ nội địa
-                    </a>
-                    <a href="{{ route('momo.pay', ['order' => $order, 'type' => 'cc']) }}" class="hover:bg-pink-50" style="display:inline-flex;align-items:center;gap:4px;background:#FFFFFF;border:1px solid #F4A8CF;color:#D82D8B;font-size:13px;font-weight:600;padding:8px 16px;border-radius:999px;text-decoration:none">
-                        🌍 Thẻ quốc tế
-                    </a>
+        @if($order->canRetryMomo())
+            <div style="background:#FDF2F8;border:1px solid #F4A8CF;border-radius:12px;padding:16px;margin-bottom:20px">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px">
+                    <p style="font-size:14px;color:#D82D8B;margin:0">
+                        @if($order->lastPaymentFailed())
+                            Thanh toán MoMo trước đó không thành công.
+                        @else
+                            Đơn hàng đang chờ thanh toán qua MoMo.
+                        @endif
+                    </p>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <a href="{{ route('momo.pay', ['order' => $order, 'type' => 'atm']) }}" class="hover:opacity-90" style="display:inline-flex;align-items:center;gap:4px;background:#D82D8B;color:#FFFFFF;font-size:13px;font-weight:600;padding:8px 16px;border-radius:999px;text-decoration:none">
+                            🏧 Thẻ nội địa
+                        </a>
+                        <a href="{{ route('momo.pay', ['order' => $order, 'type' => 'cc']) }}" class="hover:bg-pink-50" style="display:inline-flex;align-items:center;gap:4px;background:#FFFFFF;border:1px solid #F4A8CF;color:#D82D8B;font-size:13px;font-weight:600;padding:8px 16px;border-radius:999px;text-decoration:none">
+                            🌍 Thẻ quốc tế
+                        </a>
+                        <a href="{{ route('momo.pay', ['order' => $order, 'type' => 'wallet']) }}" class="hover:bg-pink-50" style="display:inline-flex;align-items:center;gap:4px;background:#FFFFFF;border:1px solid #F4A8CF;color:#D82D8B;font-size:13px;font-weight:600;padding:8px 16px;border-radius:999px;text-decoration:none">
+                            📱 Ví MoMo
+                        </a>
+                    </div>
                 </div>
+                <form method="POST" action="{{ route('momo.checkStatus', $order) }}">
+                    @csrf
+                    <button type="submit" class="hover:underline" style="background:none;border:none;padding:0;color:#D82D8B;font-size:12.5px;text-decoration:underline;cursor:pointer;font-family:inherit">Kiểm tra lại trạng thái thanh toán</button>
+                </form>
             </div>
         @endif
 
@@ -95,16 +104,32 @@
                 <p style="font-size:14px;font-weight:700;color:#B45309;margin:0 0 10px">⏳ Chờ chuyển khoản</p>
                 <p style="font-size:13px;color:#6B6B66;margin:0 0 10px">Vui lòng chuyển khoản đúng số tiền và ghi rõ mã đơn hàng vào nội dung chuyển khoản. Đơn hàng sẽ được giao sau khi shop xác nhận đã nhận được tiền.</p>
                 <div style="font-size:14px;color:#1C1C1A;line-height:1.7">
-                    <div>Ngân hàng: <strong>{{ $bankInfo['name'] ?? '—' }}</strong></div>
-                    <div>Số tài khoản: <strong style="font-family:'Space Mono',monospace">{{ $bankInfo['account_number'] ?? '—' }}</strong></div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <span>Ngân hàng: <strong>{{ $bankInfo['name'] ?? '—' }}</strong></span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <span>Số tài khoản: <strong style="font-family:'Space Mono',monospace" id="bankAccountNumber">{{ $bankInfo['account_number'] ?? '—' }}</strong></span>
+                        @if($bankInfo['account_number'] ?? null)
+                            <button type="button" class="js-copy-text" data-copy-target="bankAccountNumber" style="background:none;border:1px solid #FDE68A;border-radius:999px;padding:2px 10px;font-size:11px;color:#B45309;cursor:pointer;font-family:inherit">Sao chép</button>
+                        @endif
+                    </div>
                     <div>Chủ tài khoản: <strong>{{ $bankInfo['account_name'] ?? '—' }}</strong></div>
                     <div>Chi nhánh: <strong>{{ $bankInfo['branch'] ?? '—' }}</strong></div>
                     <div>Số tiền cần chuyển: <strong style="color:#4A6B1F">{{ number_format($order->total_price, 0, ',', '.') }} đ</strong></div>
-                    <div>Nội dung chuyển khoản: <strong>CCS {{ $order->id }}</strong></div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <span>Nội dung chuyển khoản: <strong id="bankTransferContent">{{ $order->transferContent() }}</strong></span>
+                        <button type="button" class="js-copy-text" data-copy-target="bankTransferContent" style="background:none;border:1px solid #FDE68A;border-radius:999px;padding:2px 10px;font-size:11px;color:#B45309;cursor:pointer;font-family:inherit">Sao chép</button>
+                    </div>
                     @if($order->transfer_ref)
                         <div>Mã tham chiếu bạn đã nhập: <strong>{{ $order->transfer_ref }}</strong></div>
                     @endif
                 </div>
+            </div>
+        @endif
+
+        @if($order->canCustomerCancel())
+            <div style="margin-bottom:20px">
+                <button type="button" id="cancelOrderBtn" style="background:none;border:1px solid #DC2626;color:#DC2626;font-size:13px;font-weight:600;padding:8px 18px;border-radius:999px;cursor:pointer;font-family:inherit">Huỷ đơn hàng</button>
             </div>
         @endif
 
@@ -125,7 +150,7 @@
             @foreach($order->items as $item)
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;font-size:14px;gap:12px">
                     <div style="color:#1C1C1A">
-                        <span>{{ $item->product->name ?? 'Sản phẩm đã bị xoá' }} <span style="color:#8A8680">× {{ $item->quantity }}</span></span>
+                        <span>{{ $item->product_name ?: ($item->product->name ?? 'Sản phẩm đã bị xoá') }} <span style="color:#8A8680">× {{ $item->quantity }}</span></span>
                         @if($item->variant_name)
                             <div style="font-size:12px;color:#8A8680;margin-top:2px">Phân loại: {{ $item->variant_name }}</div>
                         @endif
@@ -144,4 +169,58 @@
         </div>
     </div>
 </section>
+
+@if($order->canCustomerCancel())
+    <form id="cancelOrderForm" method="POST" action="{{ route('orders.cancel', $order) }}" style="display:none">
+        @csrf
+    </form>
+    <div id="cancelOrderModal" style="display:none;position:fixed;inset:0;background:rgba(28,28,26,0.5);z-index:var(--z-modal,400);align-items:center;justify-content:center;padding:20px">
+        <div style="background:#FFFFFF;border-radius:16px;max-width:380px;width:100%;padding:24px">
+            <h3 style="font-family:'Anton',sans-serif;font-size:18px;text-transform:uppercase;color:#1C1C1A;margin:0 0 10px">Huỷ đơn hàng #{{ $order->id }}?</h3>
+            <p style="font-size:14px;color:#6B6B66;margin:0 0 20px">Đơn hàng sẽ được huỷ và không thể khôi phục. Bạn có chắc chắn muốn huỷ?</p>
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+                <button type="button" id="cancelOrderDismiss" style="background:none;border:1px solid #E5E2DC;color:#6B6B66;font-size:13px;font-weight:600;padding:8px 18px;border-radius:999px;cursor:pointer;font-family:inherit">Đóng</button>
+                <button type="button" id="cancelOrderConfirm" style="background:#DC2626;border:none;color:#FFFFFF;font-size:13px;font-weight:600;padding:8px 18px;border-radius:999px;cursor:pointer;font-family:inherit">Huỷ đơn</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const openBtn = document.getElementById('cancelOrderBtn');
+            const modal = document.getElementById('cancelOrderModal');
+            const dismissBtn = document.getElementById('cancelOrderDismiss');
+            const confirmBtn = document.getElementById('cancelOrderConfirm');
+            const form = document.getElementById('cancelOrderForm');
+            if (!openBtn || !modal) return;
+
+            function openModal() { modal.style.display = 'flex'; }
+            function closeModal() { modal.style.display = 'none'; }
+
+            openBtn.addEventListener('click', openModal);
+            dismissBtn.addEventListener('click', closeModal);
+            modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+            confirmBtn.addEventListener('click', function () { form.submit(); });
+        })();
+    </script>
+@endif
+
+<script>
+    // Nút "Sao chép" cho thông tin chuyển khoản (Clipboard API, không dùng alert()).
+    document.querySelectorAll('.js-copy-text').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const target = document.getElementById(btn.dataset.copyTarget);
+            if (!target) return;
+            const text = target.textContent.trim();
+            const original = btn.textContent;
+            navigator.clipboard.writeText(text).then(function () {
+                btn.textContent = 'Đã sao chép';
+                setTimeout(function () { btn.textContent = original; }, 1600);
+            }).catch(function () {
+                showToast('Không thể sao chép. Vui lòng chọn và sao chép thủ công.', true);
+            });
+        });
+    });
+</script>
 @endsection
