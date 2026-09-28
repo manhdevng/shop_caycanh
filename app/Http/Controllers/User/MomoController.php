@@ -134,7 +134,18 @@ class MomoController extends Controller
             ? 'Thanh toán MoMo thành công! Vận đơn GHN đã được khởi tạo.'
             : 'Thanh toán thành công! Đơn hàng đang chờ tạo vận đơn GHN.';
 
-        return redirect()->route('orders.history')->with('success', $message);
+        // Thanh toán đã thành công (mọi nhánh còn lại của completePayment() —
+        // created/already_created/processing/failed đều là "đã thu tiền",
+        // chỉ khác kết quả tạo vận đơn) -> đưa thẳng khách về trang CHI TIẾT
+        // đơn hàng vừa mua thay vì danh sách, đồng nhất với luồng COD/chuyển
+        // khoản (OrderController::store()). $payload['signature'] đã được
+        // xác thực ở isValidSuccessfulResponse() phía trên nên tin được
+        // extraData (chứa order id nội bộ MoMoService::orderId()).
+        $orderId = $momo->orderId($request->all());
+
+        return $orderId
+            ? redirect()->route('orders.show', $orderId)->with('success', $message)
+            : redirect()->route('orders.history')->with('success', $message);
     }
 
     // Khách chủ động bấm "Kiểm tra lại trạng thái thanh toán" trên trang chi tiết đơn hàng.
