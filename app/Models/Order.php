@@ -285,28 +285,13 @@ class Order extends Model
             && ! $this->hasPaidPaymentTransaction();
     }
 
-    // C4.1: nội dung chuyển khoản chuẩn để đối soát (admin tìm đơn theo tiền
-    // tố "DH" — xem AdminOrderController::index()).
+    // C4: nội dung chuyển khoản chuẩn để đối soát (admin tìm đơn theo tiền
+    // tố "DH" — xem AdminOrderController::index()). Bản demo: khách tự nhập
+    // tài khoản ngân hàng theo config('services.bank') và ghi đúng nội dung
+    // này, không dùng QR.
     public function transferContent(): string
     {
         return 'DH'.$this->id;
-    }
-
-    // C4.2: URL ảnh QR VietQR (định dạng compact2) để khách quét chuyển khoản
-    // — null nếu thiếu cấu hình bin/số tài khoản (config('services.bank')).
-    public function vietQrUrl(): ?string
-    {
-        $bin = config('services.bank.bin');
-        $accountNumber = config('services.bank.account_number');
-
-        if (blank($bin) || blank($accountNumber)) {
-            return null;
-        }
-
-        return 'https://img.vietqr.io/image/'.rawurlencode((string) $bin).'-'.rawurlencode((string) $accountNumber).'-compact2.png'
-            .'?amount='.rawurlencode((string) (int) $this->total_price)
-            .'&addInfo='.rawurlencode($this->transferContent())
-            .'&accountName='.rawurlencode((string) config('services.bank.account_name'));
     }
 
     // C5: được phép tạo lại vận đơn GHN — đã thanh toán/COD, chưa có mã vận
