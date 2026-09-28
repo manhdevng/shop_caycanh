@@ -43,9 +43,6 @@ return [
         'account_number' => env('BANK_ACCOUNT_NUMBER', ''),
         'account_name' => env('BANK_ACCOUNT_NAME', ''),
         'branch' => env('BANK_BRANCH', ''),
-        // Mã BIN ngân hàng (napas) dùng để tạo ảnh QR VietQR — xem
-        // Order::vietQrUrl(). Tra mã BIN ngân hàng tương ứng trên vietqr.io.
-        'bin' => env('BANK_BIN', ''),
     ],
 
     'ghn' => [
