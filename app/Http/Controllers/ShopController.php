@@ -140,6 +140,14 @@ class ShopController extends Controller
         $homeFeatures = collect();
         $homeBestSellers = collect();
         $homeSoldCounts = [];
+        $heroProduct = null;
+        $indoorCategory = null;
+        $outdoorCategory = null;
+        $indoorProducts = collect();
+        $outdoorProducts = collect();
+        $quickPicks = collect();
+        $homeFeatured = collect();
+        $homeFeaturedIsBestSeller = false;
 
         if ($showFeatured) {
             $featuredProduct = Product::where('is_active', true)
@@ -192,6 +200,118 @@ class ShopController extends Controller
             // hoặc đã xoá (không nằm trong $homeBestSellers), tính thừa cho
             // các id đó là lãng phí và không dùng tới.
             $homeSoldCounts = $this->soldCountsFor($homeBestSellers->pluck('id')->all());
+
+            // ==== Màn hình đầu phải bán được ngay (kế hoạch UI/UX, đợt A) ====
+            // Ưu tiên một CÂY (không phải hoa) còn hàng, có ảnh và có giá rõ
+            // ràng: hero chỉ thuyết phục khi cái nó khoe mua được thật. Hạ dần
+            // về $featuredProduct thay vì trả null, để hero không bao giờ rỗng.
+            $heroProduct = Product::where('is_active', true)
+                ->plants()
+                ->whereNotNull('main_image')
+                ->where('stock', '>', 0)
+                ->where('base_price', '>', 0)
+                ->with(['categories', 'variants'])
+                ->latest()
+                ->first()
+                ?? $featuredProduct;
+
+            // ==== Cây theo KHÔNG GIAN sống (đợt C) ====
+            // Lấy theo danh mục THẬT chứ không đoán theo tên nhóm cây: nhóm
+            // "Cây cảnh sân vườn & ngoài trời" hiện chưa có sản phẩm nào, nếu
+            // trỏ link theo nhóm đó thì khách bấm vào ra trang trống. Danh mục
+            // "Trong nhà (Indoor)" / "Ngoài trời (Outdoor)" mới là nơi có hàng.
+            // orderBy('id') để bản ghi danh mục con (id nhỏ) thắng nhóm gốc có
+            // tên chứa cùng cụm từ.
+            $findCategory = fn (string $needle) => Category::whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($needle) . '%'])
+                ->orderBy('id')
+                ->first();
+
+            // $excludeIds: cửa hàng hiện chỉ có hơn chục sản phẩm, nếu mỗi hàng
+            // đều lấy "mới nhất" thì cùng một cây xuất hiện 3-4 lần trên trang.
+            // Loại dần những cây đã khoe ở phía trên để mỗi hàng nói một điều mới.
+            $productsInCategory = function (?Category $category, int $take, array $excludeIds = []) {
+                if (! $category) {
+                    return collect();
+                }
+
+                return Product::where('is_active', true)
+                    ->whereHas('categories', fn ($q) => $q->where('categories.id', $category->id))
+                    ->when($excludeIds, fn ($q) => $q->whereNotIn('id', $excludeIds))
+                    ->with(['categories', 'variants'])
+                    ->latest()
+                    ->take($take)
+                    ->get();
+            };
+
+            $indoorCategory = $findCategory('trong nhà');
+            $outdoorCategory = $findCategory('ngoài trời');
+
+            $heroId = $heroProduct ? [$heroProduct->id] : [];
+
+            // Lưới mua sắm ĐẦU TIÊN phải luôn là một lưới hàng mua được: có số
+            // liệu bán chạy thì dùng, chưa có thì rơi về cây mới về — không rơi
+            // về banner, vì banner không mua được gì.
+            $homeFeatured = $homeBestSellers->isNotEmpty()
+                ? $homeBestSellers
+                : Product::where('is_active', true)
+                    ->plants()
+                    ->whereNotNull('main_image')
+                    ->when($heroId, fn ($q) => $q->whereNotIn('id', $heroId))
+                    ->with(['categories', 'variants'])
+                    ->latest()
+                    ->take(4)
+                    ->get();
+            $homeFeaturedIsBestSeller = $homeBestSellers->isNotEmpty();
+
+            // Các hàng theo không gian phía dưới kể tiếp chứ không kể lại: bỏ
+            // cây đã đứng ở hero và ở lưới đầu tiên.
+            $usedIds = array_merge($heroId, $homeFeatured->pluck('id')->all());
+            $indoorProducts = $productsInCategory($indoorCategory, 3, $usedIds);
+            $outdoorProducts = $productsInCategory($outdoorCategory, 3, $usedIds);
+
+            // Hoa đã đứng ở hàng "cây ngoài trời" thì không lặp lại ở lưới hoa.
+            $shownIds = $outdoorProducts->pluck('id')->all();
+            $newestFlowers = $newestFlowers
+                ->reject(fn ($p) => in_array($p->id, $shownIds, true))
+                ->values();
+
+            // ==== Lối chọn nhanh ngay dưới hero (đợt B) ====
+            // Ảnh thẻ mượn ảnh của một sản phẩm THẬT thuộc đúng danh mục đó
+            // (các danh mục không gian chưa có ảnh riêng) — không dùng ảnh
+            // minh hoạ chung chung. Nhóm không có sản phẩm bị loại hẳn.
+            $quickPicks = collect([
+                ['label' => 'Cây trong nhà', 'category' => $indoorCategory],
+                ['label' => 'Cây ngoài trời', 'category' => $outdoorCategory],
+                ['label' => 'Ban công & cửa sổ', 'category' => $findCategory('ban công')],
+            ])
+                ->filter(fn ($row) => $row['category'] !== null)
+                ->map(function ($row) use ($productsInCategory) {
+                    $count = Product::where('is_active', true)
+                        ->whereHas('categories', fn ($q) => $q->where('categories.id', $row['category']->id))
+                        ->count();
+
+                    return [
+                        'label' => $row['label'],
+                        'href' => route('shop.index', ['categories' => [$row['category']->id]]),
+                        'image' => optional($productsInCategory($row['category'], 1)->first())->main_image,
+                        'count' => $count,
+                    ];
+                })
+                ->filter(fn ($row) => $row['count'] > 0)
+                ->values();
+
+            // Hoa lọc bằng product_type nên không phụ thuộc danh mục nào.
+            $flowerCount = Product::where('is_active', true)->flowers()->count();
+            if ($flowerCount > 0) {
+                $quickPicks->push([
+                    'label' => 'Hoa',
+                    'href' => route('shop.index', ['type' => 'flower']),
+                    'image' => optional(
+                        Product::where('is_active', true)->flowers()->whereNotNull('main_image')->latest()->first()
+                    )->main_image,
+                    'count' => $flowerCount,
+                ]);
+            }
         }
 
         // FAQ hiển thị ở trang chủ (nhóm "general") — P3.1.
@@ -216,6 +336,14 @@ class ShopController extends Controller
             'homeFeatures',
             'homeBestSellers',
             'homeSoldCounts',
+            'heroProduct',
+            'homeFeatured',
+            'homeFeaturedIsBestSeller',
+            'indoorCategory',
+            'outdoorCategory',
+            'indoorProducts',
+            'outdoorProducts',
+            'quickPicks',
             'faqs'
         ));
     }

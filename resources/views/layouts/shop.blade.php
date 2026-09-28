@@ -273,154 +273,135 @@
 </main>
 
 <!-- ==== Footer ==== -->
-<footer style="background:#FFFFFF;margin-top:64px">
-    <div style="max-width:760px;margin:0 auto;padding:clamp(64px,8vw,80px) 24px 40px;text-align:center">
-        <p style="font-size:clamp(22px,2.4vw,28px);line-height:1.6;color:#4A4A46;margin:0">&ldquo;Mỗi cây đều được tuyển chọn kỹ, đóng gói cẩn thận và giao tận tay bạn trên toàn quốc.&rdquo;</p>
-    </div>
-    <div style="display:flex;justify-content:center;align-items:center;gap:56px;flex-wrap:wrap;padding:0 24px 64px">
-        <span style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;letter-spacing:0.04em;color:#B8B4AC">GHN</span>
-        <span style="font-family:'Space Mono',monospace;font-size:18px;font-weight:700;letter-spacing:0.04em;color:#B8B4AC">MoMo</span>
-    </div>
-    <div style="border-top:1px solid #E5E2DC"></div>
-
-    <div style="background:#F7F4EF;padding:clamp(56px,8vw,88px) 24px 40px">
-        <div style="max-width:1400px;margin:0 auto;display:flex;gap:56px;flex-wrap:wrap">
-            <div style="flex:3 1 420px">
-                <h3 style="font-family:'Anton',sans-serif;font-size:22px;letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 12px">Đăng ký nhận tin</h3>
-                <p style="font-size:14px;line-height:1.6;color:#6B6B66;max-width:420px;margin:0 0 20px">Nhận mẹo chăm sóc cây và cập nhật sản phẩm mới sớm nhất.</p>
-                <div style="display:flex;gap:8px;max-width:420px;margin-bottom:44px">
-                    <input type="text" placeholder="Email của bạn" style="flex:1 1 auto;min-width:0;padding:11px 16px;border:1px solid #E5E2DC;border-radius:999px;font-size:13px;font-family:inherit;background:#FFFFFF"/>
-                    <button type="button" style="flex:none;padding:11px 22px;border-radius:999px;background:#1C1C1A;color:#FFFFFF;border:none;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase">Đăng ký</button>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:32px">
-                    <div>
-                        <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#1C1C1A;margin:0 0 16px">Về chúng tôi</p>
-                        <a href="{{ route('shop.bestSellers') }}" style="display:block;font-size:14px;color:{{ request()->routeIs('shop.bestSellers') ? '#5C2323' : '#6B6B66' }};margin-bottom:11px">Sản phẩm bán chạy</a>
-                        <a href="{{ route('pages.show', 've-chung-toi') }}" style="display:block;font-size:14px;color:#6B6B66;margin-bottom:11px">Câu chuyện của chúng tôi</a>
-                        <a href="#" style="display:block;font-size:14px;color:#6B6B66">Đánh giá khách hàng</a>
-                    </div>
-                    <div>
-                        <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#1C1C1A;margin:0 0 16px">Cẩm nang</p>
-                        <a href="{{ route('posts.show', 'huong-dan-cham-soc-cay') }}" style="display:block;font-size:14px;color:#6B6B66;margin-bottom:11px">Hướng dẫn chăm sóc cây</a>
-                        <a href="{{ route('posts.show', 'tu-van-chon-cay') }}" style="display:block;font-size:14px;color:#6B6B66;margin-bottom:11px">Tư vấn chọn cây</a>
-                        <a href="{{ route('faq.index') }}" style="display:block;font-size:14px;color:{{ request()->routeIs('faq.index') ? '#5C2323' : '#6B6B66' }}">Câu hỏi thường gặp</a>
-                    </div>
-                    <div>
-                        <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#1C1C1A;margin:0 0 16px">Điều khoản</p>
-                        <a href="{{ route('pages.show', 'van-chuyen-doi-tra') }}" style="display:block;font-size:14px;color:#6B6B66;margin-bottom:11px">Vận chuyển &amp; đổi trả</a>
-                        <a href="{{ route('pages.show', 'chinh-sach-bao-hanh') }}" style="display:block;font-size:14px;color:#6B6B66">Chính sách bảo hành</a>
-                    </div>
-                </div>
+<footer class="shop-footer">
+    <section class="shop-footer__intro" aria-labelledby="shopFooterTitle">
+        <div class="shop-footer__intro-inner">
+            <div class="shop-footer__intro-copy">
+                <p class="shop-footer__eyebrow">Một khoảng xanh cho ngôi nhà</p>
+                <h2 id="shopFooterTitle">Chọn cây hợp nhà,<br>chăm xanh mỗi ngày.</h2>
+                <p>Cây cảnh được tuyển chọn kỹ, đóng gói cẩn thận và giao đến tận tay bạn trên toàn quốc.</p>
+                <a class="shop-footer__button" href="{{ route('shop.index', ['type' => 'plant']) }}">Khám phá cây cảnh <span aria-hidden="true">&rarr;</span></a>
             </div>
-
-            <div style="flex:2 1 320px">
-                <h3 style="font-family:'Anton',sans-serif;font-size:22px;letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 20px">Liên hệ</h3>
-                <a href="{{ route('pages.show', 'lien-he') }}" style="display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #E5E2DC;border-radius:10px;padding:16px 18px;margin-bottom:14px;background:#FFFFFF">
-                    <div>
-                        <div style="font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66;margin-bottom:4px">Email</div>
-                        <div style="font-size:14px;color:#1C1C1A">hotro@caycanhshop.vn</div>
-                    </div>
-                    <span style="font-size:18px;color:#6B6B66">&rsaquo;</span>
-                </a>
-                @auth
-                    <a href="{{ route('orders.history') }}" style="display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #E5E2DC;border-radius:10px;padding:16px 18px;background:#FFFFFF">
-                        <div>
-                            <div style="font-family:'Space Mono',monospace;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66;margin-bottom:4px">Tài khoản của bạn</div>
-                            <div style="font-size:14px;color:#1C1C1A">Quản lý đơn hàng và hỗ trợ</div>
-                        </div>
-                        <span style="font-size:18px;color:#6B6B66">&rsaquo;</span>
-                    </a>
-                @endauth
+            <div class="shop-footer__assurances" aria-label="Thông tin dịch vụ">
+                <span><b>01</b> Cây được tuyển chọn</span>
+                <span><b>02</b> Giao hàng toàn quốc</span>
+                <span><b>03</b> Cẩm nang chăm cây</span>
             </div>
         </div>
-    </div>
+    </section>
 
-    {{-- ==== Dải "Thông tin cửa hàng" (nền tối, khép trang lại) ====
-         Mỗi mục lấy từ config/shop.php: mục nào null thì không render cột đó
-         (không để ô trống, không bịa dữ liệu). --}}
-    <style>
-        .footer-info-grid{display:grid;grid-template-columns:1.4fr repeat(3, minmax(0,1fr));gap:40px}
-        @media (max-width:900px){
-            .footer-info-grid{grid-template-columns:repeat(2, minmax(0,1fr))}
-        }
-        @media (max-width:560px){
-            .footer-info-grid{grid-template-columns:1fr}
-        }
-    </style>
-    <div style="background:#1C1C1A;padding:clamp(48px,7vw,72px) 24px clamp(32px,5vw,48px)">
-        <div class="footer-info-grid" style="max-width:1400px;margin:0 auto">
-            <div>
-                <h3 style="font-family:'Anton',sans-serif;font-size:22px;letter-spacing:0.01em;text-transform:uppercase;color:#FFFFFF;margin:0 0 10px">{{ config('shop.name') }}</h3>
+    <div class="shop-footer__body">
+        <div class="shop-footer__grid">
+            <div class="shop-footer__brand">
+                <a class="shop-footer__wordmark" href="{{ route('shop.index') }}">{{ config('shop.name') }}</a>
                 @if(config('shop.tagline'))
-                    <p style="font-size:14px;line-height:1.6;color:rgba(255,255,255,.7);max-width:280px;margin:0">{{ config('shop.tagline') }}</p>
+                    <p>{{ config('shop.tagline') }}</p>
                 @endif
+                <div class="shop-footer__payments" aria-label="Phương thức giao hàng và thanh toán">
+                    <span>Giao hàng GHN</span>
+                    <span>MoMo</span>
+                    <span>COD</span>
+                </div>
             </div>
 
-            @if(config('shop.address'))
-                <div>
-                    <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.55);margin:0 0 14px">Địa chỉ</p>
-                    <p style="font-size:14px;line-height:1.6;color:rgba(255,255,255,.85);margin:0 0 8px">{{ config('shop.address') }}</p>
-                    <a href="https://www.google.com/maps/search/?api=1&query={{ urlencode(config('shop.address')) }}" target="_blank" rel="noopener" style="font-size:13px;color:#FFFFFF;text-decoration:underline">Xem bản đồ</a>
-                </div>
-            @endif
+            <nav class="shop-footer__column" aria-label="Mua sắm">
+                <h3>Mua sắm</h3>
+                <a href="{{ route('shop.index', ['type' => 'plant']) }}">Tất cả cây cảnh</a>
+                <a href="{{ route('shop.index', ['type' => 'flower']) }}">Hoa tươi &amp; hoa sự kiện</a>
+                <a href="{{ route('shop.bestSellers') }}">Sản phẩm bán chạy</a>
+            </nav>
 
-            @if(config('shop.hotline'))
-                <div>
-                    <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.55);margin:0 0 14px">Hotline / Zalo</p>
-                    <a href="tel:{{ preg_replace('/\s+/', '', config('shop.hotline')) }}" style="font-size:14px;color:#FFFFFF">{{ config('shop.hotline') }}</a>
-                </div>
-            @endif
+            <nav class="shop-footer__column" aria-label="Cẩm nang và hỗ trợ">
+                <h3>Cẩm nang &amp; hỗ trợ</h3>
+                <a href="{{ route('posts.show', 'huong-dan-cham-soc-cay') }}">Hướng dẫn chăm sóc cây</a>
+                <a href="{{ route('posts.show', 'tu-van-chon-cay') }}">Tư vấn chọn cây</a>
+                <a href="{{ route('faq.index') }}">Câu hỏi thường gặp</a>
+                <a href="{{ route('pages.show', 'van-chuyen-doi-tra') }}">Vận chuyển &amp; đổi trả</a>
+                <a href="{{ route('pages.show', 'chinh-sach-bao-hanh') }}">Chính sách bảo hành</a>
+            </nav>
 
-            @if(config('shop.email'))
-                <div>
-                    <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.55);margin:0 0 14px">Email</p>
-                    <a href="mailto:{{ config('shop.email') }}" style="font-size:14px;color:#FFFFFF">{{ config('shop.email') }}</a>
-                </div>
-            @endif
-
-            @if(config('shop.hours'))
-                <div>
-                    <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.55);margin:0 0 14px">Giờ mở cửa</p>
-                    <p style="font-size:14px;line-height:1.6;color:rgba(255,255,255,.85);margin:0">{{ config('shop.hours') }}</p>
-                </div>
-            @endif
-
-            @if(config('shop.facebook') || config('shop.instagram'))
-                <div>
-                    <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.55);margin:0 0 14px">Mạng xã hội</p>
-                    {{-- Ghi chú: bản lucide@latest hiện tại đã bỏ toàn bộ icon thương hiệu (facebook/
-                         instagram không còn trong bộ icon nạp qua CDN), dùng data-lucide="facebook" sẽ
-                         ra thẻ rỗng vô hình. Vì vậy dán thẳng SVG nội tuyến bên dưới thay vì gọi lucide
-                         — đây chính là 2 icon lucide "facebook"/"instagram" bản cũ trước khi bị gỡ, nên
-                         vẫn khớp phong cách nét 24x24 stroke-width:2 đang dùng khắp trang. Đừng quay lại
-                         thử data-lucide="facebook"/"instagram", nó sẽ không hiện gì cả. --}}
-                    <div style="display:flex;align-items:center;gap:10px">
+            <div class="shop-footer__column shop-footer__contact">
+                <h3>Liên hệ</h3>
+                <a href="{{ route('pages.show', 'lien-he') }}">Trang liên hệ <span aria-hidden="true">&rarr;</span></a>
+                @if(config('shop.email'))
+                    <a href="mailto:{{ config('shop.email') }}">{{ config('shop.email') }}</a>
+                @endif
+                @if(config('shop.hotline'))
+                    <a href="tel:{{ preg_replace('/\s+/', '', config('shop.hotline')) }}">{{ config('shop.hotline') }} <span class="shop-footer__meta">Hotline / Zalo</span></a>
+                @endif
+                @if(config('shop.address'))
+                    <a href="https://www.google.com/maps/search/?api=1&amp;query={{ urlencode(config('shop.address')) }}" target="_blank" rel="noopener noreferrer">{{ config('shop.address') }} <span class="shop-footer__meta">Xem bản đồ &rarr;</span></a>
+                @endif
+                @if(config('shop.hours'))
+                    <p><span class="shop-footer__meta">Giờ mở cửa</span>{{ config('shop.hours') }}</p>
+                @endif
+                @if(config('shop.facebook') || config('shop.instagram'))
+                    <div class="shop-footer__socials" aria-label="Mạng xã hội">
                         @if(config('shop.facebook'))
-                            <a href="{{ config('shop.facebook') }}" target="_blank" rel="noopener" aria-label="Facebook của {{ config('shop.name') }}" style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:999px;border:1px solid rgba(255,255,255,.3);color:#FFFFFF">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
-                                </svg>
-                            </a>
+                            <a href="{{ config('shop.facebook') }}" target="_blank" rel="noopener noreferrer">Facebook</a>
                         @endif
                         @if(config('shop.instagram'))
-                            <a href="{{ config('shop.instagram') }}" target="_blank" rel="noopener" aria-label="Instagram của {{ config('shop.name') }}" style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:999px;border:1px solid rgba(255,255,255,.3);color:#FFFFFF">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-                                </svg>
-                            </a>
+                            <a href="{{ config('shop.instagram') }}" target="_blank" rel="noopener noreferrer">Instagram</a>
                         @endif
                     </div>
-                </div>
-            @endif
+                @endif
+            </div>
         </div>
     </div>
 
-    <div style="background:#1C1C1A;border-top:1px solid rgba(255,255,255,.12)">
-        <p style="max-width:1400px;margin:0 auto;padding:20px 24px;font-size:13px;color:rgba(255,255,255,.55)">&copy; {{ date('Y') }} {{ config('shop.name') }}. Đã đăng ký bản quyền.</p>
+    <div class="shop-footer__bottom">
+        <p>&copy; {{ date('Y') }} {{ config('shop.name') }}. Đã đăng ký bản quyền.</p>
+        <a href="{{ route('pages.show', 've-chung-toi') }}">Câu chuyện của chúng tôi</a>
     </div>
 </footer>
+
+<style>
+    .shop-footer { margin-top: clamp(48px, 7vw, 88px); color: #F8F4ED; background: #1C1C1A; }
+    .shop-footer__intro { position: relative; overflow: hidden; background: #26352B; }
+    .shop-footer__intro::after { content: ''; position: absolute; width: 420px; height: 420px; right: -130px; top: -240px; border: 1px solid rgba(255,255,255,.1); border-radius: 50%; box-shadow: 0 0 0 34px rgba(255,255,255,.025), 0 0 0 68px rgba(255,255,255,.02); pointer-events: none; }
+    .shop-footer__intro-inner { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: clamp(44px, 6vw, 76px) 24px 30px; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, .6fr); align-items: end; gap: 48px; }
+    .shop-footer__eyebrow { margin: 0 0 14px; color: #D8B58D; font: 11px 'Space Mono', monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .shop-footer__intro h2 { margin: 0; color: #FFFFFF; font: clamp(34px, 5vw, 64px)/1.02 'Anton', sans-serif; letter-spacing: .01em; text-transform: uppercase; }
+    .shop-footer__intro-copy > p:not(.shop-footer__eyebrow) { max-width: 48ch; margin: 18px 0 24px; color: rgba(255,255,255,.72); font-size: 15px; line-height: 1.65; }
+    .shop-footer__button { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; gap: 12px; padding: 0 20px; border-radius: 999px; color: #1C1C1A; background: #F8F4ED; font: 11px 'Space Mono', monospace; letter-spacing: .05em; text-decoration: none; text-transform: uppercase; transition: transform .2s ease, background .2s ease; }
+    .shop-footer__button:hover { transform: translateY(-2px); background: #FFFFFF; }
+    .shop-footer__button:focus-visible, .shop-footer a:focus-visible { outline: 3px solid #D8B58D; outline-offset: 4px; }
+    .shop-footer__assurances { display: grid; gap: 0; border-top: 1px solid rgba(255,255,255,.2); }
+    .shop-footer__assurances span { display: flex; align-items: center; gap: 16px; padding: 15px 0; border-bottom: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.82); font-size: 13px; }
+    .shop-footer__assurances b { color: #D8B58D; font: 10px 'Space Mono', monospace; }
+    .shop-footer__body { padding: clamp(44px, 6vw, 72px) 24px; background: #F7F4EF; color: #1C1C1A; }
+    .shop-footer__grid { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1.15fr .8fr 1.1fr 1fr; gap: clamp(28px, 4vw, 56px); }
+    .shop-footer__wordmark { display: inline-block; color: #1C1C1A; font: 25px 'Anton', sans-serif; letter-spacing: .01em; text-decoration: none; text-transform: uppercase; }
+    .shop-footer__brand > p { max-width: 28ch; margin: 10px 0 22px; color: #6B6B66; font-size: 14px; line-height: 1.6; }
+    .shop-footer__payments { display: flex; flex-wrap: wrap; gap: 7px; }
+    .shop-footer__payments span { padding: 7px 9px; border: 1px solid #E2DDD3; border-radius: 5px; color: #6B6B66; font: 9px 'Space Mono', monospace; letter-spacing: .03em; text-transform: uppercase; }
+    .shop-footer__column { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+    .shop-footer__column h3 { margin: 3px 0 7px; color: #5C2323; font: 10px 'Space Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .shop-footer__column a { color: #5D5B55; font-size: 13px; line-height: 1.45; text-decoration: none; transition: color .18s ease; }
+    .shop-footer__column a:hover { color: #5C2323; text-decoration: underline; text-underline-offset: 3px; }
+    .shop-footer__contact a { overflow-wrap: anywhere; }
+    .shop-footer__contact p { display: flex; flex-direction: column; gap: 5px; margin: 0; color: #5D5B55; font-size: 13px; line-height: 1.45; }
+    .shop-footer__meta { display: block; color: #8A8680; font: 9px 'Space Mono', monospace; letter-spacing: .07em; text-transform: uppercase; }
+    .shop-footer__socials { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 4px; }
+    .shop-footer__bottom { display: flex; max-width: 1400px; min-height: 64px; align-items: center; justify-content: space-between; gap: 16px; margin: 0 auto; padding: 14px 24px; border-top: 1px solid rgba(255,255,255,.12); color: rgba(255,255,255,.55); }
+    .shop-footer__bottom p { margin: 0; font-size: 12px; }
+    .shop-footer__bottom a { color: rgba(255,255,255,.72); font-size: 12px; text-decoration: none; }
+    .shop-footer__bottom a:hover { color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px; }
+    @media (max-width: 960px) {
+        .shop-footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 38px; }
+    }
+    @media (max-width: 640px) {
+        .shop-footer__intro-inner { grid-template-columns: 1fr; gap: 34px; }
+        .shop-footer__intro::after { width: 300px; height: 300px; right: -170px; top: -140px; }
+        .shop-footer__grid { grid-template-columns: 1fr 1fr; gap: 34px 22px; }
+        .shop-footer__brand, .shop-footer__contact { grid-column: 1 / -1; }
+        .shop-footer__bottom { align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .shop-footer__button, .shop-footer__column a { transition: none; }
+        .shop-footer__button:hover { transform: none; }
+    }
+</style>
 
 @auth
 <!-- ==== Popup chat hỗ trợ khách hàng ==== -->

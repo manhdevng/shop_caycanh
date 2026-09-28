@@ -44,46 +44,12 @@
 <section style="max-width:1400px;margin:0 auto;padding:0 24px clamp(64px,8vw,96px)">
     <div style="display:grid;gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
         @forelse($products as $item)
-            @php $soldCount = $soldCounts[$item->id] ?? null; @endphp
-            <div>
-                <div style="position:relative">
-                    <a href="{{ route('shop.show', $item->id) }}" style="position:relative;display:block;aspect-ratio:1/1">
-                        @include('shop.partials.badge', ['product' => $item, 'bestSellerIds' => $bestSellerIds])
-                        @unless($item->in_stock)
-                            <span style="position:absolute;top:10px;left:10px;background:#6B7280;color:#FFFFFF;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;padding:4px 9px;border-radius:3px;z-index:1">Hết hàng</span>
-                        @endunless
-                        @if($item->main_image)
-                            <img src="{{ asset('storage/' . $item->main_image) }}" alt="{{ $item->name }}" style="width:100%;height:100%;object-fit:cover;display:block">
-                        @else
-                            <div class="placeholder-pattern" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">
-                                <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#A8A196;text-align:center;padding:0 12px">{{ $item->name }}</span>
-                            </div>
-                        @endif
-                    </a>
-                    @include('shop.partials.wishlist-button', ['product' => $item, 'wishlistedIds' => $wishlistedIds])
-                </div>
-                <p style="font-size:15px;font-weight:500;color:#1C1C1A;margin:14px 0 5px">{{ $item->name }}</p>
-                <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66;margin:0 0 8px">
-                    {{ $specLineFor($item) }}
-                    @if($soldCount)
-                        <span style="color:#5C2323">&middot; Đã bán {{ $soldCount }}</span>
-                    @endif
-                </p>
-                <p style="font-size:15px;font-weight:600;color:#1C1C1A;margin:0 0 10px">
-                    @if($priceLineFor($item))
-                        {{ $priceLineFor($item) }}
-                    @else
-                        <span style="font-size:12px;color:#8A8680;font-weight:400;font-style:italic">Liên hệ giá</span>
-                    @endif
-                </p>
-                @if($item->variants->isNotEmpty())
-                    <a href="{{ route('shop.show', $item->id) }}" style="display:block;text-align:center;width:100%;padding:11px 14px;border-radius:999px;background:#FFFFFF;color:#1C1C1A;border:1px solid #1C1C1A;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase">Chọn {{ $item->effective_variant_label }}</a>
-                @elseif($item->base_price <= 0)
-                    <a href="{{ route('shop.show', $item->id) }}" style="display:block;text-align:center;width:100%;padding:11px 14px;border-radius:999px;background:#FFFFFF;color:#8A8680;border:1px solid #E5E2DC;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase">Liên hệ</a>
-                @else
-                    <button type="button" onclick="addToCart({{ $item->id }}, this)" style="width:100%;padding:11px 14px;border-radius:999px;background:#FFFFFF;color:#1C1C1A;border:1px solid #1C1C1A;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer">Thêm vào giỏ</button>
-                @endif
-            </div>
+            @include('shop.partials.product-card', [
+                'product' => $item,
+                'bestSellerIds' => $bestSellerIds,
+                'wishlistedIds' => $wishlistedIds ?? [],
+                'soldCount' => $soldCounts[$item->id] ?? null,
+            ])
         @empty
             <div style="grid-column:1/-1;text-align:center;color:#8A8680;font-size:14px;padding:60px 24px;border:1px dashed #E5E2DC;border-radius:16px">
                 <p style="margin:0 0 18px">Chưa có sản phẩm bán chạy nào trong 30 ngày gần đây.</p>

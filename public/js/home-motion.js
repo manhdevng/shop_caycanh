@@ -10,14 +10,13 @@
      Vườn trong nhà  GHIM. Ba chiếc lá ở mép hé ra -> đọc -> tấm ảnh TRÔI ĐI
                      trên vòng cung sang trái, nền đổi sang màu khối kế tiếp.
      Lưới sản phẩm   Mọc từ đáy lên.
-     Vườn ngoài trời GHIM. Tấm ảnh kế tiếp TRÔI TỚI trên cùng vòng cung đó từ
-                     bên phải vào giữa; chữ hiện khi ảnh đã về chỗ.
+     Vườn ngoài trời GHIM. Tấm ảnh đứng thẳng từ đầu, mở từ khe giữa ra hai
+                     bên như màn trượt carousel; chiều sâu chỉ nằm bên trong ảnh.
      Cam kết         Thân dây mọc dài, lá thật ở ngọn.
      Quà tặng        GHIM. Ảnh cảnh 2 mọc từ đáy lên phủ cảnh 1, chữ đổi lượt.
 
-   Hai cảnh ghim giữa trang nối nhau như hai thẻ của MỘT carousel: thẻ trước
-   trôi khỏi cung, thẻ sau trôi vào — cùng ngôn ngữ với carousel danh mục ngay
-   phía trên (xem arcSlot).
+   Hai cảnh ghim giữa trang nối nhau liền mạch như carousel danh mục: ảnh trước
+   rời cảnh, ảnh sau mở ngang nhưng luôn đứng thẳng.
 
    Ba động từ cho mọi chuyển động: Mọc (vào từ gốc lên), Lay (quán tính, lắc
    theo vận tốc cuộn rồi lắng), Hướng sáng (--sc-sun theo tiến độ cả trang).
@@ -36,11 +35,11 @@
     unfurl: 'power3.inOut',        // Mọc (mặt nạ ảnh): êm hai đầu
     arc: 'power2.inOut',           // Trôi trên vòng cung: êm hai đầu, không giật
     sway: 'sine.inOut',            // Lay
-    settle: 'elastic.out(1, 0.4)', // Lay: về chỗ sau khi dừng cuộn
+    settle: 'power2.out',          // Lay: lắng về tự nhiên, không nảy quá tay
     growDur: 1.1,
     stagger: 0.09,
     rise: 28,                      // px, Mọc tối đa
-    scrub: 1.2                     // độ trễ giữa tay cuộn và cảnh — cả trang dùng chung
+    scrub: 0.78                    // phản hồi gần tay cuộn, vẫn đủ độ mượt
   };
 
   // Vị trí thẻ trên VÒNG CUNG — dùng lại đúng công thức của carousel danh mục
@@ -73,6 +72,29 @@
     gsap.registerPlugin(ScrollTrigger);
     // Thanh địa chỉ điện thoại co giãn khi cuộn -> không đo lại cả trang mỗi lần.
     ScrollTrigger.config({ ignoreMobileResize: true });
+    var refreshTimer = 0;
+
+    function scheduleRefresh() {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(function () {
+        window.requestAnimationFrame(function () { ScrollTrigger.refresh(); });
+      }, 140);
+    }
+
+    function refreshAfterHomeMedia(event) {
+      var media = event.target;
+      if (!(media instanceof HTMLImageElement)) return;
+      if (!media.closest('#heroSection, #catArcSection, .sc-gate--garden, .sc-gate--season, #giftSection')) return;
+      scheduleRefresh();
+    }
+
+    // Ảnh được lazy-load trong các cảnh ghim có thể hoàn tất sau window.load.
+    // Đợi cả font để vị trí trigger không lệch khi tiêu đề đổi metrics.
+    root.addEventListener('load', refreshAfterHomeMedia, true);
+    root.addEventListener('error', refreshAfterHomeMedia, true);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleRefresh);
+    if (document.readyState === 'complete') scheduleRefresh();
+    else window.addEventListener('load', scheduleRefresh, { once: true });
 
     var mm = gsap.matchMedia();
     mm.add({
@@ -89,6 +111,7 @@
       // được đo SAU pin spacer của các khối ghim phía trên nó.
       var scenes = [
         ['#heroSection', heroScene],
+        ['.sc-picks', picksScene],
         ['#catArcSection', categoriesScene],
         ['.sc-gate--garden', gardenScene],
         ['.sc-gate--season', seasonScene],
@@ -112,9 +135,6 @@
       };
     });
 
-    // Ảnh/phông nạp xong làm đổi chiều cao trang -> đo lại vị trí trigger.
-    if (document.readyState === 'complete') ScrollTrigger.refresh();
-    else window.addEventListener('load', function () { ScrollTrigger.refresh(); }, { once: true });
   }
 
   /* ------------------------------------------------------------ tiện ích -- */
@@ -193,7 +213,7 @@
           base: opts.base || 0,
           k: opts.k == null ? 1 : opts.k,
           sunTilt: opts.sunTilt == null ? 8 : opts.sunTilt,
-          to: gsap.quickTo(el, 'rotation', { duration: 1.4, ease: M.settle })
+          to: gsap.quickTo(el, 'rotation', { duration: 0.9, ease: M.settle })
         };
         gsap.set(el, { rotation: target(it, 0) });
         items.push(it);
@@ -204,7 +224,7 @@
           end: 'max',
           onUpdate: function (self) {
             writeSun(self.progress);
-            push(gsap.utils.clamp(-10, 10, self.getVelocity() / -160));
+            push(gsap.utils.clamp(-6, 6, self.getVelocity() / -220));
             if (settle) settle.kill();
             settle = gsap.delayedCall(0.14, function () { push(0); });
           }
@@ -225,15 +245,67 @@
      danh mục -> đáy hero và đỉnh danh mục cùng một màu, không có nhát cắt. */
   function heroScene(hero) {
     var copy = hero.querySelector('.hero-copy');
+    var card = hero.querySelector('[data-hero-card]');
     var veil = hero.querySelector('.hero-veil');
     var media = hero.querySelectorAll('video, canvas');
+
+    // Parallax rất nhẹ, KHÔNG khóa cuộn. Chữ chỉ bắt đầu mờ ở nửa sau quãng
+    // hero (opacity giữ 1 tới 0.45) thay vì mờ dần ngay từ pixel đầu tiên —
+    // hai nút mua phải còn đọc và bấm được trong gần hết màn hình đầu.
+    // Thẻ cây chỉ trôi chậm hơn nền một chút: không xoay, không đổi tỉ lệ,
+    // không mờ, vì nó là ảnh hàng bán chứ không phải lớp trang trí.
     gsap.timeline({
       defaults: { ease: 'none' },
       scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: M.scrub }
     })
-      .to(copy, { yPercent: -22, autoAlpha: 0, ease: 'power1.in' }, 0)
-      .to(media, { scale: 1.12 }, 0)
-      .to(veil, { opacity: 1 }, 0.3);
+      .to(copy, { yPercent: -14 }, 0)
+      .fromTo(copy, { autoAlpha: 1 }, { autoAlpha: 0, ease: 'power1.in' }, 0.45)
+      .to(card, { yPercent: -6 }, 0)
+      .to(media, { scale: 1.08 }, 0)
+      .to(veil, { opacity: 1 }, 0.35);
+  }
+
+  /* --------------------------------------------------- Lối chọn nhanh --
+     Bốn thẻ mở lên một lượt khi vào khung, lệch nhau một nhịp ngắn. Chạy MỘT
+     lần (once) và không scrub: dải này nằm ngay trong màn hình thứ hai, nếu
+     buộc nó vào tiến độ cuộn thì khách cuộn ngược lên sẽ thấy nó biến mất —
+     một dải điều hướng thì không được phép nhấp nháy như vậy. */
+  function picksScene(sec) {
+    var items = gsap.utils.toArray(sec.querySelectorAll('[data-picks] > li'));
+    if (!items.length) return;
+
+    // Chỉ giấu những thẻ còn nằm dưới nếp gấp — thẻ đã trong màn hình đầu thì
+    // chẳng có gì để "mở ra".
+    var below = items.filter(function (el) {
+      return el.getBoundingClientRect().top > window.innerHeight * 0.94;
+    });
+    if (!below.length) return;
+
+    // Dùng opacity chứ KHÔNG dùng autoAlpha. autoAlpha kèm visibility:hidden,
+    // mà phần tử visibility:hidden bị Tab bỏ qua hoàn toàn: người đi bằng bàn
+    // phím sẽ nhảy thẳng từ nút "Xem tất cả" xuống lưới sản phẩm, và tới lúc
+    // cuộn làm dải hiện ra thì focus đã đi qua mất rồi — cả dải điều hướng
+    // thành không bao giờ với tới được. Với opacity, thẻ vẫn nằm trong thứ tự
+    // Tab; trình duyệt cuộn tới nó và reveal chạy như thường.
+    gsap.set(below, { opacity: 0, y: 16 });
+
+    function show(batch) {
+      gsap.to(batch, { opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: M.grow, clearProps: 'transform' });
+    }
+
+    ScrollTrigger.batch(below, {
+      start: 'top 94%',
+      once: true,
+      onEnter: show,
+      // Nhảy thẳng qua (anchor / phím End): vẫn phải hiện, không để lại ô trống.
+      onLeave: function (batch) { gsap.set(batch, { opacity: 1, y: 0, clearProps: 'transform' }); }
+    });
+
+    // Chốt chặn cuối: Tab vào một thẻ khi nó còn mờ -> hiện ngay cả dải, không
+    // để ai phải bấm một thứ mình không nhìn thấy.
+    sec.addEventListener('focusin', function () {
+      gsap.set(below, { opacity: 1, y: 0, clearProps: 'transform' });
+    }, { once: true });
   }
 
   /* ------------------------------------------------------------ Danh mục --
@@ -262,9 +334,8 @@
      Timeline dài 1 đơn vị = cả quãng ghim, ba nhãn:
        part  0.00  ba lá hé ra, ảnh lùi từ 1.06 về 1
        read  0.38  scrim + chữ hiện
-       leave 0.72  chữ mờ, lá mờ, tấm ảnh TRÔI ĐI trên vòng cung sang trái và
-                   nền đổi sang màu khối kế tiếp -> thẻ sau (gate-season) trôi
-                   tới từ bên phải, hai cảnh nối nhau như một carousel. */
+       leave 0.72  chữ mờ, lá mờ, tấm ảnh rời sang trái và nền đổi màu; cảnh
+                   kế tiếp (gate-season) hé ảnh từ khe giữa sang hai bên. */
   function gardenScene(gate, env) {
     var stage = gate.querySelector('.sc-gate__stage');
     var frame = gate.querySelector('.sc-gate__frame');
@@ -288,7 +359,7 @@
     });
     tl.addLabel('part', 0).addLabel('read', 0.38).addLabel('leave', 0.72);
 
-    if (photo) tl.fromTo(photo, { scale: 1.06 }, { scale: 1, duration: 0.5, ease: 'power1.out' }, 'part');
+    if (photo) tl.fromTo(photo, { scale: 1.05 }, { scale: 1, duration: 0.5, ease: 'power1.out' }, 'part');
 
     leaves.forEach(function (leaf) {
       var d = parseFloat(leaf.dataset.depth) || 1;
@@ -318,11 +389,10 @@
   }
 
   /* ------------------------------------------ Vườn ngoài trời (GHIM) --
-     Thẻ kế tiếp của cùng băng chuyền: tấm ảnh chờ sẵn bên PHẢI trên vòng cung
-     (nghiêng, nhỏ, bo góc — đúng thế mà tấm ảnh trước vừa rời đi sang trái),
-     rồi trôi về giữa, phẳng ra và tràn khung. Ảnh bên trong lùi nhẹ từ 1.12 về
-     1 để lớp trong và lớp ngoài không dính cứng vào nhau. Về tới giữa thì
-     scrim và từng dòng chữ hiện (Mọc). */
+     Lấy nhịp chuyển cảnh liên tục của carousel ảnh, giữ nguyên khung thẳng:
+     một khe giữa mở ngang sang hai bên như hai cánh màn. Ảnh tự tiến nhẹ
+     (scale + pan rất nhỏ) để có chiều sâu mà không xoay hoặc bay vào từ mép.
+     Khi ảnh đã mở gần hết, scrim và từng dòng chữ hiện (Mọc). */
   function seasonScene(sec, env) {
     var frame = sec.querySelector('.sc-gate-season__frame');
     var img = frame ? frame.querySelector('img') : null;
@@ -344,8 +414,14 @@
       }
     })
       .addLabel('arrive', 0)
-      .fromTo(frame, arcSlot(1, env), extend(ARC_CENTER, { duration: 0.45 }), 'arrive')
-      .fromTo(img, { scale: 1.12 }, { scale: 1, duration: 0.5, ease: 'power2.out' }, 'arrive')
+      .fromTo(frame,
+        { clipPath: 'inset(0% 50% 0% 50%)' },
+        { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.44, ease: 'power3.inOut' },
+        'arrive')
+      .fromTo(img,
+        { scale: 1.08, xPercent: 2 },
+        { scale: 1, xPercent: 0, duration: 0.5, ease: 'power2.out' },
+        'arrive')
       .addLabel('read', 0.4)
       .fromTo(scrim, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.14, ease: 'none' }, 'read')
       .fromTo(lines, { autoAlpha: 0, y: M.rise }, { autoAlpha: 1, y: 0, duration: 0.14, stagger: 0.035, ease: M.grow }, 'read+=0.04')
@@ -375,7 +451,7 @@
       }
     })
       .addLabel('swap', 0.24)
-      .fromTo(i1, { '--ct': '100%', scale: 1.12 }, { '--ct': '0%', scale: 1, duration: 0.4 }, 'swap')
+      .fromTo(i1, { '--ct': '100%', scale: 1.06 }, { '--ct': '0%', scale: 1, duration: 0.4 }, 'swap')
       .to(i0, { scale: 1.08, duration: 0.4, ease: 'none' }, 'swap')
       .to(t0, { autoAlpha: 0, y: -M.rise, duration: 0.14, stagger: 0.03, ease: 'power2.in' }, 'swap')
       .fromTo(t1, { autoAlpha: 0, y: M.rise }, { autoAlpha: 1, y: 0, duration: 0.16, stagger: 0.04, ease: M.grow }, 'swap+=0.22')
@@ -416,22 +492,19 @@
 
     function parts(card) {
       var pic = card.querySelector('.sc-leaf');
-      var img = pic ? pic.querySelector('img') : null;
-      // Mọi thứ không phải ảnh: nút yêu thích (anh em của ảnh) + khối chữ/nút mua.
-      var rest = [];
-      if (pic) {
-        for (var s = pic.nextElementSibling; s; s = s.nextElementSibling) rest.push(s);
-      }
-      for (var c = card.firstElementChild ? card.firstElementChild.nextElementSibling : null; c; c = c.nextElementSibling) rest.push(c);
-      return { pic: pic, img: img, rest: rest };
+      return { pic: pic, img: pic ? pic.querySelector('img') : null };
     }
 
+    // CHỈ ảnh được giấu trước rồi lộ ra. Tên, giá và nút mua KHÔNG bị ẩn:
+    // đây là khu bán hàng, chữ giá mà nhấp nháy theo cuộn thì khách phải chờ
+    // hiệu ứng xong mới đọc được, và nút mua trong lúc autoAlpha:0 còn dính
+    // visibility:hidden nên bấm không ăn. Thẻ vẫn nhô lên M.rise px cho có
+    // nhịp, nhưng nội dung đọc được ngay từ khung hình đầu.
     cards.forEach(function (card) {
       var p = parts(card);
       gsap.set(card, { y: M.rise });
       if (p.pic) gsap.set(p.pic, { clipPath: 'inset(100% 0% 0% 0%)' });
       if (p.img) gsap.set(p.img, { scale: 1.08, transformOrigin: '50% 100%' });
-      if (p.rest.length) gsap.set(p.rest, { autoAlpha: 0 });
     });
 
     function reveal(batch) {
@@ -447,7 +520,6 @@
         tl.to(card, { y: 0, duration: M.growDur, ease: M.grow, clearProps: 'transform' }, at);
         if (p.pic) tl.to(p.pic, { clipPath: 'inset(0% 0% 0% 0%)', duration: 1.0, ease: M.unfurl, clearProps: 'clipPath' }, at);
         if (p.img) tl.to(p.img, { scale: 1, duration: 1.6, ease: 'power2.out', clearProps: 'transform' }, at);
-        if (p.rest.length) tl.to(p.rest, { autoAlpha: 1, duration: 0.6, ease: 'power1.out' }, at + 0.4);
       });
     }
 

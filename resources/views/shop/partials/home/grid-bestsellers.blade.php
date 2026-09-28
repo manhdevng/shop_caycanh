@@ -24,7 +24,7 @@
                     <h2 style="font-family:'Anton',sans-serif;font-size:clamp(22px,3vw,30px);letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0">Sản phẩm bán chạy</h2>
                     <p style="font-size:14px;color:#6B6B66;margin:8px 0 0">Mua nhiều nhất trong 30 ngày qua</p>
                 </div>
-                <a href="{{ route('shop.bestSellers') }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66">Xem tất cả &rarr;</a>
+                <a href="{{ route('shop.bestSellers') }}" class="sc-home__view-all">Xem tất cả sản phẩm <span aria-hidden="true">&rarr;</span></a>
             </div>
             <div data-grow style="display:grid;gap:32px 24px" class="grid grid-cols-2 md:grid-cols-4">
                 @foreach($homeBestSellers as $item)

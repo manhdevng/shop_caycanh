@@ -65,24 +65,41 @@
 @endpush
 @include('shop.partials.home.home-motion')
 
+{{-- Hành trình mua (kế hoạch ke-hoach-ui-ux-ban-cay.md, mục 3):
+       nhận ra bán cây -> chọn nhanh theo không gian -> thấy hàng thật + giá
+       -> cảnh trong nhà + cây mua được -> cảnh sân vườn + cây mua được
+       -> hoa -> quà tặng -> khám phá thêm -> cam kết -> lời mời cuối.
+
+     Thay đổi so với bản cũ: lưới hàng đầu tiên trước đây nằm SAU cảnh ghim
+     "vườn trong nhà", tức khách phải cuộn qua ~5 màn hình mới thấy cây có giá.
+     Nay hai khối mua (chọn nhanh + lưới nổi bật) được đưa lên ngay dưới hero.
+
+     Carousel vòng cung (categories) chuyển xuống làm phần KHÁM PHÁ PHỤ sau
+     các hàng hàng hoá: nó cao gần một màn hình và tự trôi, để ngay đầu trang
+     sẽ đẩy hàng thật xuống quá sâu. grid-plants bị bỏ khỏi luồng vì lưới "cây
+     nổi bật" mới đã thay đúng vai trò đó (file vẫn còn trên đĩa, không dùng). --}}
 <div class="sc-home">
 @include('shop.partials.home.hero')
 
-@include('shop.partials.home.categories')
+@include('shop.partials.home.quick-picks')
+
+@include('shop.partials.home.grid-featured')
 
 @include('shop.partials.home.gate-garden')
 
-@include('shop.partials.home.grid-bestsellers')
-
-@include('shop.partials.home.grid-plants')
+@include('shop.partials.home.grid-indoor')
 
 @include('shop.partials.home.gate-season')
 
+@include('shop.partials.home.grid-outdoor')
+
 @include('shop.partials.home.grid-flowers')
 
-@include('shop.partials.home.promises')
-
 @include('shop.partials.home.gift')
+
+@include('shop.partials.home.categories')
+
+@include('shop.partials.home.promises')
 
 @include('shop.partials.home.cta-all')
 </div>
@@ -114,6 +131,24 @@
 </section>
 
 <section style="max-width:1400px;margin:0 auto;padding:0 24px clamp(64px,8vw,96px)">
+    {{-- Bộ lọc gom vào một khối mở/đóng. Trên điện thoại, ba nhóm lọc (sắp
+         xếp + khoảng giá + loại + danh mục) xếp liền nhau đẩy sản phẩm đầu
+         tiên xuống quá sâu, nên mặc định thu lại sau một nút bấm; desktop vẫn
+         mở sẵn (CSS ép hiện, nút bấm bị ẩn). Dùng <details> thay vì tự viết
+         JS: bàn phím và trình đọc màn hình hiểu sẵn trạng thái đóng/mở. --}}
+    @php
+        $activeFilterCount = count($activeIds)
+            + (!empty($type) ? 1 : 0)
+            + (request()->filled('price_min') || request()->filled('price_max') ? 1 : 0);
+    @endphp
+    <details class="sc-filters">
+        <summary class="sc-filters__toggle">
+            <span>Bộ lọc &amp; sắp xếp</span>
+            @if($activeFilterCount > 0)
+                <span class="sc-filters__count">{{ $activeFilterCount }} đang áp dụng</span>
+            @endif
+        </summary>
+        <div class="sc-filters__body">
     <form method="GET" action="{{ route('shop.index') }}" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:32px">
         @foreach($activeIds as $id)
             <input type="hidden" name="categories[]" value="{{ $id }}">
@@ -163,43 +198,40 @@
         @endforeach
         <a href="{{ route('shop.index', ['sort' => $sort, 'type' => $type ?? null]) }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.04em;text-transform:uppercase;padding:10px 18px;border-radius:999px;background:{{ empty($activeIds) ? '#1C1C1A' : '#FFFFFF' }};color:{{ empty($activeIds) ? '#FFFFFF' : '#1C1C1A' }};border:1px solid {{ empty($activeIds) ? '#1C1C1A' : '#E5E2DC' }};white-space:nowrap;display:inline-block">Tất cả bộ lọc</a>
     </div>
+        </div>
+    </details>
+
+    <style>
+        /* Desktop: bộ lọc luôn mở, không có nút bấm — giữ nguyên trải nghiệm cũ.
+           Ghi đè hành vi mặc định của <details> (ẩn con khi chưa open) bằng
+           display:block, các trình duyệt hiện nay đều cho phép. */
+        .sc-filters__toggle { display: none; }
+        .sc-filters .sc-filters__body { display: block; }
+        @media (max-width: 860px) {
+            .sc-filters { margin-bottom: 24px; border: 1px solid #E5E2DC; border-radius: 14px; }
+            .sc-filters__toggle {
+                display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                min-height: 48px; padding: 0 16px; cursor: pointer; list-style: none;
+                font-family: 'Space Mono', monospace; font-size: 12px; letter-spacing: .05em;
+                text-transform: uppercase; color: #1C1C1A;
+            }
+            .sc-filters__toggle::-webkit-details-marker { display: none; }
+            .sc-filters__toggle::after { content: '+'; font-size: 18px; line-height: 1; color: #5C2323; }
+            .sc-filters[open] .sc-filters__toggle::after { content: '\2212'; }
+            .sc-filters[open] .sc-filters__toggle { border-bottom: 1px solid #E5E2DC; }
+            .sc-filters__count { font-size: 10.5px; color: #5C2323; text-transform: none; letter-spacing: .02em; }
+            .sc-filters:not([open]) .sc-filters__body { display: none; }
+            .sc-filters .sc-filters__body { padding: 16px 16px 0; }
+        }
+    </style>
 
     <div style="display:grid;gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
         @forelse($products as $item)
-            <div>
-                <div style="position:relative">
-                    <a href="{{ route('shop.show', $item->id) }}" style="position:relative;display:block;aspect-ratio:1/1">
-                        @include('shop.partials.badge', ['product' => $item, 'bestSellerIds' => $bestSellerIds])
-                        @unless($item->in_stock)
-                            <span style="position:absolute;top:10px;left:10px;background:#6B7280;color:#FFFFFF;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;padding:4px 9px;border-radius:3px;z-index:1">Hết hàng</span>
-                        @endunless
-                        @if($item->main_image)
-                            <img src="{{ asset('storage/' . $item->main_image) }}" alt="{{ $item->name }}" style="width:100%;height:100%;object-fit:cover;display:block">
-                        @else
-                            <div class="placeholder-pattern" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">
-                                <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#A8A196;text-align:center;padding:0 12px">{{ $item->name }}</span>
-                            </div>
-                        @endif
-                    </a>
-                    @include('shop.partials.wishlist-button', ['product' => $item, 'wishlistedIds' => $wishlistedIds])
-                </div>
-                <p style="font-size:15px;font-weight:500;color:#1C1C1A;margin:14px 0 5px">{{ $item->name }}</p>
-                <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66;margin:0 0 8px">{{ $specLineFor($item) }}</p>
-                <p style="font-size:15px;font-weight:600;color:#1C1C1A;margin:0 0 10px">
-                    @if($priceLineFor($item))
-                        {{ $priceLineFor($item) }}
-                    @else
-                        <span style="font-size:12px;color:#8A8680;font-weight:400;font-style:italic">Liên hệ giá</span>
-                    @endif
-                </p>
-                @if($item->variants->isNotEmpty())
-                    <a href="{{ route('shop.show', $item->id) }}" style="display:block;text-align:center;width:100%;padding:11px 14px;border-radius:999px;background:#FFFFFF;color:#1C1C1A;border:1px solid #1C1C1A;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase">Chọn {{ $item->effective_variant_label }}</a>
-                @elseif($item->base_price <= 0)
-                    <a href="{{ route('shop.show', $item->id) }}" style="display:block;text-align:center;width:100%;padding:11px 14px;border-radius:999px;background:#FFFFFF;color:#8A8680;border:1px solid #E5E2DC;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase">Liên hệ</a>
-                @else
-                    <button type="button" onclick="addToCart({{ $item->id }}, this)" style="width:100%;padding:11px 14px;border-radius:999px;background:#FFFFFF;color:#1C1C1A;border:1px solid #1C1C1A;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer">Thêm vào giỏ</button>
-                @endif
-            </div>
+            @include('shop.partials.product-card', [
+                'product' => $item,
+                'bestSellerIds' => $bestSellerIds,
+                'wishlistedIds' => $wishlistedIds,
+            ])
         @empty
             <div style="grid-column:1/-1;text-align:center;color:#8A8680;font-size:14px;padding:60px 0">
                 Không có sản phẩm nào phù hợp. <a href="{{ route('shop.index') }}" style="color:#5C2323;text-decoration:underline">Xem tất cả sản phẩm</a>
