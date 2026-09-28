@@ -14,9 +14,10 @@
       $rowRanked     true -> đánh số #1..#N lên ảnh (khối bán chạy)
       $rowSoldCounts mảng product_id => số đã bán
 
-    Lưới: 2 cột ở mobile; desktop mở tối đa 4 cột nhưng không bao giờ nhiều hơn
-    số sản phẩm thật, để hàng chỉ có 2 cây không bị kéo giãn thành hai thẻ
-    khổng lồ.
+    Lưới: 2 cột ở mobile, 4 cột ở desktop — CỐ ĐỊNH, kể cả khi hàng chỉ có 2
+    sản phẩm. Cho số cột co theo số sản phẩm thì hàng 2 cây sẽ nở thành hai
+    thẻ rộng gần 700px, to gấp đôi thẻ ở các hàng khác và phá mất nhịp chung
+    của trang; thà để trống hai ô bên phải còn hơn.
 --}}
 @php
     $rowKicker = $rowKicker ?? null;
@@ -27,7 +28,6 @@
     $rowBg = $rowBg ?? '#FFFFFF';
     $rowRanked = $rowRanked ?? false;
     $rowSoldCounts = $rowSoldCounts ?? [];
-    $rowCols = max(2, min(4, $rowProducts->count()));
 @endphp
 @if($rowProducts->isNotEmpty())
 <section @if($rowId) id="{{ $rowId }}" @endif class="sc-row" style="background:{{ $rowBg }}">
@@ -47,7 +47,7 @@
             @endif
         </div>
 
-        <div data-grow class="sc-row__grid" style="--sc-row-cols:{{ $rowCols }}">
+        <div data-grow class="sc-row__grid">
             @foreach($rowProducts as $rowProduct)
                 @include('shop.partials.product-card', [
                     'product' => $rowProduct,
@@ -69,7 +69,7 @@
 .sc-home .sc-row__kicker { margin: 0 0 10px; font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #5C2323; }
 .sc-home .sc-row__title { margin: 0; font-family: 'Anton', sans-serif; font-size: clamp(22px, 3vw, 30px); letter-spacing: .01em; text-transform: uppercase; color: #1C1C1A; }
 .sc-home .sc-row__note { margin: 8px 0 0; font-size: 14px; color: #6B6B66; }
-.sc-home .sc-row__grid { display: grid; grid-template-columns: repeat(var(--sc-row-cols, 4), minmax(0, 1fr)); gap: 32px 24px; }
+.sc-home .sc-row__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px 24px; }
 @media (max-width: 860px) {
     .sc-home .sc-row__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 16px; }
 }
