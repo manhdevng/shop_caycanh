@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\BankTransferConfirmedMail;
 use App\Models\Order;
 use App\Services\CodSettlementService;
 use App\Services\GHNOrderService;
@@ -11,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 
 class AdminOrderController extends Controller
@@ -308,6 +310,12 @@ class AdminOrderController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
+        // Báo khách qua email ngay khi đã xác nhận thu tiền — không phụ
+        // thuộc kết quả tạo vận đơn GHN phía dưới (khách cần biết tiền đã
+        // được ghi nhận, việc tạo vận đơn thất bại đã có nút "Tạo lại vận
+        // đơn GHN" (C5) xử lý riêng).
+        $this->sendBankTransferConfirmedEmail($order);
+
         // Tạo vận đơn GHN sau khi đã xác nhận thanh toán — tải lại đơn kèm
         // 'items.product', 'items.variant' để GHNOrderService lấy đúng
         // khối lượng/tên phân loại (giống MomoController::completePayment()).
@@ -329,6 +337,29 @@ class AdminOrderController extends Controller
         }
 
         return back()->with('success', 'Đã xác nhận thanh toán chuyển khoản cho đơn hàng #'.$order->id.'.');
+    }
+
+    /**
+     * Gửi email báo khách đã được xác nhận nhận tiền chuyển khoản. Lỗi gửi
+     * email (SMTP down, sai cấu hình...) chỉ được ghi log, KHÔNG được chặn
+     * luồng xác nhận của admin — cùng quy ước với
+     * OrderController::sendOrderConfirmationEmail().
+     */
+    private function sendBankTransferConfirmedEmail(Order $order): void
+    {
+        try {
+            $order->loadMissing('user');
+
+            if (! $order->user || ! $order->user->email) {
+                Log::warning('Không gửi được email xác nhận chuyển khoản: tài khoản không có email.', ['order_id' => $order->id]);
+
+                return;
+            }
+
+            Mail::to($order->user->email)->send(new BankTransferConfirmedMail($order));
+        } catch (\Throwable $e) {
+            Log::error('Gửi email xác nhận chuyển khoản thất bại: '.$e->getMessage(), ['order_id' => $order->id]);
+        }
     }
 
     // Admin TỪ CHỐI đơn "bank_transfer" đang chờ chuyển khoản (ví dụ không
