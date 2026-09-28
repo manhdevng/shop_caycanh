@@ -56,7 +56,7 @@
                                 <div style="width:28px;height:28px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;{{ $stepNumber <= $currentStep ? 'background:#4A6B1F;color:#FFFFFF' : 'background:#EFEDE7;color:#8A8680' }}">
                                     {{ $stepNumber }}
                                 </div>
-                                <span style="margin-top:6px;font-size:11px;text-align:center;width:80px;{{ $stepNumber <= $currentStep ? 'color:#4A6B1F;font-weight:600' : 'color:#8A8680' }}">
+                                <span style="margin-top:6px;font-size:11px;text-align:center;width:min(80px,18vw);{{ $stepNumber <= $currentStep ? 'color:#4A6B1F;font-weight:600' : 'color:#8A8680' }}">
                                     {{ $stepLabel }}
                                 </span>
                             </div>

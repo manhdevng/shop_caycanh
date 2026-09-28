@@ -26,7 +26,7 @@
                 </div>
                 <a href="{{ route('shop.bestSellers') }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66">Xem tất cả &rarr;</a>
             </div>
-            <div data-grow style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 24px" class="grid grid-cols-2 md:grid-cols-4">
+            <div data-grow style="display:grid;gap:32px 24px" class="grid grid-cols-2 md:grid-cols-4">
                 @foreach($homeBestSellers as $item)
                     <div>
                         <div style="position:relative">

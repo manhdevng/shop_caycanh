@@ -27,7 +27,7 @@
 </section>
 
 <section style="max-width:1400px;margin:0 auto;padding:0 24px clamp(64px,8vw,96px)">
-    <div id="wishlist-grid" style="display:{{ $products->count() ? 'grid' : 'none' }};grid-template-columns:repeat(4,1fr);gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
+    <div id="wishlist-grid" style="display:{{ $products->count() ? 'grid' : 'none' }};gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
         @foreach($products as $item)
             <div id="wishlist-item-{{ $item->id }}">
                 <div style="position:relative">

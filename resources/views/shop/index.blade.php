@@ -164,7 +164,7 @@
         <a href="{{ route('shop.index', ['sort' => $sort, 'type' => $type ?? null]) }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.04em;text-transform:uppercase;padding:10px 18px;border-radius:999px;background:{{ empty($activeIds) ? '#1C1C1A' : '#FFFFFF' }};color:{{ empty($activeIds) ? '#FFFFFF' : '#1C1C1A' }};border:1px solid {{ empty($activeIds) ? '#1C1C1A' : '#E5E2DC' }};white-space:nowrap;display:inline-block">Tất cả bộ lọc</a>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
+    <div style="display:grid;gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
         @forelse($products as $item)
             <div>
                 <div style="position:relative">

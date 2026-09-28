@@ -42,7 +42,7 @@
 </section>
 
 <section style="max-width:1400px;margin:0 auto;padding:0 24px clamp(64px,8vw,96px)">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
+    <div style="display:grid;gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
         @forelse($products as $item)
             @php $soldCount = $soldCounts[$item->id] ?? null; @endphp
             <div>

@@ -34,11 +34,17 @@
         ::-webkit-scrollbar-thumb{background:#E5E2DC;border-radius:3px}
         .placeholder-pattern{background:repeating-linear-gradient(135deg,#F7F4EF,#F7F4EF 10px,#EFEAE1 10px,#EFEAE1 20px)}
 
+        /* ==== Thứ tự lớp (z-index) thống nhất toàn layout shop ====
+           nội dung 1-10 -> section pin 20 -> header 100 -> mega menu 110 -> chat 200 -> toast 300 -> modal 400 */
+        :root{--z-pin:20;--z-header:100;--z-mega:110;--z-chat:200;--z-toast:300;--z-modal:400;--header-h:76px}
+
         #siteHeader{background:transparent;border-bottom:1px solid transparent;transition:background-color .25s ease, border-color .25s ease}
         #siteHeader.header-scrolled{background:#FFFFFF;border-bottom-color:#E5E2DC}
         #siteHeader .header-logo,#siteHeader .header-icon{color:#FFFFFF;transition:color .25s ease}
         #siteHeader.header-scrolled .header-logo,#siteHeader.header-scrolled .header-icon{color:#1C1C1A}
-        .page-with-header-offset{padding-top:76px}
+        /* var(--header-h) do JS đo thật (syncHeaderHeight) và cập nhật cả khi resize/header
+           xuống 2 dòng ở mobile -> không còn lệch cứng như hằng số 76px trước đây (V7). */
+        .page-with-header-offset{padding-top:var(--header-h,76px)}
 
         /* ==== Ô tìm kiếm luôn hiển thị trong header (đọc được ở cả nền trong suốt lẫn header-scrolled) ==== */
         #siteHeader .site-search{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.45);transition:background-color .25s ease, border-color .25s ease}
@@ -57,7 +63,7 @@
         .nav-mega{position:relative}
         .nav-mega-trigger{background:none;border:none;padding:0;cursor:pointer;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase}
         /* Panel full-width, cố định ngay dưới header, đồng nhất kích thước dù mở scope nào */
-        .nav-mega-panel{display:none;position:fixed;left:0;right:0;top:var(--header-h,68px);background:#FFFFFF;border-top:1px solid #E5E2DC;border-bottom:1px solid #E5E2DC;box-shadow:0 12px 24px rgba(0,0,0,0.06);z-index:110}
+        .nav-mega-panel{display:none;position:fixed;left:0;right:0;top:var(--header-h,68px);background:#FFFFFF;border-top:1px solid #E5E2DC;border-bottom:1px solid #E5E2DC;box-shadow:0 12px 24px rgba(0,0,0,0.06);z-index:var(--z-mega,110)}
         .nav-mega.is-open .nav-mega-panel{display:block}
         .nav-mega-panel-inner{max-width:1400px;margin:0 auto;padding:28px 24px}
         .nav-mega-all{display:block;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #EFEAE1;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#5C2323}
@@ -78,6 +84,12 @@
             .nav-mega-panel-inner{padding:22px 20px}
             .nav-mega-grid{grid-template-columns:1fr !important;gap:24px}
         }
+
+        /* Popup chat trên mobile: full chiều rộng (trừ lề), neo trên nút chat, chiều cao
+           giới hạn theo dvh để không bị bàn phím ảo che ô nhập (V10). */
+        @media (max-width:640px){
+            .chat-popup{inset:auto 8px 84px 8px !important;width:auto !important;max-width:none !important;height:min(480px,70dvh) !important;max-height:70dvh !important}
+        }
     </style>
 @stack('styles')
 </head>
@@ -87,7 +99,7 @@
 @php
     $isHomeHero = isset($showFeatured) && $showFeatured;
 @endphp
-<header id="siteHeader" class="{{ $isHomeHero ? '' : 'header-scrolled' }}" style="position:fixed;top:0;left:0;width:100%;z-index:100">
+<header id="siteHeader" class="{{ $isHomeHero ? '' : 'header-scrolled' }}" style="position:fixed;top:0;left:0;width:100%;z-index:var(--z-header,100)">
     <div style="max-width:1400px;margin:0 auto;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap">
         <a href="{{ route('shop.index') }}" class="header-logo" style="flex:0 0 auto;font-family:'Anton',sans-serif;font-size:22px;letter-spacing:0.02em;text-transform:uppercase;white-space:nowrap">Cây Cảnh Shop</a>
 
@@ -390,12 +402,12 @@
 
 @auth
 <!-- ==== Popup chat hỗ trợ khách hàng ==== -->
-<button type="button" id="chatToggleBtn" aria-label="Mở chat hỗ trợ" style="position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:999px;background:#5C2323;color:#FFFFFF;border:none;box-shadow:0 8px 24px rgba(0,0,0,0.18);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:200">
+<button type="button" id="chatToggleBtn" aria-label="Mở chat hỗ trợ" style="position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:999px;background:#5C2323;color:#FFFFFF;border:none;box-shadow:0 8px 24px rgba(0,0,0,0.18);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:var(--z-chat,200)">
     <i data-lucide="message-circle" style="width:24px;height:24px"></i>
     <span id="chatUnreadBadge" style="display:none;position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#DC2626;color:#FFFFFF;font-size:11px;line-height:18px;text-align:center;font-family:'Space Mono',monospace;border:2px solid #FFFFFF"></span>
 </button>
 
-<div id="chatPopup" style="display:none;flex-direction:column;position:fixed;bottom:92px;right:24px;width:340px;max-width:calc(100vw - 32px);height:460px;max-height:calc(100vh - 120px);background:#FFFFFF;border:1px solid #E5E2DC;border-radius:24px;box-shadow:0 12px 32px rgba(0,0,0,0.18);overflow:hidden;z-index:200">
+<div id="chatPopup" class="chat-popup" style="display:none;flex-direction:column;position:fixed;bottom:92px;right:24px;width:340px;max-width:calc(100vw - 32px);height:460px;max-height:calc(100vh - 120px);background:#FFFFFF;border:1px solid #E5E2DC;border-radius:24px;box-shadow:0 12px 32px rgba(0,0,0,0.18);overflow:hidden;z-index:var(--z-chat,200)">
     <div style="padding:16px 18px;border-bottom:1px solid #E5E2DC;display:flex;align-items:center;justify-content:space-between;flex:none">
         <span style="font-family:'Anton',sans-serif;font-size:16px;letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A">Hỗ trợ trực tuyến</span>
         <button type="button" id="chatCloseBtn" aria-label="Đóng chat" style="background:none;border:none;cursor:pointer;color:#6B6B66;display:flex">
@@ -419,12 +431,10 @@
     const siteHeader = document.getElementById('siteHeader');
     const mainContent = document.getElementById('mainContent');
     const heroSection = document.getElementById('heroSection');
-    const isNonHeroPage = mainContent && mainContent.classList.contains('page-with-header-offset');
-
-    if (siteHeader && isNonHeroPage) {
-        // Trang không có hero: header luôn nền trắng cố định, chỉ cần đo padding-top thực tế.
-        mainContent.style.paddingTop = siteHeader.offsetHeight + 'px';
-    }
+    // Trang không có hero (header luôn nền trắng cố định) dùng class .page-with-header-offset,
+    // padding-top của nó đọc biến --header-h (do syncHeaderHeight() đo + cập nhật cả khi resize,
+    // xem IIFE mega-menu bên dưới) thay vì set inline 1 lần duy nhất như trước (V7: lệch khi
+    // header xuống 2 dòng ở mobile rồi resize/xoay ngang mà không đo lại).
 
     if (siteHeader && heroSection) {
         const toggleHeaderOnScroll = function () {
@@ -602,11 +612,24 @@
             });
     }
 
+    // ==== Toast: neo trên-phải dưới header (không đè nút chat góc dưới-phải, V1) ====
+    // Nhiều toast liên tiếp xếp chồng theo cột (gap) thay vì đè lên nhau.
+    function getToastContainer() {
+        let box = document.getElementById('toastContainer');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'toastContainer';
+            box.style.cssText = 'position:fixed;top:calc(var(--header-h,76px) + 12px);right:24px;display:flex;flex-direction:column;gap:10px;z-index:var(--z-toast,300);max-width:calc(100vw - 32px)';
+            document.body.appendChild(box);
+        }
+        return box;
+    }
+
     function showToast(message, isError = false) {
         const toast = document.createElement('div');
-        toast.style.cssText = 'position:fixed;bottom:24px;right:24px;color:#fff;font-size:13px;padding:12px 20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.18);z-index:9999;transition:opacity .4s;background:' + (isError ? '#B3261E' : '#1C1C1A');
+        toast.style.cssText = 'color:#fff;font-size:13px;padding:12px 20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.18);transition:opacity .4s;background:' + (isError ? '#B3261E' : '#1C1C1A');
         toast.textContent = message;
-        document.body.appendChild(toast);
+        getToastContainer().appendChild(toast);
         setTimeout(() => { toast.style.opacity = '0'; }, 2000);
         setTimeout(() => { toast.remove(); }, 2500);
     }

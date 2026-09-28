@@ -157,7 +157,7 @@
 @if($relatedProducts->isNotEmpty())
 <section style="max-width:1400px;margin:0 auto;padding:clamp(64px,7vw,88px) 24px 0">
     <h2 style="font-family:'Anton',sans-serif;font-size:clamp(22px,2.6vw,30px);letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 28px">Sản phẩm đi kèm phù hợp</h2>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
+    <div style="display:grid;gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
         @foreach($relatedProducts as $related)
             @php
                 $relatedHasPriceRange = $related->hasPriceRange();
