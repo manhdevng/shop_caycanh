@@ -27,13 +27,13 @@
 </section>
 
 <style>
-/* Khối F — "Mở cửa ra vườn". Cảnh ghim thứ hai của trang.
+/* Khối F — "Khu vườn nở theo mùa". Cảnh ghim thứ hai của trang.
    Tĩnh (không JS / giảm chuyển động): một dải ảnh 16:6, chữ bên trái trên
    scrim tối. Có chuyển động (.sc-home.motion-on, do home-motion.js gắn):
-   khối cao đúng một màn hình và được ghim; ảnh bắt đầu là một khung CỬA VÒM
-   nhỏ đứng trên nền trắng — cùng mô-típ với căn phòng ở gate-garden vừa thu
-   lại thành cửa vòm — rồi mở rộng ra tràn màn hình như bước qua cửa ra vườn;
-   chữ hiện khi cửa đã mở hết (hàm seasonScene).
+   khối cao đúng một màn hình và được ghim; tấm ảnh là THẺ KẾ TIẾP của cùng
+   băng chuyền với khối C — chờ sẵn bên phải trên vòng cung (nghiêng, nhỏ, bo
+   góc, đúng thế mà tấm ảnh khối C vừa rời đi sang trái), rồi trôi về giữa và
+   tràn khung; chữ hiện khi ảnh đã về chỗ (hàm seasonScene, arcSlot).
    Mọi kích thước đặt ở đây chứ không inline, vì inline style thắng mọi rule
    stylesheet — .motion-on và @media bên dưới sẽ không ghi đè được. */
 .sc-home .sc-gate--season {
@@ -61,9 +61,10 @@
     object-fit: cover;
     display: block;
 }
-.sc-home.motion-on .sc-gate-season__frame {
-    clip-path: inset(var(--ct, 0%) var(--cs, 0%) 0% var(--cs, 0%) round var(--cr, 0px) var(--cr, 0px) 0px 0px);
-}
+/* Thẻ trôi trên vòng cung: GSAP lái transform + border-radius của chính khung
+   này (home-motion.js/arcSlot), ảnh bên trong lùi scale riêng. Hai lớp tách
+   nhau nên không tranh cùng một thuộc tính transform. */
+.sc-home.motion-on .sc-gate-season__frame,
 .sc-home.motion-on .sc-gate-season__frame img { will-change: transform; }
 
 /* BẪY 1: .sc-scrim mặc định dựng từ --sc-canvas, mà .sc-home khai --sc-canvas

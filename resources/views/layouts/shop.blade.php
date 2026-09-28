@@ -46,6 +46,28 @@
            xuống 2 dòng ở mobile -> không còn lệch cứng như hằng số 76px trước đây (V7). */
         .page-with-header-offset{padding-top:var(--header-h,76px)}
 
+        /* ==== Header mờ khi đang ở trong một cảnh cuộn nền tối (trang chủ) ====
+           Các cảnh tối chiếm trọn màn hình (danh mục, hai cảnh ghim) nằm ngay dưới
+           header fixed, nên thanh nền TRẮNG cắt ngang đúng phần đang chuyển động.
+           public/js/home-motion.js bật/tắt .header-ghost theo từng cảnh: bỏ nền +
+           viền, chỉ còn chữ trắng — thứ nhìn thấy là cảnh, không phải thanh điều hướng.
+           Phải cộng thêm .header-scrolled trong selector để thắng về độ ưu tiên,
+           vì .header-scrolled mới là class đang đặt nền trắng. */
+        #siteHeader.header-ghost,
+        #siteHeader.header-ghost.header-scrolled{background:transparent;border-bottom-color:transparent}
+        /* Không có thanh nền thì chữ trắng rơi trúng vùng ảnh sáng (ô cửa kính, mảng
+           trời) là mất tương phản. Một lớp chuyển sắc tối rất nhẹ tan dần xuống dưới
+           giữ chữ luôn đọc được mà vẫn không tạo ra "thanh màu" — mắt chỉ thấy ảnh.
+           z-index:-1 nằm trong chính stacking context của header nên lớp này ở dưới
+           chữ của header, vẫn trên nội dung trang. */
+        #siteHeader.header-ghost::before{content:'';position:absolute;left:0;right:0;top:0;height:calc(100% + 32px);z-index:-1;pointer-events:none;background:linear-gradient(180deg,rgba(12,14,11,.52) 0%,rgba(12,14,11,.26) 58%,rgba(12,14,11,0) 100%)}
+        #siteHeader.header-ghost.header-scrolled .header-logo,
+        #siteHeader.header-ghost.header-scrolled .header-icon{color:#FFFFFF}
+        #siteHeader.header-ghost.header-scrolled .site-search{background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.45)}
+        #siteHeader.header-ghost.header-scrolled .site-search-input{color:#FFFFFF}
+        #siteHeader.header-ghost.header-scrolled .site-search-input::placeholder{color:rgba(255,255,255,0.72)}
+        #siteHeader.header-ghost.header-scrolled .site-search-icon{color:#FFFFFF}
+
         /* ==== Ô tìm kiếm luôn hiển thị trong header (đọc được ở cả nền trong suốt lẫn header-scrolled) ==== */
         #siteHeader .site-search{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.45);transition:background-color .25s ease, border-color .25s ease}
         #siteHeader .site-search-input{color:#FFFFFF}

@@ -1,17 +1,17 @@
-{{-- Khối C — Cổng "Vén lá vào vườn". Đỉnh cảm xúc của cả trang chủ, và là
-     khối DUY NHẤT được phép rậm rạp.
-     Tám chiếc lá thật (ảnh tách nền, public/images/foliage) cắm cuống ở mép
-     khung. Lúc khung vừa ghim, lá chĩa vào giữa, che kín căn phòng; cuộn tới
-     đâu lá xoay quanh cuống vén ra hai bên tới đó. Lá gần xoay nhiều và sáng
-     hơn lá xa. Vén xong, lá còn lại ở mép làm khung, lay theo tốc độ cuộn và
-     nghiêng theo nắng; dải nắng mềm quét ngang theo --sc-p; chữ hiện khi lá
-     đã vén gần hết, đặt lên mảng tường bê tông tối giữa ảnh, có một tấm scrim
-     riêng để giữ tương phản trên nền ảnh sáng. Cuối cảnh, căn phòng thu lại
-     thành một khung cửa vòm và nền đổi sang màu của khối kế tiếp — bước ra
-     khỏi phòng. Toàn bộ do public/js/home-motion.js (hàm gardenScene) lái:
-     GSAP ghim khối, ghi --sc-p (0 -> 1) lên section theo tiến độ ghim.
+{{-- Khối C — "Một góc xanh cho mỗi căn phòng". Cảnh ghim thứ nhất.
 
-     CSS dưới đây vẽ lá ở trạng thái ĐÃ VÉN. JS chỉ kéo lá về thế che kín khi
+     Bản trước có TÁM chiếc lá xoay 80-100° quanh cuống rồi văng hẳn ra khỏi
+     màn hình, cộng một dải nắng quét ngang: quá nhiều thứ động cùng lúc (rối
+     mắt) và góc xoay lớn tới mức lá trông như nan quạt giấy chứ không như lá
+     thật. Nay rút còn BA chiếc ở mép khung, mỗi chiếc chỉ hé ra ~26° quanh
+     cuống — vừa đủ thấy khung lá sống, vẫn tự nhiên. Dải nắng đã bỏ hẳn.
+
+     Cuối cảnh, tấm ảnh không còn thu lại thành cửa vòm mà TRÔI ĐI trên vòng
+     cung sang trái, nhường chỗ cho tấm ảnh của khối F trôi tới từ bên phải —
+     cùng ngôn ngữ với carousel danh mục ngay phía trên (home-motion.js,
+     arcSlot). Toàn bộ do hàm gardenScene lái.
+
+     CSS dưới đây vẽ lá ở trạng thái ĐÃ HÉ. JS chỉ kéo lá về thế khép khi
      chuyển động được phép, nên không JS / giảm chuyển động -> ảnh và chữ hiện
      đủ, lá nằm yên ở mép như một khung. --}}
 @php
@@ -20,19 +20,17 @@
         ? route('shop.index', ['categories' => $indoorGroup->children->pluck('id')->all()])
         : route('shop.index', ['type' => 'plant']);
 
-    // Lá vén. ax/ay: điểm cắm cuống theo % khung. rot: góc lúc đã vén (tĩnh).
-    // from: góc lúc che kín. w: rộng theo vmin. depth: 0.4 xa · 0.7 giữa · 1 gần.
+    // Ba chiếc lá khung. ax/ay: điểm cắm cuống theo % khung. rot: góc lúc đã
+    // hé (tĩnh, cũng là thế mặc định khi không có JS). from: góc lúc khép —
+    // lệch khỏi rot đúng 26° về phía giữa khung (lá trái +, lá phải −), nhỏ
+    // vừa đủ để mắt đọc ra là lá đang hé chứ không phải quạt đang xoè.
+    // w: rộng theo vmin. depth: 0.55 xa · 1 gần (chỉ còn hai lớp cho gọn).
     // ox: vị trí cuống theo % ngang ảnh (README trong thư mục foliage); ảnh
     // lật ngang thì cuống đổi phía -> ox = 100 - ox.
     $gardenLeaves = [
-        ['src' => 'monstera', 'ox' => 65.4, 'flip' => false, 'ax' => -2,  'ay' => 16,  'w' => 50, 'rot' => 194,  'from' => 112,  'depth' => .4],
-        ['src' => 'la-gan',   'ox' => 48.9, 'flip' => true,  'ax' => 102, 'ay' => 10,  'w' => 44, 'rot' => -196, 'from' => -118, 'depth' => .4],
-        ['src' => 'la-gan',   'ox' => 48.9, 'flip' => false, 'ax' => 46,  'ay' => -8,  'w' => 42, 'rot' => 262,  'from' => 178,  'depth' => .4],
-        ['src' => 'la-gan',   'ox' => 48.9, 'flip' => false, 'ax' => -3,  'ay' => 58,  'w' => 44, 'rot' => -14,  'from' => 76,   'depth' => .7],
-        ['src' => 'monstera', 'ox' => 65.4, 'flip' => true,  'ax' => 103, 'ay' => 62,  'w' => 50, 'rot' => 22,   'from' => -78,  'depth' => .7],
-        ['src' => 'monstera', 'ox' => 65.4, 'flip' => false, 'ax' => 1,   'ay' => 108, 'w' => 56, 'rot' => -16,  'from' => 52,   'depth' => 1],
-        ['src' => 'la-gan',   'ox' => 48.9, 'flip' => true,  'ax' => 99,  'ay' => 108, 'w' => 54, 'rot' => 16,   'from' => -48,  'depth' => 1],
-        ['src' => 'monstera', 'ox' => 65.4, 'flip' => false, 'ax' => 58,  'ay' => 118, 'w' => 56, 'rot' => 86,   'from' => -4,   'depth' => 1],
+        ['src' => 'monstera', 'ox' => 65.4, 'flip' => true,  'ax' => 103, 'ay' => 58,  'w' => 46, 'rot' => 22,  'from' => -4,  'depth' => .55],
+        ['src' => 'monstera', 'ox' => 65.4, 'flip' => false, 'ax' => 1,   'ay' => 108, 'w' => 54, 'rot' => -16, 'from' => 10,  'depth' => 1],
+        ['src' => 'la-gan',   'ox' => 48.9, 'flip' => true,  'ax' => 99,  'ay' => 108, 'w' => 52, 'rot' => 16,  'from' => -10, 'depth' => 1],
     ];
 @endphp
 <section class="sc-gate sc-gate--garden">
@@ -42,7 +40,6 @@
                  alt="Phòng khách ngập nắng với những chậu cây lưỡi hổ, phát tài núi và sung lá vĩ cầm đặt quanh sofa, tạo thành một khu vườn trong nhà."
                  width="2720" height="1414">
         </div>
-        <div class="sc-gate__beam" aria-hidden="true"></div>
         <div class="sc-gate__leaves" aria-hidden="true">
             @foreach($gardenLeaves as $leaf)
                 @php $ox = $leaf['flip'] ? 100 - $leaf['ox'] : $leaf['ox']; @endphp
@@ -71,9 +68,6 @@
     /* Nền cổng mang tiếp màu tối của khối B — nhát cắt cứng, không nội suy. */
     .sc-home .sc-gate--garden { background: var(--sc-ground-dark); }
 
-    /* --sc-p tĩnh = 0.6: không JS thì scrim chữ đã đầy, dải nắng đứng giữa.
-       GSAP ghim cả section (pin spacer lo quãng cuộn) và ghi --sc-p từ 0. */
-    .sc-home .sc-gate--garden { --sc-p: 0.6; }
     .sc-home .sc-gate__stage {
         position: relative;
         height: 100vh;
@@ -85,12 +79,12 @@
     .sc-home .sc-gate__frame {
         position: absolute;
         inset: 0;
+        overflow: hidden;
     }
-    /* Cửa vòm khi rời cảnh: clip-path dựng từ biến, GSAP nội suy biến
-       (home-motion.js, OPEN / arch). Mặc định 0 = khung mở hết. */
-    .sc-home.motion-on .sc-gate__frame {
-        clip-path: inset(var(--ct, 0%) var(--cs, 0%) 0% var(--cs, 0%) round var(--cr, 0px) var(--cr, 0px) 0px 0px);
-    }
+    /* Rời cảnh: tấm ảnh trôi trên vòng cung (transform + border-radius do GSAP
+       lái, home-motion.js/arcSlot). Chỉ transform/opacity nên không gây
+       reflow; will-change báo trước cho trình duyệt tách lớp. */
+    .sc-home.motion-on .sc-gate__frame { will-change: transform; }
     .sc-home .sc-gate__frame img {
         width: 100%;
         height: 100%;
@@ -135,34 +129,6 @@
     }
     .sc-home .gg-leaf--flip img { transform: scaleX(-1); }
 
-    /* Dải nắng — tự lái hoàn toàn từ --sc-p do GSAP ghi trên section,
-       kế thừa xuống phần tử con này. Chỉ animate
-       transform/opacity, mềm, ấm, không phải neon glow. */
-    .sc-home .sc-gate__beam {
-        position: absolute;
-        inset: -10% -35%;
-        pointer-events: none;
-        z-index: 1;
-        mix-blend-mode: soft-light;
-        background: linear-gradient(100deg,
-            transparent 0%,
-            transparent 38%,
-            rgba(255, 214, 150, .95) 50%,
-            transparent 62%,
-            transparent 100%);
-        transform: translateX(calc((var(--sc-p, 0.5) - 0.5) * 150%));
-        /* Trapezoid mềm: hai đường dốc tuyến tính clamp 0..1 nhân với nhau.
-           Dốc VÀO nhanh (0.45 -> đầy ở ~0.617). Dốc RA chậm và dài, chạm 0
-           đúng tại p=1.0 (không phải 0.85) — act đỉnh phải dính hình ảnh
-           chuyển động cho tới hết quãng pin, không để lại quãng cuộn chết
-           ở đuôi act. Đỉnh phẳng ~0.617-0.65 ở biên độ tối đa 0.35. */
-        opacity: calc(
-            min(1, max(0, (var(--sc-p, 0.5) - 0.45) * 6))
-            * min(1, max(0, (1 - var(--sc-p, 0.5)) * 2.857))
-            * 0.35
-        );
-    }
-
     /* Tấm scrim của khối chữ. Là anh em của .sc-gate__copy (không phải
        ::before của nó): GSAP ẩn/hiện khối chữ bằng autoAlpha (visibility),
        mà visibility:hidden ẩn luôn pseudo-element — scrim phải sống riêng để
@@ -194,11 +160,10 @@
             rgba(10, 10, 8, .58) 0%,
             rgba(10, 10, 8, .34) 45%,
             rgba(10, 10, 8, 0) 78%);
-        /* Lên trước chữ một nhịp (--sc-p do GSAP ghi trên section, kế thừa
-           xuống mọi con): plate đã đầy trước khi
-           chữ (cue mở ở p=0.40) chạm opacity tối đa (~p=0.53), và không tắt
-           trước chữ — giữ nguyên suốt phần đọc rồi nhạt cùng lúc chữ nhạt. */
-        opacity: calc(min(1, max(0, (var(--sc-p, 0) - 0.30) * 5)) * 0.9);
+        /* Không JS / giảm chuyển động: scrim hiện sẵn để chữ trắng vẫn đủ
+           tương phản. Có chuyển động thì GSAP ghi đè opacity inline, cho scrim
+           lên trước chữ một nhịp rồi nhạt cùng lúc chữ nhạt (gardenScene). */
+        opacity: .9;
     }
 
     .sc-home .sc-gate--garden .sc-gate__copy {
@@ -242,13 +207,6 @@
         text-decoration: underline;
         text-underline-offset: 4px;
         text-decoration-thickness: 1px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        /* Giảm chuyển động: không ghim, không chạy GSAP -> dải nắng đứng im
-           giữa ảnh sẽ trông như lỗi, ẩn hẳn. Chữ và scrim đã hiện sẵn nhờ
-           --sc-p tĩnh 0.6. */
-        .sc-home .sc-gate__beam { display: none; }
     }
 
     @media (max-width: 860px) {
