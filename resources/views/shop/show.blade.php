@@ -32,11 +32,11 @@
     <span style="color:#1C1C1A">{{ $product->name }}</span>
 </nav>
 
-<section style="max-width:1400px;margin:0 auto;padding:24px 24px 0;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,1fr);gap:56px;align-items:start" class="grid md:grid-cols-2">
+<section class="sc-pd sc-pd--main" style="max-width:1400px;margin:0 auto;padding:24px 24px 0">
 
-    <div style="display:grid;grid-template-columns:{{ $gallery->count() > 1 ? '76px minmax(0,1fr)' : '1fr' }};gap:14px" class="grid">
+    <div class="sc-pd__gallery{{ $gallery->count() > 1 ? ' sc-pd__gallery--multi' : '' }}">
         @if($gallery->count() > 1)
-        <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="sc-pd__thumbs">
             @foreach($gallery as $image)
                 <button type="button" onclick="switchMainImage('{{ asset('storage/' . $image) }}', this)" class="thumb-btn" style="width:76px;height:76px;padding:0;border-radius:8px;overflow:hidden;border:{{ $loop->first ? '2px solid #5C2323' : '1px solid #E5E2DC' }};cursor:pointer">
                     <img src="{{ asset('storage/' . $image) }}" style="width:100%;height:100%;object-fit:cover;display:block">
@@ -112,7 +112,7 @@
             </div>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
+        <div id="buy-actions" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
             @if($isContactPrice)
                 {{-- Sản phẩm liên hệ giá (base_price <= 0, không có phân loại) — không cho thêm vào giỏ (P2, F9) --}}
                 <button type="button" disabled style="width:100%;padding:17px 20px;border-radius:999px;background:#E5E2DC;color:#8A8680;border:none;font-family:'Space Mono',monospace;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;cursor:not-allowed">Liên hệ giá</button>
@@ -205,7 +205,7 @@
     <div style="border-top:1px solid #E5E2DC"></div>
 </div>
 
-<section style="max-width:1400px;margin:0 auto;padding:clamp(64px,7vw,88px) 24px 0;display:grid;grid-template-columns:minmax(220px,0.8fr) minmax(0,1.4fr);gap:56px" class="grid md:grid-cols-2">
+<section class="sc-pd sc-pd--split" style="max-width:1400px;margin:0 auto;padding:clamp(64px,7vw,88px) 24px 0">
     <div>
         <h2 style="font-family:'Anton',sans-serif;font-size:clamp(22px,2.6vw,28px);line-height:1.2;letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 16px">Đánh giá từ khách hàng</h2>
         <p style="font-size:15px;color:#5C2323;letter-spacing:1px;margin:0 0 10px">
@@ -261,7 +261,7 @@
 </section>
 
 @if($faqs->isNotEmpty())
-<section style="max-width:1400px;margin:0 auto;padding:clamp(64px,7vw,88px) 24px clamp(64px,8vw,96px);display:grid;grid-template-columns:minmax(220px,0.8fr) minmax(0,1.4fr);gap:56px" class="grid md:grid-cols-2">
+<section class="sc-pd sc-pd--split" style="max-width:1400px;margin:0 auto;padding:clamp(64px,7vw,88px) 24px clamp(64px,8vw,96px)">
     <div>
         <h2 style="font-family:'Anton',sans-serif;font-size:clamp(22px,2.6vw,28px);letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 18px">Câu hỏi thường gặp</h2>
         <span style="display:inline-block;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66;border:1px solid #E5E2DC;border-radius:999px;padding:8px 16px">Kiến thức cơ bản</span>
@@ -277,7 +277,115 @@
 </section>
 @endif
 
+<style>
+/* Bố cục trang chi tiết — viết mobile-first.
+
+   Trước đây ba khối này đặt grid-template-columns THẲNG trong thuộc tính
+   style kèm class Tailwind "md:grid-cols-2". Inline style luôn thắng class,
+   nên breakpoint không bao giờ có tác dụng: ở 390px trang vẫn chia hai cột,
+   cột phải hẹp tới mức câu hỏi "Cây có kèm chậu không?" vỡ thành mỗi dòng
+   một từ. Nay một cột là mặc định, hai cột chỉ bật từ 861px trở lên. */
+.sc-pd { display: grid; gap: 32px; align-items: start; }
+@media (min-width: 861px) {
+    .sc-pd { gap: 56px; }
+    .sc-pd--main { grid-template-columns: minmax(0, 1.15fr) minmax(280px, 1fr); }
+    .sc-pd--split { grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr); }
+}
+
+/* Thư viện ảnh: mobile để ảnh lớn lên trước, dải thumbnail cuộn ngang bên
+   dưới (dải dọc 76px ở mobile ăn mất 1/5 bề ngang màn hình). */
+.sc-pd__gallery { display: grid; gap: 14px; }
+.sc-pd__thumbs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.sc-pd__gallery--multi .sc-pd__thumbs { order: 2; }
+.sc-pd__thumbs .thumb-btn { flex: 0 0 auto; }
+@media (min-width: 861px) {
+    .sc-pd__gallery--multi { grid-template-columns: 76px minmax(0, 1fr); }
+    .sc-pd__gallery--multi .sc-pd__thumbs { order: 0; flex-direction: column; overflow-x: visible; }
+}
+</style>
+
+{{-- ==== Thanh mua dính đáy (chỉ mobile) ====
+     Trang chi tiết trên điện thoại dài (ảnh, mô tả, đánh giá, hỏi đáp, sản
+     phẩm liên quan): cuộn qua nút mua gốc là khách mất luôn đường mua, phải
+     vuốt ngược lên tìm. Thanh này hiện khi nút gốc rời khỏi màn hình và biến
+     mất khi nút gốc quay lại — không đè lên nút thật, không nhân đôi CTA.
+     Giá trong thanh bám theo phân loại đang chọn (xem selectVariant).
+     Hết hàng / liên hệ giá thì không dựng thanh: không mời một luồng sẽ hỏng. --}}
+@if(!$isContactPrice && $product->stock > 0)
+<div id="sticky-buy" class="sc-sticky-buy" hidden>
+    <div class="sc-sticky-buy__info">
+        <span class="sc-sticky-buy__name">{{ $product->name }}</span>
+        <span id="sticky-buy-price" class="sc-sticky-buy__price">{{ number_format($displayPrice, 0, ',', '.') }}&#8363;</span>
+    </div>
+    <button type="button" onclick="addProductToCart({{ $product->id }})" class="sc-sticky-buy__btn">Thêm vào giỏ</button>
+</div>
+
+<style>
+.sc-sticky-buy { display: none; }
+@media (max-width: 860px) {
+    .sc-sticky-buy {
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        z-index: var(--z-chat, 200);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px var(--sc-gutter, 16px) calc(10px + env(safe-area-inset-bottom));
+        background: #FFFFFF;
+        border-top: 1px solid #E5E2DC;
+        box-shadow: 0 -8px 24px -18px rgba(0,0,0,.5);
+    }
+    .sc-sticky-buy[hidden] { display: none; }
+    .sc-sticky-buy__info { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+    .sc-sticky-buy__name { font-size: 12px; color: #6B6B66; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sc-sticky-buy__price { font-size: 16px; font-weight: 700; color: #1C1C1A; }
+    .sc-sticky-buy__btn {
+        flex: 0 0 auto; min-height: 44px; padding: 0 20px; border: none; border-radius: 999px;
+        background: #5C2323; color: #FFFFFF; cursor: pointer;
+        font-family: 'Space Mono', monospace; font-size: 12px; letter-spacing: .05em; text-transform: uppercase;
+    }
+    /* Nút chat nổi và thanh mua cùng bám đáy phải -> đẩy nút chat lên trên
+       thanh, nếu không nó đè đúng chỗ nút "Thêm vào giỏ". */
+    body:has(#sticky-buy:not([hidden])) #chatToggleBtn { bottom: 88px; }
+}
+</style>
+@endif
+
 @push('scripts')
+@if(!$isContactPrice && $product->stock > 0)
+<script>
+    // Thanh mua đáy chỉ hiện khi khối nút mua gốc đã trôi lên QUÁ mép trên
+    // màn hình. Khách chưa cuộn tới đó thì không hiện, vì lúc ấy nút thật vẫn
+    // đang nằm ngay trước mắt.
+    //
+    // Cố tình KHÔNG dùng IntersectionObserver ở đây: observer chỉ gọi lại khi
+    // trạng thái giao nhau ĐỔI, mà khối nút mua lúc tải trang nằm dưới nếp gấp
+    // (không giao) và sau khi cuộn qua thì nằm trên màn hình (cũng không giao)
+    // — cùng một trạng thái, nên với cú nhảy anchor hoặc trình duyệt khôi phục
+    // vị trí cuộn cũ, callback không bao giờ chạy và thanh không bao giờ hiện.
+    // Đo thẳng vị trí trong một listener passive + rAF thì đúng ở mọi trường hợp.
+    (function () {
+        var bar = document.getElementById('sticky-buy');
+        var anchor = document.getElementById('buy-actions');
+        if (!bar || !anchor) return;
+        var queued = false;
+
+        function apply() {
+            queued = false;
+            bar.hidden = anchor.getBoundingClientRect().bottom > 0;
+        }
+        function onScroll() {
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(apply);
+        }
+
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll, { passive: true });
+        apply();
+    })();
+</script>
+@endif
 <script>
     // ==== Bật/tắt yêu thích trực tiếp trên trang chi tiết (không reload) ====
     function toggleWishlist(productId, btn) {
@@ -354,6 +462,10 @@
         document.getElementById('selected-variant-id').value = variantId;
         const priceEl = document.querySelector('#price-display span');
         if (priceEl) { priceEl.textContent = Number(price).toLocaleString('vi-VN') + '₫'; }
+        // Thanh mua dính ở đáy (mobile) phải đổi giá theo đúng phân loại vừa
+        // chọn — nếu không, khách chọn chậu L mà thanh dưới vẫn báo giá chậu S.
+        const stickyPrice = document.getElementById('sticky-buy-price');
+        if (stickyPrice) { stickyPrice.textContent = Number(price).toLocaleString('vi-VN') + '₫'; }
 
         document.querySelectorAll('.variant-btn').forEach(b => {
             b.style.background = '#FFFFFF';

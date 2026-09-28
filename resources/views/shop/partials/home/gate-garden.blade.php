@@ -6,10 +6,9 @@
      thật. Nay rút còn BA chiếc ở mép khung, mỗi chiếc chỉ hé ra ~26° quanh
      cuống — vừa đủ thấy khung lá sống, vẫn tự nhiên. Dải nắng đã bỏ hẳn.
 
-     Cuối cảnh, tấm ảnh không còn thu lại thành cửa vòm mà TRÔI ĐI trên vòng
-     cung sang trái, nhường chỗ cho tấm ảnh của khối F trôi tới từ bên phải —
-     cùng ngôn ngữ với carousel danh mục ngay phía trên (home-motion.js,
-     arcSlot). Toàn bộ do hàm gardenScene lái.
+     Cuối cảnh, tấm ảnh mờ dần trên cung sang trái. Cảnh sân vườn kế tiếp mở
+     từ khe giữa sang hai bên, vẫn giữ ảnh đứng thẳng. Toàn bộ do home-motion.js
+     điều khiển.
 
      CSS dưới đây vẽ lá ở trạng thái ĐÃ HÉ. JS chỉ kéo lá về thế khép khi
      chuyển động được phép, nên không JS / giảm chuyển động -> ảnh và chữ hiện
@@ -59,7 +58,7 @@
             <p class="sc-gate__label">Cây trong nhà</p>
             <h2 class="sc-gate__title">Một góc xanh cho mỗi căn phòng</h2>
             <p class="sc-gate__desc">Lưỡi hổ bên cửa kính, phát tài cạnh sofa, sung lá vĩ cầm nơi góc tường. Những loại cây ưa bóng râm, ít cần chăm, giữ cho căn nhà trong lành và dịu lại sau một ngày dài.</p>
-            <a href="{{ $indoorHref }}" class="sc-gate__link">Xem cây để trong nhà &rarr;</a>
+            <a href="{{ $indoorHref }}" class="sc-home__view-all sc-home__view-all--inverse">Xem tất cả cây trong nhà <span aria-hidden="true">&rarr;</span></a>
         </div>
     </div>
 </section>

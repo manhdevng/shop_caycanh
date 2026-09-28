@@ -13,7 +13,7 @@
 
 <section class="sc-gate sc-gate--season">
     <div class="sc-gate-season__frame">
-        <img src="{{ asset('images/back_flow.webp') }}" alt="Lối đi lát đá giữa khóm hồng leo và hoa cam trong vườn" loading="lazy" decoding="async">
+        <img src="{{ asset('images/back_flow-editorial.webp') }}" alt="Lối đi lát đá trong khu vườn xanh với hoa hồng nở" width="1535" height="1025" loading="lazy" decoding="async">
     </div>
 
     <div class="sc-scrim sc-scrim--left" aria-hidden="true"></div>
@@ -22,7 +22,7 @@
         <p class="sc-gate-season__label">Cây sân vườn</p>
         <h2 class="sc-gate-season__title">Khu vườn nở theo mùa</h2>
         <p class="sc-gate-season__desc">Hồng leo, dâm bụt và những khóm hoa cam rực nắng bên lối đi lát đá. Cây sân vườn ưa sáng, bền với nắng mưa, cho khoảng sân nhà bạn đổi màu qua từng tháng.</p>
-        <a href="{{ $seasonHref }}" class="sc-gate-season__link">Xem cây sân vườn &rarr;</a>
+        <a href="{{ $seasonHref }}" class="sc-home__view-all sc-home__view-all--inverse">Xem tất cả cây sân vườn <span aria-hidden="true">&rarr;</span></a>
     </div>
 </section>
 
@@ -30,12 +30,9 @@
 /* Khối F — "Khu vườn nở theo mùa". Cảnh ghim thứ hai của trang.
    Tĩnh (không JS / giảm chuyển động): một dải ảnh 16:6, chữ bên trái trên
    scrim tối. Có chuyển động (.sc-home.motion-on, do home-motion.js gắn):
-   khối cao đúng một màn hình và được ghim; tấm ảnh là THẺ KẾ TIẾP của cùng
-   băng chuyền với khối C — chờ sẵn bên phải trên vòng cung (nghiêng, nhỏ, bo
-   góc, đúng thế mà tấm ảnh khối C vừa rời đi sang trái), rồi trôi về giữa và
-   tràn khung; chữ hiện khi ảnh đã về chỗ (hàm seasonScene, arcSlot).
-   Mọi kích thước đặt ở đây chứ không inline, vì inline style thắng mọi rule
-   stylesheet — .motion-on và @media bên dưới sẽ không ghi đè được. */
+   khối cao đúng một màn hình và được ghim; khung ảnh giữ nguyên phương ngang,
+   GSAP hé ảnh từ khe giữa sang hai bên và chữ hiện khi ảnh gần mở xong. Mọi
+   kích thước đặt ở đây chứ không inline để giữ responsive. */
 .sc-home .sc-gate--season {
     position: relative;
     width: 100%;
@@ -61,10 +58,8 @@
     object-fit: cover;
     display: block;
 }
-/* Thẻ trôi trên vòng cung: GSAP lái transform + border-radius của chính khung
-   này (home-motion.js/arcSlot), ảnh bên trong lùi scale riêng. Hai lớp tách
-   nhau nên không tranh cùng một thuộc tính transform. */
-.sc-home.motion-on .sc-gate-season__frame,
+/* Khung ảnh hé bằng mặt nạ ngang; chuyển động tách lớp để giữ ảnh thẳng. */
+.sc-home.motion-on .sc-gate-season__frame { will-change: clip-path; }
 .sc-home.motion-on .sc-gate-season__frame img { will-change: transform; }
 
 /* BẪY 1: .sc-scrim mặc định dựng từ --sc-canvas, mà .sc-home khai --sc-canvas
@@ -93,6 +88,8 @@
     gap: 10px;
     max-width: min(40ch, 60%);
 }
+
+.sc-home .sc-gate-season__copy .sc-home__view-all { align-self: flex-start; }
 
 .sc-home .sc-gate-season__label {
     margin: 0;
@@ -155,5 +152,6 @@
     }
 
     .sc-home .sc-gate-season__desc { max-width: none; }
+    .sc-home .sc-gate-season__frame img { object-position: 58% center; }
 }
 </style>

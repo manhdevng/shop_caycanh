@@ -91,6 +91,9 @@
     .cat-arc-card{position:absolute;top:0;left:0;will-change:transform;visibility:hidden}
     .cat-arc-inner{position:relative;display:block;width:100%;height:100%;overflow:hidden;border-radius:10px;background:#2A2A27;opacity:0;box-shadow:0 18px 40px -12px rgba(0,0,0,.55),0 2px 6px rgba(0,0,0,.2);-webkit-user-drag:none;color:#FFFFFF;text-decoration:none}
     .cat-arc-inner img{display:block;width:100%;height:100%;object-fit:cover;pointer-events:none;-webkit-user-drag:none;transition:transform .6s ease}
+    .cat-arc-all{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:6px 10px;border:1px solid rgba(255,255,255,.68);border-radius:999px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#FFFFFF;transition:background .2s ease,color .2s ease}
+    .cat-arc-all::after{content:'→';font-size:12px}
+    .cat-arc-inner:hover .cat-arc-all,.cat-arc-inner:focus-visible .cat-arc-all{background:#FFFFFF;color:#1C1C1A}
     .cat-arc-card:hover .cat-arc-inner img{transform:scale(1.05)}
     .cat-arc-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center;font-family:'Space Mono',monospace;font-size:11px;text-transform:uppercase;color:rgba(255,255,255,.5);background:repeating-linear-gradient(135deg,rgba(28,28,26,.72),rgba(28,28,26,.72) 10px,rgba(50,50,46,.72) 10px,rgba(50,50,46,.72) 20px)}
     .cat-arc-shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.35) 70%,rgba(0,0,0,.72) 100%);transition:opacity .3s ease}
@@ -175,7 +178,9 @@
         if (item.tag) { const t = document.createElement('span'); t.className = 'cat-arc-tag'; t.textContent = item.tag; text.appendChild(t); }
         const n = document.createElement('p'); n.className = 'cat-arc-name'; n.textContent = item.title;
         const d = document.createElement('p'); d.className = 'cat-arc-desc'; d.textContent = item.desc;
-        text.appendChild(n); text.appendChild(d);
+        const more = document.createElement('span'); more.className = 'cat-arc-all'; more.textContent = 'Xem tất cả';
+        a.setAttribute('aria-label', 'Xem tất cả ' + item.title + ' — ' + item.desc);
+        text.appendChild(n); text.appendChild(d); text.appendChild(more);
         a.appendChild(shade); a.appendChild(text);
         card.appendChild(a);
         return { card, inner: a };
