@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Services\CodSettlementService;
 use App\Services\LoyaltyService;
 use App\Services\OrderCancellationService;
 use Illuminate\Http\Request;
@@ -197,6 +198,11 @@ class GHNWebhookController extends Controller
             // giao thành công — service tự kiểm tra idempotent (points_awarded),
             // an toàn khi gọi lồng trong transaction hiện tại (savepoint).
             LoyaltyService::awardIfDelivered($order);
+
+            // G6: đơn COD giao thành công -> đồng bộ giao dịch sang "paid" để
+            // vào báo cáo tài chính — tự kiểm tra idempotent, an toàn khi gọi
+            // lồng trong transaction hiện tại (savepoint).
+            CodSettlementService::settleIfDelivered($order);
 
             Log::info('GHN webhook: đã cập nhật trạng thái vận chuyển', [
                 'order_id' => $order->id,

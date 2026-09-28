@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Services\CodSettlementService;
 use App\Services\GHNOrderService;
 use App\Services\LoyaltyService;
 use App\Services\OrderCancellationService;
@@ -165,6 +166,10 @@ class AdminOrderController extends Controller
         // Cộng điểm thành viên (nếu đủ điều kiện) ngay khi đơn chuyển sang
         // "delivered" — service tự kiểm tra idempotent (points_awarded).
         LoyaltyService::awardIfDelivered($order);
+
+        // G6: đơn COD giao thành công -> đồng bộ giao dịch sang "paid" để vào
+        // báo cáo tài chính — service tự kiểm tra idempotent.
+        CodSettlementService::settleIfDelivered($order);
 
         return back()->with('success', 'Đã cập nhật trạng thái vận chuyển.');
     }

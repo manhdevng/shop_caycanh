@@ -16,6 +16,7 @@ use App\Services\MomoService;
 use App\Services\OrderCancellationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -104,6 +105,26 @@ class OrderController extends Controller
 
     // Đặt hàng: tạo Order + OrderItem từ giỏ hàng trong session, sau đó tạo vận đơn bên GHN.
     public function store(Request $request, GHNOrderService $ghnOrderService, GHNService $ghn)
+    {
+        // G10: chặn double-submit — bấm "Đặt hàng" 2 lần liên tiếp (double
+        // click, double-tap trên mobile...) có thể khiến 2 request cùng đọc
+        // session giỏ hàng và cùng tạo đơn trước khi request đầu xoá giỏ
+        // hàng/commit xong. Các khoá DB (lockForUpdate) trong storeLocked()
+        // chỉ chống ÂM KHO, không chống việc tạo 2 đơn trùng từ cùng 1 giỏ.
+        $lock = Cache::lock('checkout:user:' . Auth::id(), 15);
+
+        if (! $lock->get()) {
+            return back()->with('error', 'Đơn hàng đang được xử lý, vui lòng không bấm nhiều lần.');
+        }
+
+        try {
+            return $this->storeLocked($request, $ghnOrderService, $ghn);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function storeLocked(Request $request, GHNOrderService $ghnOrderService, GHNService $ghn)
     {
         // Giỏ hàng thật đầy đủ trong session, dùng để merge lại khi ghi đè
         // session('cart') bên dưới — không được làm mất các sản phẩm không
