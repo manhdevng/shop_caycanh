@@ -26,7 +26,6 @@ class AdminOrderController extends Controller
         'cancelled' => ['label' => 'Đã hủy', 'color' => 'red', 'statuses' => ['cancelled']],
     ];
 
-  
     public function index(Request $request)
     {
         $paymentLabels = [
@@ -58,8 +57,8 @@ class AdminOrderController extends Controller
             ->orderByDesc('id')->limit(1);
 
         $source = DB::table('orders')->leftJoin('payment_transactions as payment', function ($join) use ($paymentId) {
-                $join->on('payment.order_id', '=', 'orders.id')->where('payment.id', '=', $paymentId);
-            })->select('orders.*')
+            $join->on('payment.order_id', '=', 'orders.id')->where('payment.id', '=', $paymentId);
+        })->select('orders.*')
             ->selectRaw("COALESCE(payment.gateway, CASE WHEN orders.status IN ('cod_ordered', 'cod_paid') THEN 'cod' WHEN orders.status = 'awaiting_transfer' THEN 'bank_transfer' WHEN orders.status IN ('paid', 'paid_momo') THEN 'momo' ELSE 'unknown' END) as gateway")
             ->selectRaw("COALESCE(payment.status, CASE WHEN orders.status IN ('cod_ordered', 'awaiting_transfer') THEN 'pending' WHEN orders.status IN ('cod_paid', 'paid_momo') THEN 'paid' ELSE orders.status END) as payment_status");
 
@@ -96,6 +95,7 @@ class AdminOrderController extends Controller
         $tabs = collect(self::TABS)->map(function ($tab, $key) use ($shippingCounts) {
             $tab['count'] = $key === 'all' ? $shippingCounts->sum()
                 : collect($tab['statuses'])->sum(fn ($status) => $shippingCounts->get($status, 0));
+
             return $tab;
         });
 
@@ -193,7 +193,7 @@ class AdminOrderController extends Controller
             // success=false và skipped=false (khác skipped=true) nghĩa là GHN
             // thực sự gọi lỗi (không phải do đơn chưa có vận đơn) -> chỉ log
             // cảnh báo, không chặn việc huỷ đơn ở phía hệ thống.
-            Log::warning('Huỷ đơn hàng #' . $order->id . ' thành công nhưng huỷ vận đơn GHN thất bại', [
+            Log::warning('Huỷ đơn hàng #'.$order->id.' thành công nhưng huỷ vận đơn GHN thất bại', [
                 'order_id' => $order->id,
                 'ghn_order_code' => $order->ghn_order_code,
                 'message' => $ghnResult['message'] ?? null,
@@ -242,7 +242,7 @@ class AdminOrderController extends Controller
                 'shipping_status' => 'ready_to_pick',
             ]);
 
-            return back()->with('success', 'Đã tạo lại vận đơn GHN cho đơn hàng #' . $order->id . '.');
+            return back()->with('success', 'Đã tạo lại vận đơn GHN cho đơn hàng #'.$order->id.'.');
         }
 
         Log::error('Tạo lại vận đơn GHN thất bại', [
@@ -321,14 +321,14 @@ class AdminOrderController extends Controller
                 'shipping_status' => 'ready_to_pick',
             ]);
         } else {
-            Log::warning('Xác nhận chuyển khoản đơn #' . $order->id . ' thành công nhưng tạo vận đơn GHN thất bại', [
+            Log::warning('Xác nhận chuyển khoản đơn #'.$order->id.' thành công nhưng tạo vận đơn GHN thất bại', [
                 'order_id' => $order->id,
                 'response' => $ghnResponse,
             ]);
             $order->update(['shipping_status' => 'not_shipped']);
         }
 
-        return back()->with('success', 'Đã xác nhận thanh toán chuyển khoản cho đơn hàng #' . $order->id . '.');
+        return back()->with('success', 'Đã xác nhận thanh toán chuyển khoản cho đơn hàng #'.$order->id.'.');
     }
 
     // Admin TỪ CHỐI đơn "bank_transfer" đang chờ chuyển khoản (ví dụ không
@@ -367,7 +367,7 @@ class AdminOrderController extends Controller
         $ghnResult = $ghnOrderService->cancelForOrder($order);
 
         if (! $ghnResult['success'] && empty($ghnResult['skipped'])) {
-            Log::warning('Từ chối chuyển khoản đơn hàng #' . $order->id . ' thành công nhưng huỷ vận đơn GHN thất bại', [
+            Log::warning('Từ chối chuyển khoản đơn hàng #'.$order->id.' thành công nhưng huỷ vận đơn GHN thất bại', [
                 'order_id' => $order->id,
                 'ghn_order_code' => $order->ghn_order_code,
                 'message' => $ghnResult['message'] ?? null,
@@ -375,6 +375,6 @@ class AdminOrderController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Đã từ chối và hủy đơn hàng chuyển khoản #' . $order->id . '.');
+        return back()->with('success', 'Đã từ chối và hủy đơn hàng chuyển khoản #'.$order->id.'.');
     }
 }

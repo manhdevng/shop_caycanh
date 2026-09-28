@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Product;
 use App\Models\Category;
-use App\Models\ProductVariant;
+use App\Models\Product;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -24,9 +23,9 @@ class ProductController extends Controller
         if ($request->has('categories')) {
             // Ép kiểu mảng: tránh TypeError khi query string dạng ?categories=1.
             $categoryIds = array_filter((array) $request->input('categories', []));
-            if (!empty($categoryIds)) {
+            if (! empty($categoryIds)) {
                 foreach ($categoryIds as $categoryId) {
-                    $query->whereHas('categories', function($q) use ($categoryId) {
+                    $query->whereHas('categories', function ($q) use ($categoryId) {
                         $q->where('categories.id', $categoryId);
                     });
                 }
@@ -42,7 +41,7 @@ class ProductController extends Controller
         // Tìm theo tên sản phẩm.
         $search = trim((string) $request->input('q'));
         if ($search !== '') {
-            $query->where('name', 'like', '%' . $search . '%');
+            $query->where('name', 'like', '%'.$search.'%');
         }
 
         $products = $query->paginate(20)->withQueryString();
@@ -88,7 +87,7 @@ class ProductController extends Controller
             DB::beginTransaction();
 
             $data = $this->extractProductData($request);
-            if (!empty($data['main_image'])) {
+            if (! empty($data['main_image'])) {
                 $storedFiles[] = $data['main_image'];
             }
 
@@ -119,6 +118,7 @@ class ProductController extends Controller
             }
 
             DB::commit();
+
             return redirect()->route('products.index')->with('success', 'Thêm sản phẩm thành công.');
 
         } catch (\Throwable $e) {
@@ -133,6 +133,7 @@ class ProductController extends Controller
     public function show(Product $product)
     {
         $product->load(['categories.parent', 'variants']);
+
         return view('products.show', compact('product'));
     }
 
@@ -233,6 +234,7 @@ class ProductController extends Controller
     public function trashed()
     {
         $products = Product::onlyTrashed()->with('categories')->paginate(20);
+
         return view('products.trashed', compact('products'));
     }
 
@@ -255,13 +257,13 @@ class ProductController extends Controller
     {
         $rules = [
             'name' => 'required|string|max:255',
-            'product_type' => 'required|in:' . implode(',', array_keys(Product::TYPES)),
+            'product_type' => 'required|in:'.implode(',', array_keys(Product::TYPES)),
             'pricing_mode' => 'required|in:single,variants',
             'weight' => 'nullable|integer|min:1',
             'main_image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:8192',
             'categories' => 'required|array|min:1',
             'categories.*' => 'exists:categories,id',
-            'badge' => 'nullable|in:' . implode(',', array_keys(Product::BADGES)),
+            'badge' => 'nullable|in:'.implode(',', array_keys(Product::BADGES)),
             'variant_label' => 'nullable|string|max:50',
             'stock' => 'required|integer|min:0',
         ];
@@ -316,7 +318,7 @@ class ProductController extends Controller
         $productType = $request->input('product_type');
         $categoryIds = array_filter((array) $request->input('categories', []));
 
-        if (empty($categoryIds) || !in_array($productType, array_keys(Product::TYPES), true)) {
+        if (empty($categoryIds) || ! in_array($productType, array_keys(Product::TYPES), true)) {
             // Lỗi required/in đã được rule cơ bản báo, không cần lặp lại ở đây.
             return;
         }
@@ -328,9 +330,9 @@ class ProductController extends Controller
             ->get();
 
         $hasExactType = $scopes->contains(fn ($row) => $row->effective_scope === $productType);
-        $hasWrongScope = $scopes->contains(fn ($row) => !in_array($row->effective_scope, [$productType, 'both'], true));
+        $hasWrongScope = $scopes->contains(fn ($row) => ! in_array($row->effective_scope, [$productType, 'both'], true));
 
-        if (!$hasExactType || $hasWrongScope) {
+        if (! $hasExactType || $hasWrongScope) {
             $validator->errors()->add('categories', 'Vui lòng chọn ít nhất một kiểu cây/kiểu hoa.');
         }
     }
@@ -364,7 +366,7 @@ class ProductController extends Controller
             $data['base_price'] = 0;
         }
 
-        if ($request->hasFile('main_image') && !$product) {
+        if ($request->hasFile('main_image') && ! $product) {
             $data['main_image'] = $request->file('main_image')->store('products', 'public');
         }
 
@@ -405,7 +407,7 @@ class ProductController extends Controller
                 'sort_order' => $variantData['sort_order'] ?? 0,
             ];
 
-            if (!empty($variantData['id'])) {
+            if (! empty($variantData['id'])) {
                 // Update existing variant
                 $variantModel = $product->variants()->find($variantData['id']);
 
@@ -464,7 +466,7 @@ class ProductController extends Controller
     {
         $paths = array_values(array_unique(array_filter($paths)));
 
-        if (!empty($paths)) {
+        if (! empty($paths)) {
             Storage::disk('public')->delete($paths);
         }
     }

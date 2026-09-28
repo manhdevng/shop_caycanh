@@ -39,13 +39,13 @@ return [
     // hình thức "Chuyển khoản ngân hàng" (C4.1). Không phải bí mật như khóa
     // MoMo, nhưng vẫn để trong .env để mỗi môi trường khai số tài khoản riêng.
     'bank' => [
-        'name'           => env('BANK_NAME', 'Vietcombank'),
+        'name' => env('BANK_NAME', 'Vietcombank'),
         'account_number' => env('BANK_ACCOUNT_NUMBER', ''),
-        'account_name'   => env('BANK_ACCOUNT_NAME', ''),
-        'branch'         => env('BANK_BRANCH', ''),
+        'account_name' => env('BANK_ACCOUNT_NAME', ''),
+        'branch' => env('BANK_BRANCH', ''),
         // Mã BIN ngân hàng (napas) dùng để tạo ảnh QR VietQR — xem
         // Order::vietQrUrl(). Tra mã BIN ngân hàng tương ứng trên vietqr.io.
-        'bin'            => env('BANK_BIN', ''),
+        'bin' => env('BANK_BIN', ''),
     ],
 
     'ghn' => [

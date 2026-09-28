@@ -48,7 +48,9 @@ class Order extends Model
 
     // Hình thức thanh toán (orders.payment_method).
     const PAYMENT_COD = 'cod';
+
     const PAYMENT_MOMO = 'momo';
+
     const PAYMENT_BANK_TRANSFER = 'bank_transfer';
 
     /**
@@ -287,7 +289,7 @@ class Order extends Model
     // tố "DH" — xem AdminOrderController::index()).
     public function transferContent(): string
     {
-        return 'DH' . $this->id;
+        return 'DH'.$this->id;
     }
 
     // C4.2: URL ảnh QR VietQR (định dạng compact2) để khách quét chuyển khoản
@@ -301,10 +303,10 @@ class Order extends Model
             return null;
         }
 
-        return 'https://img.vietqr.io/image/' . rawurlencode((string) $bin) . '-' . rawurlencode((string) $accountNumber) . '-compact2.png'
-            . '?amount=' . rawurlencode((string) (int) $this->total_price)
-            . '&addInfo=' . rawurlencode($this->transferContent())
-            . '&accountName=' . rawurlencode((string) config('services.bank.account_name'));
+        return 'https://img.vietqr.io/image/'.rawurlencode((string) $bin).'-'.rawurlencode((string) $accountNumber).'-compact2.png'
+            .'?amount='.rawurlencode((string) (int) $this->total_price)
+            .'&addInfo='.rawurlencode($this->transferContent())
+            .'&accountName='.rawurlencode((string) config('services.bank.account_name'));
     }
 
     // C5: được phép tạo lại vận đơn GHN — đã thanh toán/COD, chưa có mã vận
@@ -327,7 +329,6 @@ class Order extends Model
         return $this->belongsTo(Voucher::class);
     }
 
-   
     public function items()
     {
         return $this->hasMany(OrderItem::class);

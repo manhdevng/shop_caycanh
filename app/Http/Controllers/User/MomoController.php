@@ -198,7 +198,7 @@ class MomoController extends Controller
 
         $this->markFailed($result, $momo);
 
-        return back()->with('error', 'MoMo báo giao dịch thất bại hoặc đã bị huỷ (' . ($result['message'] ?? 'không rõ lý do') . '). Vui lòng thử thanh toán lại.');
+        return back()->with('error', 'MoMo báo giao dịch thất bại hoặc đã bị huỷ ('.($result['message'] ?? 'không rõ lý do').'). Vui lòng thử thanh toán lại.');
     }
 
     // MoMo gọi thẳng máy chủ (server-to-server) để báo kết quả thanh toán thật sự.
@@ -274,6 +274,7 @@ class MomoController extends Controller
 
             if ((int) $transaction->amount !== (int) ($payload['amount'] ?? 0)) {
                 $momo->markFailed($transaction, $payload);
+
                 return 'invalid';
             }
 
@@ -314,6 +315,7 @@ class MomoController extends Controller
                 'ghn_total_fee' => $response['data']['total_fee'] ?? $order->ghn_total_fee,
                 'shipping_status' => 'ready_to_pick',
             ]);
+
             return 'created';
         }
 
@@ -322,6 +324,7 @@ class MomoController extends Controller
             'response' => $response,
         ]);
         $order->update(['shipping_status' => 'not_shipped']);
+
         return 'failed';
     }
 

@@ -10,8 +10,8 @@ use App\Models\PaymentTransaction;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Voucher;
-use App\Services\GHNService;
 use App\Services\GHNOrderService;
+use App\Services\GHNService;
 use App\Services\MomoService;
 use App\Services\OrderCancellationService;
 use Illuminate\Http\Request;
@@ -65,7 +65,7 @@ class OrderController extends Controller
         $user = Auth::user();
 
         $voucherSession = session('voucher');
-        if (!empty($voucherSession['id'])) {
+        if (! empty($voucherSession['id'])) {
             $voucherModel = Voucher::find($voucherSession['id']);
             // $cart ở đây ĐÃ được lọc theo checkbox chọn sản phẩm (nếu có)
             // ngay từ đầu hàm — không tự đọc lại session('cart') đầy đủ.
@@ -111,7 +111,7 @@ class OrderController extends Controller
         // session giỏ hàng và cùng tạo đơn trước khi request đầu xoá giỏ
         // hàng/commit xong. Các khoá DB (lockForUpdate) trong storeLocked()
         // chỉ chống ÂM KHO, không chống việc tạo 2 đơn trùng từ cùng 1 giỏ.
-        $lock = Cache::lock('checkout:user:' . Auth::id(), 15);
+        $lock = Cache::lock('checkout:user:'.Auth::id(), 15);
 
         if (! $lock->get()) {
             return back()->with('error', 'Đơn hàng đang được xử lý, vui lòng không bấm nhiều lần.');
@@ -207,7 +207,7 @@ class OrderController extends Controller
 
             if ($totalPrice < $momoMin || $totalPrice > $momoMax) {
                 return back()->withInput()->with('error', 'Với hình thức thanh toán MoMo, tổng tiền đơn hàng phải từ '
-                    . number_format($momoMin, 0, ',', '.') . 'đ đến ' . number_format($momoMax, 0, ',', '.') . 'đ. Vui lòng chọn hình thức thanh toán khác.');
+                    .number_format($momoMin, 0, ',', '.').'đ đến '.number_format($momoMax, 0, ',', '.').'đ. Vui lòng chọn hình thức thanh toán khác.');
             }
         }
 
@@ -217,19 +217,19 @@ class OrderController extends Controller
         $voucherSession = session('voucher');
 
         try {
-            $order = DB::transaction(function () use ($request, $cart, $totalPrice, $shippingFee, $subtotal, $voucherSession) {
+            $order = DB::transaction(function () use ($request, $cart, $totalPrice, $shippingFee, $voucherSession) {
                 $discountAmount = 0;
                 $voucherId = null;
 
                 $user = Auth::user();
 
-                if (!empty($voucherSession['id'])) {
+                if (! empty($voucherSession['id'])) {
                     // Khoá bản ghi voucher (SELECT ... FOR UPDATE) trước khi kiểm
                     // tra + tăng used_count, để 2 khách cùng dùng nốt lượt cuối
                     // cùng lúc phải xếp hàng chờ nhau thay vì cùng vượt usage_limit.
                     $voucher = Voucher::where('id', $voucherSession['id'])->lockForUpdate()->first();
 
-                    if (!$voucher) {
+                    if (! $voucher) {
                         throw new \RuntimeException('Mã giảm giá không còn tồn tại. Vui lòng gỡ mã và thử lại.');
                     }
 
@@ -302,7 +302,7 @@ class OrderController extends Controller
                     // tồn kho cũ rồi cùng trừ, gây âm kho (race condition).
                     $product = Product::where('id', $item['product_id'])->lockForUpdate()->first();
 
-                    if (!$product) {
+                    if (! $product) {
                         throw new \RuntimeException('Một sản phẩm trong giỏ hàng không còn tồn tại. Vui lòng kiểm tra lại giỏ hàng.');
                     }
 
@@ -324,7 +324,7 @@ class OrderController extends Controller
                     // thẳng từ DB, không dùng tên đã lưu trong session) để đảm
                     // bảo đúng nhất tại thời điểm đặt hàng. Xem D3-P8.
                     $variantName = null;
-                    if (!empty($item['variant_id'])) {
+                    if (! empty($item['variant_id'])) {
                         $variantName = optional(ProductVariant::find($item['variant_id']))->variant_name;
                     }
 
@@ -386,7 +386,7 @@ class OrderController extends Controller
             $this->sendOrderConfirmationEmail($order);
 
             return redirect()->route('orders.show', $order)
-                ->with('success', 'Đặt hàng thành công! Vui lòng chuyển khoản theo thông tin ngân hàng và chờ xác nhận. Mã đơn hàng #' . $order->id . '.');
+                ->with('success', 'Đặt hàng thành công! Vui lòng chuyển khoản theo thông tin ngân hàng và chờ xác nhận. Mã đơn hàng #'.$order->id.'.');
         }
 
         // ==== Thanh toán khi nhận hàng (COD): tạo vận đơn GHN ngay lập tức ====
@@ -410,14 +410,14 @@ class OrderController extends Controller
                 'shipping_status' => 'ready_to_pick',
             ]);
         } else {
-            Log::warning('GHN createOrder failed for order #' . $order->id, ['response' => $ghnResponse]);
+            Log::warning('GHN createOrder failed for order #'.$order->id, ['response' => $ghnResponse]);
         }
 
         // Gửi email xác nhận đơn hàng — xem chú thích ở nhánh MoMo phía trên.
         $this->sendOrderConfirmationEmail($order);
 
         return redirect()->route('orders.show', $order)
-            ->with('success', 'Đặt hàng thành công! Mã đơn hàng #' . $order->id . '.');
+            ->with('success', 'Đặt hàng thành công! Mã đơn hàng #'.$order->id.'.');
     }
 
     /**
@@ -439,7 +439,7 @@ class OrderController extends Controller
 
             Mail::to($order->user->email)->send(new OrderConfirmationMail($order));
         } catch (\Throwable $e) {
-            Log::error('Gửi email xác nhận đơn hàng thất bại: ' . $e->getMessage(), ['order_id' => $order->id]);
+            Log::error('Gửi email xác nhận đơn hàng thất bại: '.$e->getMessage(), ['order_id' => $order->id]);
         }
     }
 
@@ -515,7 +515,7 @@ class OrderController extends Controller
         $ghnResult = $ghnOrderService->cancelForOrder($order);
 
         if (! $ghnResult['success'] && empty($ghnResult['skipped'])) {
-            Log::warning('Huỷ đơn hàng #' . $order->id . ' (khách tự huỷ) thành công nhưng huỷ vận đơn GHN thất bại', [
+            Log::warning('Huỷ đơn hàng #'.$order->id.' (khách tự huỷ) thành công nhưng huỷ vận đơn GHN thất bại', [
                 'order_id' => $order->id,
                 'ghn_order_code' => $order->ghn_order_code,
                 'message' => $ghnResult['message'] ?? null,
@@ -605,17 +605,19 @@ class OrderController extends Controller
         foreach ($cart as $key => $item) {
             $product = Product::find($item['product_id'] ?? null);
 
-            if (!$product || !$product->is_active) {
+            if (! $product || ! $product->is_active) {
                 $removed = true;
+
                 continue;
             }
 
             $variant = null;
-            if (!empty($item['variant_id'])) {
+            if (! empty($item['variant_id'])) {
                 $variant = ProductVariant::find($item['variant_id']);
 
-                if (!$variant || $variant->product_id !== $product->id) {
+                if (! $variant || $variant->product_id !== $product->id) {
                     $removed = true;
+
                     continue;
                 }
             }
