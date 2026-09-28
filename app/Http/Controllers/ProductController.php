@@ -296,7 +296,11 @@ class ProductController extends Controller
             $messages['variants.*.price.required'] = 'Vui lòng nhập giá cho từng phân loại.';
             $messages['variants.*.price.min'] = 'Giá phân loại phải từ 1.000đ trở lên.';
         } else {
-            $rules['base_price'] = 'required|numeric|min:0';
+            // G11: đồng bộ với variants.*.price (min:1000) — giá 0đ không có ý
+            // nghĩa thương mại và có thể khiến MoMo từ chối tạo payUrl (amount
+            // tối thiểu 1.000đ, xem config('services.momo.min_amount')).
+            $rules['base_price'] = 'required|numeric|min:1000';
+            $messages['base_price.min'] = 'Giá bán phải từ 1.000đ trở lên.';
         }
 
         return Validator::make($request->all(), $rules, $messages);

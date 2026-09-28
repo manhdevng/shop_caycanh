@@ -176,6 +176,20 @@ class OrderController extends Controller
         $shippingFee = (int) $ghnFeeResponse['data']['total'];
         $totalPrice = $subtotal + $shippingFee;
 
+        // G11: chặn sớm nếu tổng tiền ngoài giới hạn MoMo chấp nhận cho tham
+        // số "amount" của API tạo thanh toán (xem config/services.php ->
+        // momo.min_amount/max_amount) — tránh tạo đơn "pending" rác vì MoMo
+        // chắc chắn từ chối tạo payUrl.
+        if ($request->payment_method === 'momo') {
+            $momoMin = (int) config('services.momo.min_amount');
+            $momoMax = (int) config('services.momo.max_amount');
+
+            if ($totalPrice < $momoMin || $totalPrice > $momoMax) {
+                return back()->withInput()->with('error', 'Với hình thức thanh toán MoMo, tổng tiền đơn hàng phải từ '
+                    . number_format($momoMin, 0, ',', '.') . 'đ đến ' . number_format($momoMax, 0, ',', '.') . 'đ. Vui lòng chọn hình thức thanh toán khác.');
+            }
+        }
+
         // Voucher (nếu có) chỉ mới được lưu tạm trong session ở bước
         // VoucherController::apply() — KHÔNG tin discount_amount đã tính sẵn
         // ở đó, phải tính lại từ voucher thật trong transaction bên dưới.
