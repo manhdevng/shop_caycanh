@@ -54,7 +54,7 @@
                     <th class="py-4 px-6 text-xs font-semibold text-text-secondary uppercase tracking-wider">Số tiền</th>
                     <th class="py-4 px-6 text-xs font-semibold text-text-secondary uppercase tracking-wider">Kênh & Trạng thái</th>
                     <th class="py-4 px-6 text-xs font-semibold text-text-secondary uppercase tracking-wider">Ngày cập nhật</th>
-                    <th class="py-4 px-6 text-xs font-semibold text-text-secondary uppercase tracking-wider text-right">Thao tác COD</th>
+                    <th class="py-4 px-6 text-xs font-semibold text-text-secondary uppercase tracking-wider text-right">Thao tác</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-green-border/50">
@@ -95,6 +95,15 @@
                         <div class="text-sm text-text-primary">{{ $order->paid_at ? \Carbon\Carbon::parse($order->paid_at)->format('d/m/Y H:i') : '-' }}</div>
                     </td>
                     <td class="py-4 px-6 text-right">
+                        @if($order->payment_status === 'refund_pending')
+                            <form action="{{ route('admin.finance.mark-refunded', $order->id) }}" method="POST" class="inline-flex">
+                                @csrf
+                                @method('PATCH')
+                                <button type="submit" class="px-3 py-1.5 bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-medium hover:bg-orange-200 transition-colors">
+                                    Xác nhận đã hoàn tiền
+                                </button>
+                            </form>
+                        @endif
                         @if(($order->gateway === 'cod' || in_array($order->status, ['cod_ordered', 'cod_paid'])) && isset($codTransitions[$order->payment_status]) && count($codTransitions[$order->payment_status]) > 0)
                             <form action="{{ route('admin.finance.update-status', $order->id) }}" method="POST" class="inline-flex items-center gap-2">
                                 @csrf
