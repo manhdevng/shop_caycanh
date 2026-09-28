@@ -7,13 +7,17 @@
      Hero            chữ rời lên, ảnh áp sát, tối dần về màu nền lá của khối
                      danh mục -> hai khối hòa vào nhau, không có nhát cắt.
      Danh mục        ảnh lá nền trôi chậm hơn trang (chiều sâu).
-     Vườn trong nhà  GHIM. Vén lá -> đọc -> căn phòng thu lại thành CỬA VÒM,
-                     nền đổi sang màu khối kế tiếp -> bước ra khỏi phòng.
+     Vườn trong nhà  GHIM. Ba chiếc lá ở mép hé ra -> đọc -> tấm ảnh TRÔI ĐI
+                     trên vòng cung sang trái, nền đổi sang màu khối kế tiếp.
      Lưới sản phẩm   Mọc từ đáy lên.
-     Vườn ngoài trời GHIM. Cửa vòm (cùng mô-típ vừa khép lại ở trên) mở rộng ra
-                     tràn màn hình -> bước qua cửa ra vườn; chữ hiện khi cửa mở hết.
+     Vườn ngoài trời GHIM. Tấm ảnh kế tiếp TRÔI TỚI trên cùng vòng cung đó từ
+                     bên phải vào giữa; chữ hiện khi ảnh đã về chỗ.
      Cam kết         Thân dây mọc dài, lá thật ở ngọn.
      Quà tặng        GHIM. Ảnh cảnh 2 mọc từ đáy lên phủ cảnh 1, chữ đổi lượt.
+
+   Hai cảnh ghim giữa trang nối nhau như hai thẻ của MỘT carousel: thẻ trước
+   trôi khỏi cung, thẻ sau trôi vào — cùng ngôn ngữ với carousel danh mục ngay
+   phía trên (xem arcSlot).
 
    Ba động từ cho mọi chuyển động: Mọc (vào từ gốc lên), Lay (quán tính, lắc
    theo vận tốc cuộn rồi lắng), Hướng sáng (--sc-sun theo tiến độ cả trang).
@@ -30,7 +34,7 @@
   var M = {
     grow: 'power3.out',            // Mọc: nhanh ở đầu, chậm dần như mầm đội đất
     unfurl: 'power3.inOut',        // Mọc (mặt nạ ảnh): êm hai đầu
-    open: 'power2.inOut',          // cửa vòm mở / khép
+    arc: 'power2.inOut',           // Trôi trên vòng cung: êm hai đầu, không giật
     sway: 'sine.inOut',            // Lay
     settle: 'elastic.out(1, 0.4)', // Lay: về chỗ sau khi dừng cuộn
     growDur: 1.1,
@@ -39,12 +43,29 @@
     scrub: 1.2                     // độ trễ giữa tay cuộn và cảnh — cả trang dùng chung
   };
 
-  // Cửa vòm mở hết. Khung (.sc-gate__frame, .sc-gate-season__frame, ảnh quà
-  // tặng) dựng clip-path trong CSS từ các biến --ct/--cs/--cr; GSAP chỉ nội
-  // suy các biến số này. Không animate thẳng chuỗi clip-path vì trình duyệt tự
-  // rút gọn "inset(0% 0% 0% 0% round 0px ...)" thành "inset(0%)" -> số lượng
-  // số hai đầu lệch nhau, GSAP không nội suy được và nhảy cóc ở cuối.
-  var OPEN = { '--ct': '0%', '--cs': '0%', '--cr': '0px' };
+  // Vị trí thẻ trên VÒNG CUNG — dùng lại đúng công thức của carousel danh mục
+  // (category-arc.blade.php, "Arc Flow Carousel"): các thẻ nằm trên một cung
+  // tròn bán kính rất lớn, tâm nằm sâu phía dưới màn hình. Trôi dọc cung đó thì
+  // thẻ vừa xoay nhẹ, vừa dạt ngang, vừa hụp xuống một chút — mắt đọc ra ngay
+  // là "thẻ kế tiếp của cùng một băng chuyền", khác hẳn kiểu khung thu/nở tại
+  // chỗ như cánh cửa.
+  //     x = R·sin θ     y = R·(1 − cos θ)     góc = θ
+  // dir: -1 rời sang trái · +1 chờ sẵn bên phải. x/y là hàm để đo lại theo
+  // chiều cao màn hình mỗi lần ScrollTrigger refresh (invalidateOnRefresh).
+  function arcSlot(dir, env) {
+    var deg = (env.mobile ? 7 : 10) * dir;
+    var rad = deg * Math.PI / 180;
+    var rMul = env.mobile ? 2.6 : 2.2;
+    return {
+      x: function () { return Math.round(window.innerHeight * rMul * Math.sin(rad)); },
+      y: function () { return Math.round(window.innerHeight * rMul * (1 - Math.cos(rad))); },
+      rotation: deg,
+      scale: env.mobile ? 0.9 : 0.86,
+      borderRadius: '20px'
+    };
+  }
+  // Thẻ đang ở chính giữa cung: phẳng, tràn khung, không bo góc.
+  var ARC_CENTER = { x: 0, y: 0, rotation: 0, scale: 1, borderRadius: '0px' };
 
   function boot() {
     var root = document.querySelector('.sc-home');
@@ -62,7 +83,7 @@
 
       // Gắn trước khi tạo trigger: các khối ghim đổi sang cao một màn hình.
       root.classList.add('motion-on');
-      var env = { mobile: ctx.conditions.mobile, lay: createLay(root) };
+      var env = { mobile: ctx.conditions.mobile, lay: createLay(root), ghost: createHeaderGhost() };
 
       // Tạo cảnh theo đúng thứ tự trên trang (trên -> dưới) để mỗi trigger
       // được đo SAU pin spacer của các khối ghim phía trên nó.
@@ -86,6 +107,7 @@
 
       return function () {
         env.lay.kill();
+        env.ghost.kill();
         root.classList.remove('motion-on');
       };
     });
@@ -97,17 +119,32 @@
 
   /* ------------------------------------------------------------ tiện ích -- */
 
-  // Khung cửa vòm: rộng wFrac bề ngang, đỉnh ở topFrac chiều cao, chân chạm
-  // đáy khung, bo tròn nửa bề rộng. Bán kính là hàm để đo lại khi đổi cỡ màn
-  // hình (invalidateOnRefresh).
-  function arch(el, wFrac, topFrac) {
+  function extend(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
+
+  /* ------------------------------------------------ Header mờ trong cảnh --
+     Các cảnh tối chiếm trọn màn hình (danh mục, hai cảnh ghim) nằm ngay dưới
+     header fixed: thanh nền TRẮNG của header cắt ngang đúng phần đang chuyển
+     động. Khi một cảnh như vậy đang ở dưới header thì bỏ nền + viền, chỉ để
+     lại chữ trắng — giao diện chính là cảnh, không phải thanh điều hướng.
+     Dùng bộ đếm chứ không phải cờ bật/tắt: hai cảnh liền nhau có thể cùng
+     active trong một nhịp cuộn, nếu dùng cờ thì cảnh ra sẽ tắt nhầm cảnh vào.
+     CHỈ gắn cho cảnh nền TỐI — cảnh quà tặng nền kem (#F7F4EF) mà để chữ
+     trắng thì không đọc được. */
+  function createHeaderGhost() {
+    var header = document.getElementById('siteHeader');
+    var depth = 0;
     return {
-      '--ct': (topFrac * 100).toFixed(2) + '%',
-      '--cs': ((1 - wFrac) / 2 * 100).toFixed(2) + '%',
-      '--cr': function () { return Math.round(el.offsetWidth * wFrac / 2) + 'px'; }
+      toggle: function (self) {
+        if (!header) return;
+        depth += self.isActive ? 1 : -1;
+        if (depth < 0) depth = 0;
+        header.classList.toggle('header-ghost', depth > 0);
+      },
+      kill: function () {
+        if (header) header.classList.remove('header-ghost');
+      }
     };
   }
-  function extend(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
 
   function pinDistance(vhMultiple) {
     return function () { return '+=' + Math.round(window.innerHeight * vhMultiple); };
@@ -203,7 +240,10 @@
      Ảnh lá nền trôi ngược một chút so với trang -> có chiều sâu, và là lớp lá
      đầu tiên của lối đi trước khi vào vườn. Carousel vòng cung tự chạy vòng
      rAF riêng (category-arc.blade.php), không đụng tới. */
-  function categoriesScene(sec) {
+  function categoriesScene(sec, env) {
+    // Nền gần như đen: header phải mờ suốt quãng khối này nằm dưới nó.
+    ScrollTrigger.create({ trigger: sec, start: 'top top', end: 'bottom top', onToggle: env.ghost.toggle });
+
     var bg = sec.querySelector('.cat-arc-bg');
     if (!bg) return;
     gsap.fromTo(bg, { yPercent: -6, scale: 1.14 }, {
@@ -213,12 +253,18 @@
   }
 
   /* ------------------------------------------- Vườn trong nhà (GHIM) --
-     .gg-leaf cắm cuống ở mép khung, CSS vẽ sẵn thế ĐÃ VÉN (data-rot). Timeline
-     dài 1 đơn vị = cả quãng ghim, chia nhãn:
-       part  0.00  lá vén (lá gần trước, lá xa sau), ảnh lùi từ 1.1 về 1
-       read  0.40  scrim + chữ hiện, dải nắng quét qua (--sc-p)
-       leave 0.74  chữ + lá rời đi, căn phòng thu thành cửa vòm, nền đổi sang
-                   màu khối kế tiếp -> khi thả ghim, khối sau nối liền. */
+     Cảnh này trước đây có tám chiếc lá xoay 80-100° quanh cuống rồi văng ra
+     khỏi màn hình, cộng dải nắng quét ngang — quá nhiều thứ động cùng lúc và
+     góc xoay lớn tới mức lá trông như quạt giấy chứ không như lá thật. Nay chỉ
+     còn BA chiếc ở mép, hé ra đúng ~26° (xem $gardenLeaves), đủ để thấy khung
+     lá động mà vẫn tự nhiên.
+
+     Timeline dài 1 đơn vị = cả quãng ghim, ba nhãn:
+       part  0.00  ba lá hé ra, ảnh lùi từ 1.06 về 1
+       read  0.38  scrim + chữ hiện
+       leave 0.72  chữ mờ, lá mờ, tấm ảnh TRÔI ĐI trên vòng cung sang trái và
+                   nền đổi sang màu khối kế tiếp -> thẻ sau (gate-season) trôi
+                   tới từ bên phải, hai cảnh nối nhau như một carousel. */
   function gardenScene(gate, env) {
     var stage = gate.querySelector('.sc-gate__stage');
     var frame = gate.querySelector('.sc-gate__frame');
@@ -232,29 +278,26 @@
       scrollTrigger: {
         trigger: gate,
         start: 'top top',
-        end: pinDistance(env.mobile ? 1.6 : 2.4),
+        end: pinDistance(env.mobile ? 1.3 : 1.8),
         pin: true,
         scrub: M.scrub,
         anticipatePin: 1,
-        invalidateOnRefresh: true
+        invalidateOnRefresh: true,
+        onToggle: env.ghost.toggle
       }
     });
-    tl.addLabel('part', 0).addLabel('read', 0.4).addLabel('leave', 0.74);
+    tl.addLabel('part', 0).addLabel('read', 0.38).addLabel('leave', 0.72);
 
-    // --sc-p lái dải nắng (CSS calc trong gate-garden.blade.php).
-    tl.fromTo(gate, { '--sc-p': 0 }, { '--sc-p': 1, ease: 'none', duration: 1 }, 0);
-    if (photo) tl.fromTo(photo, { scale: 1.1 }, { scale: 1, duration: 0.45, ease: 'power1.out' }, 'part');
+    if (photo) tl.fromTo(photo, { scale: 1.06 }, { scale: 1, duration: 0.5, ease: 'power1.out' }, 'part');
 
     leaves.forEach(function (leaf) {
       var d = parseFloat(leaf.dataset.depth) || 1;
-      var side = parseFloat(getComputedStyle(leaf).getPropertyValue('--ax')) < 50 ? -1 : 1;
       tl.fromTo(leaf,
-        { rotation: parseFloat(leaf.dataset.from), scale: 1 + 0.16 * d },
-        { rotation: parseFloat(leaf.dataset.rot), scale: 1, duration: 0.3 },
-        0.03 + 0.09 * (1 - d) / 0.6);
-      // Rời cảnh: lá gần đi trước, dạt hẳn ra ngoài mép.
-      tl.to(leaf, { x: side * window.innerWidth * (0.2 + 0.2 * d), autoAlpha: 0, duration: 0.16, ease: 'power2.in' },
-        'leave+=' + (0.06 * (1 - d)).toFixed(3));
+        { rotation: parseFloat(leaf.dataset.from) },
+        { rotation: parseFloat(leaf.dataset.rot), duration: 0.42, ease: M.sway },
+        0.02 + 0.06 * (1 - d));
+      // Rời cảnh: chỉ mờ đi cùng tấm ảnh, không còn cú văng ngang.
+      tl.to(leaf, { autoAlpha: 0, duration: 0.14, ease: 'power2.in' }, 'leave');
       var sway = leaf.querySelector('.gg-leaf__sway');
       if (sway) env.lay.add(sway, { k: 0.3 + 0.5 * d, sunTilt: 4 });
     });
@@ -264,22 +307,22 @@
         .to(plate, { autoAlpha: 0, duration: 0.1, ease: 'none' }, 'leave');
     }
     if (copy) {
-      tl.fromTo(copy, { autoAlpha: 0, y: M.rise }, { autoAlpha: 1, y: 0, duration: 0.12, ease: M.grow }, 'read')
+      tl.fromTo(copy, { autoAlpha: 0, y: M.rise }, { autoAlpha: 1, y: 0, duration: 0.14, ease: M.grow }, 'read')
         .to(copy, { autoAlpha: 0, y: -M.rise, duration: 0.1, ease: 'power2.in' }, 'leave');
     }
     if (frame) {
-      tl.fromTo(frame, OPEN,
-        extend(arch(stage, env.mobile ? 0.62 : 0.34, env.mobile ? 0.2 : 0.14), { duration: 0.24, ease: M.open, immediateRender: false }),
-        'leave+=0.02');
+      tl.to(frame, extend(arcSlot(-1, env), { autoAlpha: 0, duration: 0.28, ease: M.arc }), 'leave+=0.02');
     }
-    tl.to(stage, { backgroundColor: nextBackground(gate), duration: 0.2, ease: 'none' }, 'leave+=0.06');
+    tl.to(stage, { backgroundColor: nextBackground(gate), duration: 0.2, ease: 'none' }, 'leave+=0.08');
     tl.set({}, {}, 1); // giữ tổng = 1 để nhãn khớp tiến độ ghim
   }
 
   /* ------------------------------------------ Vườn ngoài trời (GHIM) --
-     Mở đầu là cửa vòm nhỏ trên nền trắng — tiếp mô-típ căn phòng vừa khép lại
-     ở gate-garden. Cửa mở rộng tràn màn hình, ảnh lùi từ 1.25 về 1 như bước
-     qua ngưỡng cửa; khi cửa mở hết, scrim và từng dòng chữ hiện (Mọc). */
+     Thẻ kế tiếp của cùng băng chuyền: tấm ảnh chờ sẵn bên PHẢI trên vòng cung
+     (nghiêng, nhỏ, bo góc — đúng thế mà tấm ảnh trước vừa rời đi sang trái),
+     rồi trôi về giữa, phẳng ra và tràn khung. Ảnh bên trong lùi nhẹ từ 1.12 về
+     1 để lớp trong và lớp ngoài không dính cứng vào nhau. Về tới giữa thì
+     scrim và từng dòng chữ hiện (Mọc). */
   function seasonScene(sec, env) {
     var frame = sec.querySelector('.sc-gate-season__frame');
     var img = frame ? frame.querySelector('img') : null;
@@ -288,20 +331,21 @@
     if (!frame) return;
 
     gsap.timeline({
-      defaults: { ease: M.open },
+      defaults: { ease: M.arc },
       scrollTrigger: {
         trigger: sec,
         start: 'top top',
-        end: pinDistance(env.mobile ? 1.2 : 1.8),
+        end: pinDistance(env.mobile ? 1.0 : 1.4),
         pin: true,
         scrub: M.scrub,
         anticipatePin: 1,
-        invalidateOnRefresh: true
+        invalidateOnRefresh: true,
+        onToggle: env.ghost.toggle
       }
     })
-      .addLabel('open', 0)
-      .fromTo(frame, arch(sec, env.mobile ? 0.62 : 0.34, env.mobile ? 0.26 : 0.2), extend(OPEN, { duration: 0.45 }), 'open')
-      .fromTo(img, { scale: 1.25 }, { scale: 1, duration: 0.5, ease: 'power2.out' }, 'open')
+      .addLabel('arrive', 0)
+      .fromTo(frame, arcSlot(1, env), extend(ARC_CENTER, { duration: 0.45 }), 'arrive')
+      .fromTo(img, { scale: 1.12 }, { scale: 1, duration: 0.5, ease: 'power2.out' }, 'arrive')
       .addLabel('read', 0.4)
       .fromTo(scrim, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.14, ease: 'none' }, 'read')
       .fromTo(lines, { autoAlpha: 0, y: M.rise }, { autoAlpha: 1, y: 0, duration: 0.14, stagger: 0.035, ease: M.grow }, 'read+=0.04')
@@ -319,7 +363,7 @@
     if (!i0 || !i1) return;
 
     gsap.timeline({
-      defaults: { ease: M.open },
+      defaults: { ease: M.arc },
       scrollTrigger: {
         trigger: sec,
         start: 'top top',
