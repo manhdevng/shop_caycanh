@@ -59,6 +59,17 @@
                 <div class="text-sm font-semibold text-text-secondary mono mb-1">Mã vận đơn GHN</div>
                 <div class="text-text-primary mono">{{ $order->ghn_order_code }}</div>
             </div>
+            @elseif($order->canRetryGhn())
+            <div class="sm:col-span-2">
+                <div class="text-sm font-semibold text-text-secondary mono mb-1">Vận đơn GHN</div>
+                <div class="text-amber-700 text-sm mb-2">Đơn hàng chưa tạo được vận đơn GHN.</div>
+                <form method="POST" action="{{ route('admin.orders.retryGhn', $order) }}">
+                    @csrf
+                    <button type="submit" class="px-5 py-2 bg-green-primary text-white rounded-pill font-medium hover:bg-green-accent transition-colors text-sm border border-green-border">
+                        Tạo lại vận đơn GHN
+                    </button>
+                </form>
+            </div>
             @endif
         </div>
     </div>
@@ -179,9 +190,9 @@
                 <tr class="border-b border-green-border/20">
                     <td class="py-4 pr-4 text-text-primary font-medium">
                         @if($item->product)
-                            <a href="{{ route('products.show', $item->product->id) }}" class="hover:text-green-primary transition-colors">{{ $item->product->name }}</a>
+                            <a href="{{ route('products.show', $item->product->id) }}" class="hover:text-green-primary transition-colors">{{ $item->product_name ?: $item->product->name }}</a>
                         @else
-                            <span class="text-text-secondary italic">Sản phẩm đã bị xóa</span>
+                            <span class="text-text-secondary italic">{{ $item->product_name ?: 'Sản phẩm đã bị xóa' }}</span>
                         @endif
                         @if($item->variant_name)
                             <div class="text-xs text-text-secondary font-normal mt-1">Phân loại: {{ $item->variant_name }}</div>
