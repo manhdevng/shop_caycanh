@@ -27,6 +27,13 @@ class MomoController extends Controller
             abort(403);
         }
 
+        // G1: chặn tạo giao dịch MoMo cho đơn đã huỷ/đã thanh toán/không phải
+        // đơn MoMo (ví dụ đơn COD) — chỉ đơn MoMo đang 'pending' và chưa có
+        // giao dịch nào 'paid' mới được phép.
+        if (! $order->canRetryMomo()) {
+            return redirect()->route('orders.show', $order)->with('error', 'Đơn hàng này không thể thanh toán MoMo ở trạng thái hiện tại.');
+        }
+
         return $this->redirectToMomo($order, $this->newTransaction($order), $momo, $this->resolveCardType($request));
     }
 
@@ -36,6 +43,11 @@ class MomoController extends Controller
     {
         if ($order->user_id !== Auth::id()) {
             abort(403);
+        }
+
+        // G1: xem chú thích ở start().
+        if (! $order->canRetryMomo()) {
+            return redirect()->route('orders.show', $order)->with('error', 'Đơn hàng này không thể thanh toán MoMo ở trạng thái hiện tại.');
         }
 
         return $this->redirectToMomo($order, $this->newTransaction($order), $momo, $this->resolveCardType($request, $order));
@@ -203,7 +215,10 @@ class MomoController extends Controller
             $this->markFailed($request->all(), $momo);
         }
 
-        return response()->json(['message' => 'Received']);
+        // G12: MoMo yêu cầu merchant trả 204 No Content cho IPN (theo tài liệu
+        // https://developers.momo.vn/v3/docs/payment/api/result-handling/notification/
+        // — "respond with HTTP code 204 (No Content)"), không phải 200 kèm body.
+        return response()->noContent();
     }
 
     // Lưu một lần thử thanh toán mới cho đơn hàng.
@@ -273,7 +288,25 @@ class MomoController extends Controller
         }
 
         $order = Order::with('items.product', 'items.variant')->find($result[1]);
-        $response = $ghnOrders->create($order, isPaid: true);
+
+        // G9: GHNService/Http có thể ném exception (timeout, lỗi kết nối...)
+        // — không để văng ra ngoài completePayment() (đơn đã 'paid' phải luôn
+        // được trả lời cho khách/IPN), và không được để shipping_status kẹt ở
+        // 'processing' mãi mãi (khi đó completePayment() lần sau sẽ luôn trả
+        // về 'processing' ở nhánh phía trên, không bao giờ thử tạo lại vận
+        // đơn) — đưa về 'not_shipped' để nút "Tạo lại vận đơn GHN" (C5) dùng được.
+        try {
+            $response = $ghnOrders->create($order, isPaid: true);
+        } catch (\Throwable $e) {
+            Log::error('GHN order threw exception after MoMo payment', [
+                'order_id' => $order->id,
+                'exception_class' => get_class($e),
+                'exception_message' => $e->getMessage(),
+            ]);
+            $order->update(['shipping_status' => 'not_shipped']);
+
+            return 'failed';
+        }
 
         if (($response['code'] ?? null) === 200 && ! empty($response['data']['order_code'])) {
             $order->update([
