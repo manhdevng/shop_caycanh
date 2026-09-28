@@ -8,6 +8,12 @@
 
     @if(count($cart) > 0)
         <form method="GET" action="{{ route('checkout') }}">
+            {{-- Bảng giỏ hàng luôn dùng chung 1 lưới 7 cột (kể cả ở mobile) -> quá chật ở
+                 375px và đẩy tràn cả trang (nút xoá/giá bị đẩy ra ngoài viewport). Bọc
+                 trong khung cuộn ngang riêng + ép min-width để mobile cuộn được TRONG
+                 khung này thay vì làm tràn toàn trang. --}}
+            <div style="overflow-x:auto">
+            <div style="min-width:640px">
             <div style="display:grid;grid-template-columns:24px minmax(0,2.4fr) 1fr 0.8fr 0.9fr 0.9fr 32px;gap:16px;align-items:center;padding-bottom:14px;border-bottom:1px solid #E5E2DC" class="hidden md:grid">
                 <input type="checkbox" id="check-all" checked>
                 <span style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#8A8680">Sản phẩm</span>
@@ -42,6 +48,8 @@
                     <button type="button" onclick="removeFromCart('{{ $id }}')" aria-label="Xoá" style="width:32px;height:32px;border:none;background:none;cursor:pointer;color:#8A8680;font-size:15px">🗑</button>
                 </div>
             @endforeach
+            </div>
+            </div>
 
             @include('partials.voucher-list', ['availableVouchers' => $availableVouchers, 'savableVouchers' => $savableVouchers ?? collect(), 'subtotal' => $total])
 

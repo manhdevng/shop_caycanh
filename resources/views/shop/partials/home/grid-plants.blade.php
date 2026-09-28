@@ -4,7 +4,7 @@
         <h2 style="font-family:'Anton',sans-serif;font-size:clamp(22px,3vw,30px);letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0">Cây cảnh mới nhập</h2>
         <a href="{{ route('shop.index', ['type' => 'plant', 'sort' => 'featured']) }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B66">Xem tất cả &rarr;</a>
     </div>
-    <div data-grow style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 24px" class="grid grid-cols-2 md:grid-cols-4">
+    <div data-grow style="display:grid;gap:32px 24px" class="grid grid-cols-2 md:grid-cols-4">
         @foreach($newestPlants as $item)
             <div>
                 <div style="position:relative">

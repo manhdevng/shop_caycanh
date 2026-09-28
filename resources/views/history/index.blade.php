@@ -35,7 +35,7 @@
 
     @forelse($recentlyViewed as $item)
         @if($loop->first)
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
+            <div style="display:grid;gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
         @endif
                 <div>
                     <a href="{{ route('shop.show', $item->id) }}" style="position:relative;display:block;aspect-ratio:1/1">
@@ -75,7 +75,7 @@
 
     @forelse($purchasedProducts as $item)
         @if($loop->first)
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
+            <div style="display:grid;gap:32px 20px" class="grid grid-cols-2 md:grid-cols-4">
         @endif
                 <div>
                     <a href="{{ route('shop.show', $item->id) }}" style="position:relative;display:block;aspect-ratio:1/1">
