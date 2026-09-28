@@ -207,9 +207,113 @@ class Order extends Model
         return self::PAYMENT_LABELS[$this->payment_method] ?? (string) $this->payment_method;
     }
 
+    /**
+     * orders.status cho phép KHÁCH tự huỷ (chưa vào giai đoạn giao hàng, xem
+     * canCustomerCancel()). Dùng cùng với CUSTOMER_CANCELLABLE_SHIPPING_STATUSES.
+     */
+    public const CUSTOMER_CANCELLABLE_STATUSES = ['pending', 'awaiting_transfer', 'cod_ordered'];
+
+    /**
+     * shipping_status cho phép KHÁCH tự huỷ — chưa rời kho (chưa "processing"
+     * trở lên trong SHIPPING_STAGE_GROUPS, ngoại trừ 'processing' vì đó là lúc
+     * hệ thống đang tạo vận đơn, không nên huỷ giữa chừng).
+     */
+    public const CUSTOMER_CANCELLABLE_SHIPPING_STATUSES = ['pending', 'not_shipped', 'ready_to_pick'];
+
+    /**
+     * shipping_status cho phép admin/khách TẠO LẠI vận đơn GHN (đã thanh toán
+     * hoặc COD nhưng chưa có ghn_order_code — xem canRetryGhn()).
+     */
+    public const RETRY_GHN_SHIPPING_STATUSES = ['not_shipped', 'pending'];
+
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    // Đơn có ít nhất 1 giao dịch đã thu tiền thành công (status = 'paid') hay
+    // chưa — dùng relation đã eager-load nếu có (tránh N+1 ở orders.show/history).
+    private function hasPaidPaymentTransaction(): bool
+    {
+        if ($this->relationLoaded('paymentTransactions')) {
+            return $this->paymentTransactions->contains(fn (PaymentTransaction $t) => $t->status === 'paid');
+        }
+
+        return $this->paymentTransactions()->where('status', 'paid')->exists();
+    }
+
+    // Giao dịch MoMo mới nhất của đơn (theo id), dùng relation đã eager-load nếu có.
+    private function latestMomoTransaction(): ?PaymentTransaction
+    {
+        if ($this->relationLoaded('paymentTransactions')) {
+            return $this->paymentTransactions
+                ->where('gateway', 'momo')
+                ->sortByDesc('id')
+                ->first();
+        }
+
+        return $this->paymentTransactions()->where('gateway', 'momo')->latest('id')->first();
+    }
+
+    // C1: khách được bấm "Thanh toán lại" MoMo — đơn đang chờ thanh toán MoMo
+    // (chưa huỷ, chưa hoàn tất, chưa có giao dịch nào đã thu tiền).
+    public function canRetryMomo(): bool
+    {
+        return $this->payment_method === self::PAYMENT_MOMO
+            && $this->status === 'pending'
+            && ! $this->hasPaidPaymentTransaction();
+    }
+
+    // C2: lần thử thanh toán MoMo gần nhất của đơn đã thất bại — dùng để báo
+    // khách thay cho orders.status = 'payment_failed' (giá trị không tồn tại).
+    public function lastPaymentFailed(): bool
+    {
+        if ($this->payment_method !== self::PAYMENT_MOMO) {
+            return false;
+        }
+
+        return optional($this->latestMomoTransaction())->status === 'failed';
+    }
+
+    // C3: khách tự huỷ được đơn — chưa vào giai đoạn giao hàng và chưa thu tiền.
+    public function canCustomerCancel(): bool
+    {
+        return in_array($this->status, self::CUSTOMER_CANCELLABLE_STATUSES, true)
+            && in_array($this->shipping_status, self::CUSTOMER_CANCELLABLE_SHIPPING_STATUSES, true)
+            && ! $this->hasPaidPaymentTransaction();
+    }
+
+    // C4.1: nội dung chuyển khoản chuẩn để đối soát (admin tìm đơn theo tiền
+    // tố "DH" — xem AdminOrderController::index()).
+    public function transferContent(): string
+    {
+        return 'DH' . $this->id;
+    }
+
+    // C4.2: URL ảnh QR VietQR (định dạng compact2) để khách quét chuyển khoản
+    // — null nếu thiếu cấu hình bin/số tài khoản (config('services.bank')).
+    public function vietQrUrl(): ?string
+    {
+        $bin = config('services.bank.bin');
+        $accountNumber = config('services.bank.account_number');
+
+        if (blank($bin) || blank($accountNumber)) {
+            return null;
+        }
+
+        return 'https://img.vietqr.io/image/' . rawurlencode((string) $bin) . '-' . rawurlencode((string) $accountNumber) . '-compact2.png'
+            . '?amount=' . rawurlencode((string) (int) $this->total_price)
+            . '&addInfo=' . rawurlencode($this->transferContent())
+            . '&accountName=' . rawurlencode((string) config('services.bank.account_name'));
+    }
+
+    // C5: được phép tạo lại vận đơn GHN — đã thanh toán/COD, chưa có mã vận
+    // đơn, và chưa rời khỏi giai đoạn "chờ tạo vận đơn".
+    public function canRetryGhn(): bool
+    {
+        return in_array($this->status, self::PAID_OR_COD_STATUSES, true)
+            && blank($this->ghn_order_code)
+            && in_array($this->shipping_status, self::RETRY_GHN_SHIPPING_STATUSES, true);
     }
 
     // Admin đã xác nhận đã nhận được tiền chuyển khoản (orders.transfer_confirmed_by).
