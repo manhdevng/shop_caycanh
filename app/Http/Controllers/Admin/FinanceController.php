@@ -159,15 +159,15 @@ class FinanceController extends Controller
             $payment = $order->paymentTransactions()->orderByRaw(self::PAYMENT_PRIORITY)->orderByDesc('id')->lockForUpdate()->first();
 
             $isCod = $payment ? $payment->gateway === 'cod' : in_array($order->status, ['cod_ordered', 'cod_paid'], true);
-            if (!$isCod) {
+            if (! $isCod) {
                 throw ValidationException::withMessages(['payment_status' => 'Chỉ được cập nhật thủ công cho đơn COD.']);
             }
             $currentStatus = $payment?->status ?? ($order->status === 'cod_paid' ? 'paid' : 'pending');
-            if ($currentStatus !== $data['current_payment_status'] || $order->status !== $data['current_order_status'] || (int)($payment?->id ?? 0) !== (int)$data['current_payment_id']) {
+            if ($currentStatus !== $data['current_payment_status'] || $order->status !== $data['current_order_status'] || (int) ($payment?->id ?? 0) !== (int) $data['current_payment_id']) {
                 throw ValidationException::withMessages(['payment_status' => 'Đơn hàng vừa thay đổi. Vui lòng tải lại trang trước khi cập nhật.']);
             }
             $newStatus = $data['payment_status'];
-            if (!in_array($newStatus, self::COD_TRANSITIONS[$currentStatus] ?? [], true)) {
+            if (! in_array($newStatus, self::COD_TRANSITIONS[$currentStatus] ?? [], true)) {
                 throw ValidationException::withMessages(['payment_status' => 'Không thể chuyển sang trạng thái thanh toán này.']);
             }
             if ($newStatus === $currentStatus) {
