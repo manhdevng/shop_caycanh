@@ -43,6 +43,9 @@ return [
         'account_number' => env('BANK_ACCOUNT_NUMBER', ''),
         'account_name'   => env('BANK_ACCOUNT_NAME', ''),
         'branch'         => env('BANK_BRANCH', ''),
+        // Mã BIN ngân hàng (napas) dùng để tạo ảnh QR VietQR — xem
+        // Order::vietQrUrl(). Tra mã BIN ngân hàng tương ứng trên vietqr.io.
+        'bin'            => env('BANK_BIN', ''),
     ],
 
     'ghn' => [
@@ -70,6 +73,11 @@ return [
         // Để trống -> MomoService tự dùng route('momo.callback') / route('momo.ipn').
         'redirect_url' => env('MOMO_REDIRECT_URL'),
         'ipn_url' => env('MOMO_IPN_URL'),
+        // Giới hạn số tiền (VND) MoMo chấp nhận cho tham số "amount" của API tạo
+        // thanh toán AIO v2 (dùng chung cho payWithATM/payWithCC/captureWallet) —
+        // theo tài liệu chính thức: https://developers.momo.vn/v3/docs/payment/api/wallet/onetime/
+        'min_amount' => (int) env('MOMO_MIN_AMOUNT', 1000),
+        'max_amount' => (int) env('MOMO_MAX_AMOUNT', 50000000),
     ],
 
 ];

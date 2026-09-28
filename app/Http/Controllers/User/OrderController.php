@@ -12,6 +12,8 @@ use App\Models\ProductVariant;
 use App\Models\Voucher;
 use App\Services\GHNService;
 use App\Services\GHNOrderService;
+use App\Services\MomoService;
+use App\Services\OrderCancellationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -409,7 +411,7 @@ class OrderController extends Controller
     public function orderHistory()
     {
         $orders = Order::where('user_id', Auth::id())
-            ->with('items.product')
+            ->with('items.product', 'paymentTransactions')
             ->orderByDesc('created_at')
             ->paginate(10);
 
@@ -422,9 +424,71 @@ class OrderController extends Controller
             abort(403);
         }
 
-        $order->load('items.product');
+        $order->load('items.product', 'paymentTransactions');
 
         return view('orders.show', compact('order'));
+    }
+
+    // C3/G5: khách tự huỷ đơn hàng chưa thanh toán/chưa vào giai đoạn giao hàng.
+    public function cancel(
+        Order $order,
+        OrderCancellationService $cancellation,
+        GHNOrderService $ghnOrderService,
+        MomoService $momo,
+        MomoController $momoController,
+    ) {
+        if ($order->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        // Đơn MoMo còn giao dịch đang chờ (initiated) -> hỏi lại MoMo trước
+        // khi huỷ: nếu MoMo báo đã thanh toán thì hoàn tất thanh toán thay vì
+        // huỷ (tránh trường hợp khách vừa trả tiền xong lại bị huỷ đơn).
+        if ($order->payment_method === Order::PAYMENT_MOMO) {
+            $transaction = PaymentTransaction::where('order_id', $order->id)
+                ->where('gateway', 'momo')
+                ->where('status', 'initiated')
+                ->whereNotNull('gateway_order_id')
+                ->latest('id')
+                ->first();
+
+            if ($transaction) {
+                $result = $momo->queryTransaction($transaction->gateway_order_id);
+                $result['orderId'] = $result['orderId'] ?? $transaction->gateway_order_id;
+
+                if ($momo->isSuccessful($result)) {
+                    $momoController->completePayment($result, $ghnOrderService, $momo);
+
+                    return back()->with('error', 'MoMo báo đơn hàng này đã được thanh toán nên không thể huỷ. Vui lòng kiểm tra lại đơn hàng.');
+                }
+            }
+        }
+
+        $result = $cancellation->cancel(
+            $order,
+            'Khách hàng tự huỷ đơn.',
+            guard: fn (Order $locked) => $locked->canCustomerCancel() ? null : 'Đơn hàng không thể huỷ ở trạng thái hiện tại.',
+        );
+
+        if (! $result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        // Huỷ vận đơn GHN sau khi phần dữ liệu nội bộ đã huỷ thành công.
+        // cancelForOrder() không bao giờ ném exception, tự bỏ qua nếu đơn
+        // chưa có mã vận đơn (mirror AdminOrderController::cancel()).
+        $ghnResult = $ghnOrderService->cancelForOrder($order);
+
+        if (! $ghnResult['success'] && empty($ghnResult['skipped'])) {
+            Log::warning('Huỷ đơn hàng #' . $order->id . ' (khách tự huỷ) thành công nhưng huỷ vận đơn GHN thất bại', [
+                'order_id' => $order->id,
+                'ghn_order_code' => $order->ghn_order_code,
+                'message' => $ghnResult['message'] ?? null,
+                'error' => $ghnResult['error'] ?? null,
+            ]);
+        }
+
+        return back()->with('success', 'Đã hủy đơn hàng.');
     }
 
     // ==========================================

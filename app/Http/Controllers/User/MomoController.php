@@ -228,7 +228,10 @@ class MomoController extends Controller
     }
 
     // Xác nhận thanh toán (đối chiếu giao dịch + số tiền) và tạo vận đơn GHN.
-    private function completePayment(array $payload, GHNOrderService $ghnOrders, MomoService $momo): string
+    // Public: OrderController::cancel() (User) cũng gọi lại hàm này khi khách
+    // bấm huỷ đơn nhưng MoMo báo giao dịch đã thanh toán thành công (G5) — để
+    // hoàn tất thanh toán thay vì huỷ, dùng đúng 1 luồng xử lý duy nhất.
+    public function completePayment(array $payload, GHNOrderService $ghnOrders, MomoService $momo): string
     {
         $result = DB::transaction(function () use ($payload, $momo) {
             $transaction = PaymentTransaction::where('gateway', 'momo')

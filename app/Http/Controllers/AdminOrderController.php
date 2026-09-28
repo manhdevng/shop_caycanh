@@ -199,6 +199,56 @@ class AdminOrderController extends Controller
         return back()->with('success', 'Đã hủy đơn hàng.');
     }
 
+    // G8/C5: tạo lại vận đơn GHN cho đơn đã thanh toán/COD nhưng lần tạo
+    // trước đó thất bại (shipping_status = not_shipped, chưa có ghn_order_code).
+    public function retryGhn(Order $order, GHNOrderService $ghnOrderService)
+    {
+        if (! $order->canRetryGhn()) {
+            return back()->with('error', 'Đơn hàng không đủ điều kiện để tạo lại vận đơn GHN.');
+        }
+
+        // Khoá đơn + kiểm tra lại điều kiện trên dòng đã khoá trước khi đặt
+        // "processing" (tránh 2 admin cùng bấm tạo lại vận đơn 1 lúc).
+        $locked = DB::transaction(function () use ($order) {
+            $locked = Order::whereKey($order->id)->lockForUpdate()->first();
+
+            if (! $locked || ! $locked->canRetryGhn()) {
+                return null;
+            }
+
+            $locked->update(['shipping_status' => 'processing']);
+
+            return $locked;
+        });
+
+        if (! $locked) {
+            return back()->with('error', 'Đơn hàng không đủ điều kiện để tạo lại vận đơn GHN.');
+        }
+
+        // Gọi GHN ngoài transaction (gọi mạng ngoài, không giữ khoá DB trong lúc chờ).
+        $order = Order::with(['items.product', 'items.variant'])->find($locked->id);
+        $isPaid = in_array($order->status, ['paid', 'paid_momo'], true);
+        $ghnResponse = $ghnOrderService->create($order, isPaid: $isPaid);
+
+        if (($ghnResponse['code'] ?? null) === 200 && ! empty($ghnResponse['data']['order_code'])) {
+            $order->update([
+                'ghn_order_code' => $ghnResponse['data']['order_code'],
+                'ghn_total_fee' => $ghnResponse['data']['total_fee'] ?? $order->ghn_total_fee,
+                'shipping_status' => 'ready_to_pick',
+            ]);
+
+            return back()->with('success', 'Đã tạo lại vận đơn GHN cho đơn hàng #' . $order->id . '.');
+        }
+
+        Log::error('Tạo lại vận đơn GHN thất bại', [
+            'order_id' => $order->id,
+            'response' => $ghnResponse,
+        ]);
+        $order->update(['shipping_status' => 'not_shipped']);
+
+        return back()->with('error', 'Tạo lại vận đơn GHN thất bại. Vui lòng thử lại sau.');
+    }
+
     // Admin xác nhận ĐÃ NHẬN được tiền chuyển khoản của đơn "bank_transfer":
     // chuyển đơn sang "paid" rồi tạo vận đơn GHN — mirror chính xác nhánh
     // MoMo đã thanh toán (MomoController::completePayment()): set trạng thái

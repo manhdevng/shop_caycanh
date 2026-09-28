@@ -195,4 +195,28 @@ class FinanceController extends Controller
 
         return back()->with('success', 'Đã lưu trạng thái thanh toán đơn COD #'.$order->id.'.');
     }
+
+    // G7/C6: admin xác nhận ĐÃ hoàn tiền cho đơn bị huỷ sau khi đã thu tiền —
+    // áp dụng cho MỌI kênh (MoMo, chuyển khoản, COD), chỉ cho refund_pending -> refunded.
+    public function markRefunded(Request $request, Order $order)
+    {
+        DB::transaction(function () use ($order, $request) {
+            $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            $payment = $order->paymentTransactions()
+                ->orderByRaw(self::PAYMENT_PRIORITY)->orderByDesc('id')->lockForUpdate()->first();
+
+            if (! $payment || $payment->status !== 'refund_pending') {
+                throw ValidationException::withMessages([
+                    'payment_status' => 'Đơn hàng không ở trạng thái chờ hoàn tiền nên không thể xác nhận.',
+                ]);
+            }
+
+            $payment->update([
+                'status' => 'refunded',
+                'message' => 'Quản trị viên #'.$request->user()->id.' xác nhận đã hoàn tiền.',
+            ]);
+        });
+
+        return back()->with('success', 'Đã xác nhận hoàn tiền cho đơn hàng #'.$order->id.'.');
+    }
 }

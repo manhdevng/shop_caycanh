@@ -146,6 +146,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Đơn hàng của tôi
     Route::get('/orders', [OrderController::class, 'orderHistory'])->name('orders.history');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::post('/orders/{order}/huy', [OrderController::class, 'cancel'])->name('orders.cancel');
 
     // Thanh toán MoMo (thẻ nội địa / thẻ quốc tế / ví MoMo)
     Route::get('/orders/{order}/start-momo', [MomoController::class, 'start'])->name('momo.start');
@@ -193,6 +194,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'admin'])->group(functio
     Route::get('/orders/{order}', [AdminOrderController::class, 'show'])->name('admin.orders.show');
     Route::patch('/orders/{order}/status', [AdminOrderController::class, 'updateStatus'])->name('admin.orders.updateStatus');
     Route::post('/orders/{order}/cancel', [AdminOrderController::class, 'cancel'])->name('admin.orders.cancel');
+    Route::post('/orders/{order}/retry-ghn', [AdminOrderController::class, 'retryGhn'])->name('admin.orders.retryGhn');
 
     // Đối soát chuyển khoản ngân hàng (C4.1). Chỉ áp dụng cho đơn đang ở
     // trạng thái 'awaiting_transfer'; hai method này ĐÃ tồn tại thật trong
@@ -247,4 +249,5 @@ Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.'
     Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
     Route::get('/finance/transactions', [FinanceController::class, 'transactions'])->name('finance.transactions');
     Route::patch('/finance/{order}/status', [FinanceController::class, 'updateStatus'])->name('finance.update-status');
+    Route::patch('/finance/{order}/refunded', [FinanceController::class, 'markRefunded'])->name('finance.mark-refunded');
 });
