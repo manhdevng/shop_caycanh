@@ -42,25 +42,16 @@
         #siteHeader.header-scrolled{background:#FFFFFF;border-bottom-color:#E5E2DC}
         #siteHeader .header-logo,#siteHeader .header-icon{color:#FFFFFF;transition:color .25s ease}
         #siteHeader.header-scrolled .header-logo,#siteHeader.header-scrolled .header-icon{color:#1C1C1A}
+        #siteHeader:not(.header-scrolled) .header-logo,
+        #siteHeader:not(.header-scrolled) .header-icon,
+        #siteHeader:not(.header-scrolled) .nav-mega-trigger{filter:drop-shadow(0 1px 4px rgba(0,0,0,.6))}
         /* var(--header-h) do JS đo thật (syncHeaderHeight) và cập nhật cả khi resize/header
            xuống 2 dòng ở mobile -> không còn lệch cứng như hằng số 76px trước đây (V7). */
         .page-with-header-offset{padding-top:var(--header-h,76px)}
 
-        /* ==== Header mờ khi đang ở trong một cảnh cuộn nền tối (trang chủ) ====
-           Các cảnh tối chiếm trọn màn hình (danh mục, hai cảnh ghim) nằm ngay dưới
-           header fixed, nên thanh nền TRẮNG cắt ngang đúng phần đang chuyển động.
-           public/js/home-motion.js bật/tắt .header-ghost theo từng cảnh: bỏ nền +
-           viền, chỉ còn chữ trắng — thứ nhìn thấy là cảnh, không phải thanh điều hướng.
-           Phải cộng thêm .header-scrolled trong selector để thắng về độ ưu tiên,
-           vì .header-scrolled mới là class đang đặt nền trắng. */
+        /* Header trong suốt trên hero và các cảnh nền tối của trang chủ. */
         #siteHeader.header-ghost,
         #siteHeader.header-ghost.header-scrolled{background:transparent;border-bottom-color:transparent}
-        /* Không có thanh nền thì chữ trắng rơi trúng vùng ảnh sáng (ô cửa kính, mảng
-           trời) là mất tương phản. Một lớp chuyển sắc tối rất nhẹ tan dần xuống dưới
-           giữ chữ luôn đọc được mà vẫn không tạo ra "thanh màu" — mắt chỉ thấy ảnh.
-           z-index:-1 nằm trong chính stacking context của header nên lớp này ở dưới
-           chữ của header, vẫn trên nội dung trang. */
-        #siteHeader.header-ghost::before{content:'';position:absolute;left:0;right:0;top:0;height:calc(100% + 32px);z-index:-1;pointer-events:none;background:linear-gradient(180deg,rgba(12,14,11,.52) 0%,rgba(12,14,11,.26) 58%,rgba(12,14,11,0) 100%)}
         #siteHeader.header-ghost.header-scrolled .header-logo,
         #siteHeader.header-ghost.header-scrolled .header-icon{color:#FFFFFF}
         #siteHeader.header-ghost.header-scrolled .site-search{background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.45)}
@@ -79,6 +70,15 @@
         #siteHeader.header-scrolled .site-search-icon{color:#8A8680}
         @media (max-width:900px){
             .site-search{flex-basis:100%;max-width:none;order:10}
+        }
+        @media (max-width:640px){
+            #siteHeader .header-inner{display:grid !important;grid-template-columns:minmax(0,1fr) auto;gap:9px 12px;padding:10px 16px !important}
+            #siteHeader .header-logo{grid-column:1;grid-row:1;font-size:20px !important}
+            #siteHeader .header-nav{grid-column:1 / -1;grid-row:2;gap:18px !important;min-width:0}
+            #siteHeader .header-actions{display:contents !important}
+            #siteHeader .header-tools{grid-column:2;grid-row:1;gap:14px;justify-self:end}
+            #siteHeader .site-search{grid-column:1 / -1;grid-row:3;width:100%;height:36px !important;min-width:0 !important;max-width:none !important;flex:none !important}
+            #siteHeader .header-auth{display:none !important}
         }
 
         /* ==== Mega-menu danh mục (Cây cảnh / Hoa) - dạng full-width chỉ chữ (kiểu Uniqlo) ==== */
@@ -122,7 +122,7 @@
     $isHomeHero = isset($showFeatured) && $showFeatured;
 @endphp
 <header id="siteHeader" class="{{ $isHomeHero ? '' : 'header-scrolled' }}" style="position:fixed;top:0;left:0;width:100%;z-index:var(--z-header,100)">
-    <div style="max-width:1400px;margin:0 auto;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap">
+    <div class="header-inner" style="max-width:1400px;margin:0 auto;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap">
         <a href="{{ route('shop.index') }}" class="header-logo" style="flex:0 0 auto;font-family:'Anton',sans-serif;font-size:22px;letter-spacing:0.02em;text-transform:uppercase;white-space:nowrap">Cây Cảnh Shop</a>
 
         {{--
@@ -140,7 +140,7 @@
                 'flower' => ['label' => 'Hoa', 'panelId' => 'megaPanelFlower'],
             ];
         @endphp
-        <nav aria-label="Danh mục sản phẩm" style="display:flex;align-items:center;gap:22px;flex:0 0 auto">
+        <nav class="header-nav" aria-label="Danh mục sản phẩm" style="display:flex;align-items:center;gap:22px;flex:0 0 auto">
             <a href="{{ route('shop.bestSellers') }}" class="header-icon" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;{{ request()->routeIs('shop.bestSellers') ? 'color:#5C2323' : '' }}">Bán chạy</a>
             @foreach($megaMenus as $scopeValue => $meta)
                 @php $scopeGroups = $navCategories->where('scope', $scopeValue)->filter(fn ($g) => $g->children->isNotEmpty()); @endphp
@@ -174,13 +174,14 @@
             @endforeach
         </nav>
 
-        <div style="display:flex;align-items:center;gap:22px;flex:1 1 auto;justify-content:flex-end;min-width:280px;flex-wrap:wrap">
+        <div class="header-actions" style="display:flex;align-items:center;gap:22px;flex:1 1 auto;justify-content:flex-end;min-width:280px;flex-wrap:wrap">
             <form class="site-search" action="{{ route('shop.index') }}" method="GET" style="display:flex;align-items:center;gap:8px;border-radius:999px;padding:0 6px 0 16px;height:38px;flex:1 1 220px;max-width:320px;min-width:170px">
                 <i data-lucide="search" class="site-search-icon" style="width:16px;height:16px;flex:none"></i>
                 <input type="text" name="q" value="{{ request('q') }}" placeholder="Tìm cây, hoa..." aria-label="Tìm kiếm sản phẩm" class="site-search-input" style="flex:1 1 auto;min-width:0;border:none;background:transparent;outline:none;font-size:13px;font-family:inherit">
                 <button type="submit" class="site-search-btn" style="flex:none;padding:7px 16px;border-radius:999px;background:#1C1C1A;color:#FFFFFF;border:none;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer">Tìm</button>
             </form>
 
+            <div class="header-tools" style="display:flex;align-items:center;gap:22px">
             <div style="position:relative;display:inline-flex">
                 <button type="button" id="accountToggle" aria-label="Tài khoản" class="header-icon" style="display:inline-flex;background:none;border:none;padding:0;cursor:pointer">
                     <i data-lucide="user" style="width:19px;height:19px"></i>
@@ -248,10 +249,11 @@
                 <i data-lucide="shopping-bag" style="width:19px;height:19px"></i>
                 <span class="cart-count-badge" style="font-family:'Space Mono',monospace;font-size:12px;color:#5C2323">{{ count(session('cart', [])) }}</span>
             </a>
+            </div>
 
             @guest
-                <a href="{{ route('login') }}" class="header-icon" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap">Đăng nhập</a>
-                <a href="{{ route('register') }}" style="display:inline-block;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;background:#5C2323;color:#FFFFFF;padding:10px 22px;border-radius:999px;white-space:nowrap">Đăng ký</a>
+                <a href="{{ route('login') }}" class="header-icon header-auth" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap">Đăng nhập</a>
+                <a href="{{ route('register') }}" class="header-auth" style="display:inline-block;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;background:#5C2323;color:#FFFFFF;padding:10px 22px;border-radius:999px;white-space:nowrap">Đăng ký</a>
             @endguest
         </div>
     </div>
@@ -440,13 +442,13 @@
     // header xuống 2 dòng ở mobile rồi resize/xoay ngang mà không đo lại).
 
     if (siteHeader && heroSection) {
+        const categorySection = document.getElementById('catArcSection');
         const toggleHeaderOnScroll = function () {
-            const threshold = heroSection.offsetHeight * 0.9;
-            if (window.scrollY > threshold) {
-                siteHeader.classList.add('header-scrolled');
-            } else {
-                siteHeader.classList.remove('header-scrolled');
-            }
+            const threshold = categorySection
+                ? categorySection.getBoundingClientRect().bottom + window.scrollY - siteHeader.offsetHeight
+                : heroSection.offsetHeight * 0.9;
+            const pastDarkScenes = window.scrollY >= threshold;
+            siteHeader.classList.toggle('header-scrolled', pastDarkScenes);
         };
         window.addEventListener('scroll', toggleHeaderOnScroll, { passive: true });
         toggleHeaderOnScroll();
@@ -470,7 +472,9 @@
         // Đo chiều cao header thật -> panel mobile (position:fixed) neo đúng dưới header
         function syncHeaderHeight() {
             if (siteHeader) {
-                document.documentElement.style.setProperty('--header-h', siteHeader.offsetHeight + 'px');
+                const headerHeight = siteHeader.offsetHeight + 'px';
+                document.documentElement.style.setProperty('--header-h', headerHeight);
+                document.documentElement.style.setProperty('--sc-safe-top', headerHeight);
             }
         }
         syncHeaderHeight();
