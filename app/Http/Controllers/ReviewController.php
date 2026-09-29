@@ -13,6 +13,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Đánh giá sản phẩm kiểu Shopee: đánh giá theo TỪNG DÒNG HÀNG trong đơn, có
@@ -140,6 +142,12 @@ class ReviewController extends Controller
             return back()->with('error', 'Vui lòng chọn số sao cho ít nhất một sản phẩm.');
         }
 
+        // Trình duyệt vẫn gửi ô <input type="file"> rỗng, PHP biến nó thành
+        // một entry UPLOAD_ERR_NO_FILE. Nếu để nguyên, validator coi đó là
+        // "file tải lên hỏng" và chặn luôn việc SỬA đánh giá mà không đổi ảnh
+        // (lỗi khách gặp: "The reviews.X.images.0 failed to upload").
+        $cleanFiles = $this->prunedImageFiles($request);
+
         $rules = [];
         $messages = [];
 
@@ -166,53 +174,78 @@ class ReviewController extends Controller
             $messages["reviews.$itemId.images.*.dimensions"] = 'Ảnh quá lớn (tối đa 4000x4000 điểm ảnh).';
         }
 
-        $request->validate($rules, $messages);
+        // Validate trên dữ liệu ĐÃ DỌN, không dùng $request->validate():
+        // Request::allFiles() cache kết quả chuyển đổi ngay lần đọc đầu tiên
+        // nên sửa thẳng vào $request->files sẽ không có tác dụng.
+        Validator::make(
+            array_replace_recursive($request->input(), ['reviews' => $cleanFiles]),
+            $rules,
+            $messages
+        )->validate();
+
+        // Tổng số ảnh sau khi sửa (ảnh cũ giữ lại + ảnh mới) không được vượt
+        // hạn mức. Rule 'max' ở trên chỉ đếm ảnh MỚI nên không bắt được
+        // trường hợp khách đã có 4 ảnh rồi tải thêm 3.
+        $this->validateTotalImageCount($cleanFiles, $submitted, $lines, $maxImages);
 
         // File ảnh cũ bị thay/gỡ — chỉ xoá khỏi ổ đĩa SAU KHI transaction đã
         // commit, để rollback không làm mất ảnh của đánh giá vẫn còn sống.
         $pathsToDelete = [];
+        // Ngược lại: ảnh MỚI được ghi ra đĩa ngay trong transaction. Nếu
+        // transaction rollback thì dòng DB biến mất nhưng file vẫn nằm lại —
+        // theo dõi để tự dọn, không để rác tích tụ trong storage.
+        $writtenPaths = [];
         $savedCount = 0;
         $rewardedPoints = 0;
 
-        DB::transaction(function () use ($submitted, $lines, $order, $user, $request, $maxImages, &$pathsToDelete, &$savedCount, &$rewardedPoints) {
-            foreach ($submitted as $itemId => $data) {
-                $line = $lines->get((int) $itemId);
-                $existing = $line['review'];
+        try {
+            DB::transaction(function () use ($submitted, $lines, $order, $user, $cleanFiles, $maxImages, &$pathsToDelete, &$writtenPaths, &$savedCount, &$rewardedPoints) {
+                foreach ($submitted as $itemId => $data) {
+                    $line = $lines->get((int) $itemId);
+                    $existing = $line['review'];
 
-                // Đã đánh giá rồi mà không còn quyền sửa -> bỏ qua im lặng
-                // (khách có thể mở 2 tab, tab cũ gửi lại dữ liệu cũ).
-                if ($existing !== null && ! $line['can_edit']) {
-                    continue;
+                    // Đã đánh giá rồi mà không còn quyền sửa -> bỏ qua im lặng
+                    // (khách có thể mở 2 tab, tab cũ gửi lại dữ liệu cũ).
+                    if ($existing !== null && ! $line['can_edit']) {
+                        continue;
+                    }
+
+                    $review = $existing ?? new Review([
+                        'product_id' => $line['item']->product_id,
+                        'user_id' => $user->id,
+                        'order_id' => $order->id,
+                        'order_item_id' => $line['item']->id,
+                        'variant_name' => $line['item']->variant_name,
+                    ]);
+
+                    $review->rating = (int) $data['rating'];
+                    $review->comment = $data['comment'] ?? null;
+                    $review->is_anonymous = (bool) ($data['is_anonymous'] ?? false);
+
+                    // Sửa: đánh dấu đã dùng quyền sửa (mỗi đánh giá sửa 1 lần).
+                    if ($existing !== null) {
+                        $review->edited_at = now();
+                    }
+
+                    $review->save();
+
+                    $pathsToDelete = array_merge(
+                        $pathsToDelete,
+                        $this->syncImages($cleanFiles, $review, (int) $itemId, $data, $maxImages, $writtenPaths)
+                    );
+
+                    $rewardedPoints += $this->awardPointsIfQualified($review, $user);
+                    $savedCount++;
                 }
-
-                $review = $existing ?? new Review([
-                    'product_id' => $line['item']->product_id,
-                    'user_id' => $user->id,
-                    'order_id' => $order->id,
-                    'order_item_id' => $line['item']->id,
-                    'variant_name' => $line['item']->variant_name,
-                ]);
-
-                $review->rating = (int) $data['rating'];
-                $review->comment = $data['comment'] ?? null;
-                $review->is_anonymous = (bool) ($data['is_anonymous'] ?? false);
-
-                // Sửa: đánh dấu đã dùng quyền sửa (mỗi đánh giá sửa 1 lần).
-                if ($existing !== null) {
-                    $review->edited_at = now();
-                }
-
-                $review->save();
-
-                $pathsToDelete = array_merge(
-                    $pathsToDelete,
-                    $this->syncImages($request, $review, (int) $itemId, $data, $maxImages)
-                );
-
-                $rewardedPoints += $this->awardPointsIfQualified($review, $user);
-                $savedCount++;
+            });
+        } catch (\Throwable $e) {
+            // Transaction đã rollback -> xoá luôn ảnh vừa ghi ra đĩa.
+            foreach ($writtenPaths as $path) {
+                Storage::disk('public')->delete($path);
             }
-        });
+
+            throw $e;
+        }
 
         // Xoá file ngoài transaction: thao tác trên ổ đĩa không rollback được.
         foreach ($pathsToDelete as $path) {
@@ -241,11 +274,12 @@ class ReviewController extends Controller
      *
      * @return array<int, string>
      */
-    private function syncImages(Request $request, Review $review, int $itemId, array $data, int $maxImages): array
+    private function syncImages(array $cleanFiles, Review $review, int $itemId, array $data, int $maxImages, array &$writtenPaths): array
     {
         $toDelete = [];
 
-        // 1) Gỡ ảnh cũ khách bỏ chọn (chỉ ảnh thuộc đúng đánh giá này).
+        // 1) Gỡ những ảnh khách tích chọn bỏ (chỉ ảnh thuộc đúng đánh giá này
+        //    — không tin id gửi lên).
         $removeIds = array_filter(array_map('intval', $data['remove_images'] ?? []));
 
         if ($removeIds !== []) {
@@ -257,25 +291,27 @@ class ReviewController extends Controller
             }
         }
 
-        /** @var array<int, UploadedFile> $files */
-        $files = $request->file("reviews.$itemId.images", []);
+        $files = $cleanFiles[$itemId]['images'] ?? [];
 
         if ($files === []) {
             return $toDelete;
         }
 
-        // 2) Khi SỬA đánh giá thì ảnh mới THAY cho toàn bộ ảnh cũ (luật B2:
-        // "khi sửa ảnh cũ bị thay bằng ảnh mới").
-        if ($review->wasChanged('edited_at') || $review->edited_at !== null) {
-            foreach (ReviewImage::where('review_id', $review->id)->get() as $image) {
-                $toDelete[] = $image->path;
-                $image->delete();
-            }
+        // 2) Ảnh mới được CỘNG THÊM vào những ảnh cũ khách giữ lại, không xoá
+        //    trắng. Form có ô tích "gỡ ảnh" cho từng ảnh (remove_images[]),
+        //    nên xoá hết ảnh cũ mỗi lần tải thêm sẽ khiến ô tích đó vô nghĩa
+        //    và làm khách mất ảnh họ muốn giữ.
+        $kept = ReviewImage::where('review_id', $review->id)->count();
+        $room = max(0, $maxImages - $kept);
+
+        if ($room === 0) {
+            return $toDelete;
         }
 
-        $sortOrder = 0;
+        // sort_order chạy tiếp sau ảnh cũ để thứ tự hiển thị ổn định.
+        $sortOrder = (int) ReviewImage::where('review_id', $review->id)->max('sort_order') + 1;
 
-        foreach (array_slice($files, 0, $maxImages) as $file) {
+        foreach (array_slice($files, 0, $room) as $file) {
             $path = $file->store('reviews/'.$review->id, 'public');
 
             if ($path === false) {
@@ -283,6 +319,8 @@ class ReviewController extends Controller
 
                 continue;
             }
+
+            $writtenPaths[] = $path;
 
             ReviewImage::create([
                 'review_id' => $review->id,
@@ -292,6 +330,93 @@ class ReviewController extends Controller
         }
 
         return $toDelete;
+    }
+
+    /**
+     * Ảnh THẬT SỰ được tải lên, gom theo order_item_id:
+     * `[<order_item_id> => ['images' => [UploadedFile, ...]]]`.
+     *
+     * Đã loại bỏ ô <input type="file"> rỗng (UPLOAD_ERR_NO_FILE) và file
+     * hỏng, nên cả validator lẫn phần lưu ảnh đều chỉ thấy file hợp lệ.
+     * Dòng nào không có ảnh hợp lệ thì KHÔNG có khoá 'images' — nhờ vậy rule
+     * `reviews.X.images.*` không chạy và khách sửa đánh giá mà không đổi ảnh
+     * sẽ không bị chặn.
+     *
+     * @return array<int, array{images: array<int, UploadedFile>}>
+     */
+    private function prunedImageFiles(Request $request): array
+    {
+        $files = $request->file('reviews');
+
+        if (! is_array($files)) {
+            return [];
+        }
+
+        $clean = [];
+
+        foreach ($files as $itemId => $fields) {
+            $images = $fields['images'] ?? null;
+
+            if ($images === null) {
+                continue;
+            }
+
+            $images = $images instanceof UploadedFile ? [$images] : (array) $images;
+
+            $valid = array_values(array_filter(
+                $images,
+                fn ($file) => $file instanceof UploadedFile && $file->isValid()
+            ));
+
+            if ($valid !== []) {
+                $clean[(int) $itemId] = ['images' => $valid];
+            }
+        }
+
+        return $clean;
+    }
+
+    /**
+     * Chặn trường hợp tổng ảnh (cũ giữ lại + mới) vượt hạn mức, với thông
+     * báo tiếng Việt nói rõ còn được thêm bao nhiêu ảnh.
+     *
+     * @param  \Illuminate\Support\Collection  $submitted
+     * @param  \Illuminate\Support\Collection  $lines
+     */
+    private function validateTotalImageCount(array $cleanFiles, $submitted, $lines, int $maxImages): void
+    {
+        $errors = [];
+
+        foreach ($submitted as $itemId => $data) {
+            $new = count($cleanFiles[(int) $itemId]['images'] ?? []);
+
+            if ($new === 0) {
+                continue;
+            }
+
+            $review = $lines->get((int) $itemId)['review'] ?? null;
+
+            if ($review === null) {
+                continue;
+            }
+
+            $removeIds = array_filter(array_map('intval', $data['remove_images'] ?? []));
+            $kept = $review->images->count() - count(array_intersect(
+                $review->images->pluck('id')->all(),
+                $removeIds
+            ));
+
+            if ($kept + $new > $maxImages) {
+                $room = max(0, $maxImages - $kept);
+                $errors["reviews.$itemId.images"] = $room === 0
+                    ? "Đánh giá này đã đủ {$maxImages} ảnh. Hãy gỡ bớt ảnh cũ trước khi thêm ảnh mới."
+                    : "Đánh giá này chỉ còn thêm được {$room} ảnh (tối đa {$maxImages} ảnh).";
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     /**
