@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 #[ObservedBy([OrderObserver::class])]
 class Order extends Model
@@ -485,15 +486,88 @@ class Order extends Model
     }
 
     /**
-     * Khách được đánh giá sản phẩm trong đơn — đã trả tiền (hoặc COD đã thu)
-     * VÀ hàng đã giao tới nơi. Sửa lỗi L12: trước đây chỉ chấp nhận
-     * paid/cod_ordered nên đơn COD (đã đổi sang cod_paid sau khi giao) bị
-     * chặn đánh giá, còn đơn chưa giao lại đánh giá được.
+     * Khách được đánh giá các sản phẩm trong đơn — đã trả tiền (hoặc COD đã
+     * thu), hàng đã giao tới nơi, VÀ còn trong thời hạn đánh giá.
+     *
+     * Sửa lỗi L12: trước đây chỉ chấp nhận paid/cod_ordered nên đơn COD (đã
+     * đổi sang cod_paid sau khi giao) bị chặn đánh giá, còn đơn chưa giao lại
+     * đánh giá được. Bổ sung thời hạn theo luật B2 của kế hoạch "mua với
+     * voucher + đánh giá": quá hạn thì đơn không còn mời đánh giá nữa.
      */
     public function canReview(): bool
     {
         return in_array($this->status, self::PAID_OR_COD_STATUSES, true)
-            && $this->shipping_status === 'delivered';
+            && $this->shipping_status === 'delivered'
+            && $this->withinReviewWindow();
+    }
+
+    /**
+     * Còn trong cửa sổ đánh giá (mặc định 30 ngày kể từ lúc GHN báo giao
+     * thành công). Đơn đã giao nhưng thiếu `delivered_at` (dữ liệu cũ trước
+     * khi có cột này) được coi là CÒN hạn — thà cho đánh giá muộn còn hơn
+     * chặn oan khách vì dữ liệu lịch sử thiếu mốc thời gian.
+     */
+    public function withinReviewWindow(): bool
+    {
+        if ($this->delivered_at === null) {
+            return true;
+        }
+
+        $days = max(1, (int) config('shop.review_window_days', 30));
+
+        return $this->delivered_at->copy()->addDays($days)->isFuture();
+    }
+
+    /**
+     * Các dòng hàng trong đơn kèm trạng thái đánh giá, dùng cho trang
+     * /orders/{order}/danh-gia và cho ShopController::show().
+     *
+     * Trả Collection các mảng {item, product, review|null, can_review,
+     * can_edit} theo hợp đồng mục 4.4. Eager load sẵn items.product và
+     * reviews của chính $user để không sinh N+1 khi view duyệt từng dòng.
+     *
+     * @return \Illuminate\Support\Collection<int, array{item: OrderItem, product: ?Product, review: ?Review, can_review: bool, can_edit: bool}>
+     */
+    public function reviewableLines(?User $user): Collection
+    {
+        if ($user === null || $this->user_id !== $user->id) {
+            return collect();
+        }
+
+        $this->loadMissing('items.product');
+
+        // 1 truy vấn lấy hết đánh giá của khách trong đơn này, khoá theo
+        // order_item_id để tra cứu O(1) trong vòng lặp bên dưới.
+        $reviews = Review::where('order_id', $this->id)
+            ->where('user_id', $user->id)
+            ->whereNotNull('order_item_id')
+            ->with('images')
+            ->get()
+            ->keyBy('order_item_id');
+
+        $orderIsReviewable = $this->canReview();
+
+        return $this->items->map(function (OrderItem $item) use ($reviews, $orderIsReviewable, $user) {
+            $review = $reviews->get($item->id);
+
+            return [
+                'item' => $item,
+                'product' => $item->product,
+                'review' => $review,
+                // Chưa đánh giá dòng này và đơn còn đủ điều kiện -> viết mới.
+                'can_review' => $orderIsReviewable && $review === null,
+                // Đã đánh giá -> chỉ còn quyền sửa (1 lần, trong hạn).
+                'can_edit' => $review !== null && $review->canBeEditedBy($user),
+            ];
+        })->values();
+    }
+
+    /** Đơn còn ít nhất 1 dòng hàng chưa đánh giá (và vẫn đủ điều kiện). */
+    public function hasPendingReviews(?User $user = null): bool
+    {
+        $user ??= $this->relationLoaded('user') ? $this->user : $this->user()->first();
+
+        return $this->reviewableLines($user)->contains(fn (array $line) => $line['can_review']);
     }
 
     /**

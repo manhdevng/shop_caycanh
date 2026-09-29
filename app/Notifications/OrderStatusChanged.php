@@ -87,9 +87,21 @@ class OrderStatusChanged extends Notification
             'title' => $this->title(),
             'message' => $this->message(),
             'icon' => self::ICONS[$this->event] ?? 'package',
-            'url' => '/orders/'.$this->order->id,
+            'url' => $this->url(),
             'occurred_at' => $this->occurredAt->toIso8601String(),
         ];
+    }
+
+    /**
+     * Trang đích khi khách bấm vào thông báo. Mốc "đã giao" dẫn thẳng tới
+     * trang đánh giá đơn — đó là việc khách cần làm tiếp, thay vì bắt họ mở
+     * chi tiết đơn rồi tự tìm nút "Đánh giá".
+     */
+    private function url(): string
+    {
+        return $this->event === 'delivered'
+            ? '/orders/'.$this->order->id.'/danh-gia'
+            : '/orders/'.$this->order->id;
     }
 
     public function toMail(object $notifiable): Mailable|MailMessage

@@ -334,6 +334,36 @@ class Voucher extends Model
     /**
      * True nếu $user đã dùng mã này rồi (used_at khác null trong ví).
      */
+    /**
+     * Số lượt dùng còn lại của mã (`usage_limit - used_count`), hoặc NULL khi
+     * mã không giới hạn lượt. Dùng để hiện "Còn N lượt" kích cầu ở dải mã
+     * trang sản phẩm. Không bao giờ trả số âm (dữ liệu lệch vẫn về 0).
+     */
+    public function getRemainingUsesAttribute(): ?int
+    {
+        if ($this->usage_limit === null) {
+            return null;
+        }
+
+        return max(0, (int) $this->usage_limit - (int) $this->used_count);
+    }
+
+    /**
+     * True khi mã hết hạn trong vòng 24 giờ tới — view dùng để bật đồng hồ
+     * đếm ngược. Mã không có hạn, hoặc đã hết hạn rồi, đều trả false (mã đã
+     * hết hạn thì không còn gì để đếm ngược).
+     */
+    public function getExpiresSoonAttribute(): bool
+    {
+        if ($this->expires_at === null) {
+            return false;
+        }
+
+        $now = now();
+
+        return $this->expires_at->gt($now) && $this->expires_at->lte($now->copy()->addDay());
+    }
+
     public function isUsedBy(?User $user): bool
     {
         if ($user === null) {
