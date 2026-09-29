@@ -188,20 +188,10 @@
                             </a>
 
                             @if(in_array($order->shipping_status, $pendingShippingStatuses, true))
-                                <form action="{{ route('admin.orders.updateStatus', $order->id) }}" method="POST" class="inline-block">
+                                <a href="{{ route('admin.orders.show', $order->id) }}" class="px-3 py-2 rounded-pill border border-green-border text-xs text-text-primary" title="Đổi trạng thái và ghi chú">Đổi trạng thái</a>
+                                <form id="adminCancelForm{{ $order->id }}" action="{{ route('admin.orders.cancel', $order->id) }}" method="POST" class="inline-block">
                                     @csrf
-                                    @method('PATCH')
-                                    <select name="shipping_status" onchange="this.form.submit()" class="rounded-xl border-green-border/50 border px-3 py-2 bg-white focus:ring-2 focus:ring-green-primary focus:border-green-primary outline-none text-xs text-text-primary">
-                                        {{-- Không cho chọn "Đã hủy" ở đây — hủy đơn phải qua nút "Hủy đơn" bên cạnh. --}}
-                                        @foreach(\Illuminate\Support\Arr::except($shippingLabels, ['cancelled']) as $value => $label)
-                                            <option value="{{ $value }}" {{ $order->shipping_status === $value ? 'selected' : '' }}>{{ $label }}</option>
-                                        @endforeach
-                                    </select>
-                                </form>
-
-                                <form action="{{ route('admin.orders.cancel', $order->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn này?');">
-                                    @csrf
-                                    <button type="submit" class="p-2 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="Hủy đơn">
+                                    <button type="button" class="js-admin-cancel p-2 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" data-form="adminCancelForm{{ $order->id }}" title="Hủy đơn">
                                         <i data-lucide="x-circle" class="w-5 h-5"></i>
                                     </button>
                                 </form>
@@ -225,4 +215,23 @@
         {{ $orders->links() }}
     </div>
 </div>
+<div id="adminCancelModal" role="dialog" aria-modal="true" aria-labelledby="adminCancelTitle" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(28,28,26,.5);align-items:center;justify-content:center;padding:20px">
+    <div style="width:100%;max-width:380px;background:#FFFFFF;border-radius:16px;padding:24px">
+        <h2 id="adminCancelTitle" style="font-family:'Anton',sans-serif;font-size:21px;margin:0 0 10px">Huỷ đơn hàng?</h2>
+        <p style="font-size:14px;color:#8A8680;margin:0 0 20px">Hành động này không thể hoàn tác.</p>
+        <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" id="adminCancelClose" style="border:1px solid #E5E2DC;border-radius:999px;background:#FFFFFF;padding:9px 16px">Đóng</button><button type="button" id="adminCancelSubmit" style="border:0;border-radius:999px;background:#5C2323;color:#FFFFFF;padding:9px 16px">Huỷ đơn</button></div>
+    </div>
+</div>
+<script>
+    (function () {
+        const modal = document.getElementById('adminCancelModal');
+        let selectedForm = null;
+        document.querySelectorAll('.js-admin-cancel').forEach(function (button) { button.addEventListener('click', function () { selectedForm = document.getElementById(button.dataset.form); modal.style.display = 'flex'; }); });
+        function closeModal() { modal.style.display = 'none'; selectedForm = null; }
+        document.getElementById('adminCancelClose').addEventListener('click', closeModal);
+        modal.addEventListener('click', function (event) { if (event.target === modal) closeModal(); });
+        document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeModal(); });
+        document.getElementById('adminCancelSubmit').addEventListener('click', function () { if (selectedForm) selectedForm.submit(); });
+    })();
+</script>
 @endsection

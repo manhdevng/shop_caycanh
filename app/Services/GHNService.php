@@ -91,6 +91,19 @@ class GHNService
         ]);
     }
 
+    /**
+     * Tra cứu chi tiết 1 vận đơn: trạng thái hiện tại (`data.status`) và mảng
+     * hành trình `data.log[] {status, updated_date}`. Dùng để vẽ timeline
+     * kiểu Shopee và để "đồng bộ bù" khi webhook bị lỡ (xem
+     * GHNShipmentSyncService::syncFromDetail()).
+     */
+    public function orderDetail(string $orderCode): array
+    {
+        return $this->post('/v2/shipping-order/detail', [
+            'order_code' => $orderCode,
+        ]);
+    }
+
     protected function get(string $uri, array $query = []): array
     {
         try {

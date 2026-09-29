@@ -15,7 +15,6 @@
         'delivering' => 'Đang giao',
         'delivered' => 'Đã giao',
     ];
-    $itemsSubtotal = $order->items->sum(fn ($item) => $item->price * $item->quantity);
 @endphp
 
 @section('content')
@@ -57,7 +56,8 @@
             @if($order->ghn_order_code)
             <div class="sm:col-span-2">
                 <div class="text-sm font-semibold text-text-secondary mono mb-1">Mã vận đơn GHN</div>
-                <div class="text-text-primary mono">{{ $order->ghn_order_code }}</div>
+                <div class="text-text-primary mono" style="overflow-wrap:anywhere">{{ $order->ghn_order_code }}</div>
+                <form method="POST" action="{{ route('admin.orders.syncGhn', $order) }}" class="mt-3">@csrf<button type="submit" style="border:1px solid #E5E2DC;border-radius:999px;padding:8px 14px;background:#FFFFFF;color:#4A6B1F;font-size:12px;cursor:pointer">Đồng bộ GHN</button></form>
             </div>
             @elseif($order->canRetryGhn())
             <div class="sm:col-span-2">
@@ -97,6 +97,24 @@
             <span class="px-3 py-1 bg-green-background border border-green-border/50 text-text-primary rounded-pill text-xs mono font-semibold">
                 {{ $order->payment_method_label }}
             </span>
+        </div>
+
+        <div class="pt-4 border-t border-green-border/20 mb-5">
+            <p style="font-size:12px;line-height:1.5;color:#5C2323;margin:0 0 12px">Trạng thái vận chuyển do GHN cập nhật tự động — chỉ đổi tay khi có ngoại lệ.</p>
+            <form method="POST" action="{{ route('admin.orders.updateStatus', $order) }}" style="display:grid;gap:10px">
+                @csrf
+                @method('PATCH')
+                <label for="shipping_status" style="font-family:'Space Mono',monospace;font-size:11px;color:#8A8680">Trạng thái vận chuyển</label>
+                <select id="shipping_status" name="shipping_status" style="width:100%;min-width:0;border:1px solid #E5E2DC;border-radius:12px;padding:10px;background:#FFFFFF;font-size:13px">
+                    @foreach(\App\Models\Order::SHIPPING_LABELS as $value => $label)
+                        @if($value !== 'cancelled')<option value="{{ $value }}" @selected(old('shipping_status', $order->shipping_status) === $value)>{{ $label }}</option>@endif
+                    @endforeach
+                </select>
+                <label for="status_note" style="font-family:'Space Mono',monospace;font-size:11px;color:#8A8680">Ghi chú bắt buộc</label>
+                <textarea id="status_note" name="note" required maxlength="255" rows="3" style="width:100%;min-width:0;border:1px solid #E5E2DC;border-radius:12px;padding:10px;font-size:13px" placeholder="Lý do cập nhật trạng thái">{{ old('note') }}</textarea>
+                @error('note')<p style="font-size:12px;color:#5C2323;margin:0">{{ $message }}</p>@enderror
+                <button type="submit" style="background:#5C2323;color:#FFFFFF;border:0;border-radius:999px;padding:10px 16px;font-size:12px;cursor:pointer">Cập nhật trạng thái</button>
+            </form>
         </div>
 
         <div class="pt-4 border-t border-green-border/20">
@@ -215,7 +233,7 @@
         <div class="w-full sm:w-80 space-y-2">
             <div class="flex justify-between text-sm text-text-secondary">
                 <span>Tạm tính (tiền hàng)</span>
-                <span class="text-text-primary font-medium">{{ number_format($itemsSubtotal, 0, ',', '.') }}đ</span>
+                <span class="text-text-primary font-medium">{{ number_format($order->subtotal(), 0, ',', '.') }}đ</span>
             </div>
             <div class="flex justify-between text-sm text-text-secondary">
                 <span>Phí vận chuyển (GHN)</span>
@@ -228,6 +246,25 @@
         </div>
     </div>
 </div>
+
+<section style="background:#FFFFFF;border:1px solid #E5E2DC;border-radius:16px;padding:clamp(18px,4vw,28px);margin-bottom:24px;min-width:0">
+    <h3 style="font-family:'Anton',sans-serif;font-size:22px;text-transform:uppercase;margin:0 0 20px">Lịch sử trạng thái</h3>
+    @php
+        $sourceLabels = ['customer' => 'Khách hàng', 'admin' => 'Admin', 'system' => 'Hệ thống', 'momo' => 'MoMo', 'ghn_webhook' => 'GHN webhook', 'ghn_sync' => 'GHN đồng bộ', 'scheduler' => 'Hệ thống tự động'];
+    @endphp
+    <ol style="list-style:none;padding:0;margin:0;border-left:1px solid #E5E2DC">
+        @forelse($order->statusHistories->sortByDesc('occurred_at') as $history)
+            <li style="position:relative;padding:0 0 20px 20px;margin-left:-5px;overflow-wrap:anywhere">
+                <span style="position:absolute;left:0;top:5px;width:9px;height:9px;border-radius:999px;background:{{ $loop->first ? '#4A6B1F' : '#E5E2DC' }}"></span>
+                <strong style="display:block;font-size:14px;color:#1C1C1A">{{ $history->field === 'shipping_status' ? (\App\Models\Order::SHIPPING_LABELS[$history->to_value] ?? $history->to_value) : ($history->field === 'status' ? (\App\Models\Order::STATUS_LABELS[$history->to_value] ?? $history->to_value) : ($history->to_value === 'placed' ? 'Đã đặt hàng' : ($history->to_value === 'completed' ? 'Hoàn thành' : $history->to_value))) }}</strong>
+                <time style="display:block;font-family:'Space Mono',monospace;font-size:10px;color:#8A8680;margin-top:4px">{{ $history->occurred_at?->format('d/m/Y H:i') }} · {{ $sourceLabels[$history->source] ?? $history->source }}@if($history->actor) · {{ $history->actor->name }}@endif</time>
+                @if($history->note)<p style="font-size:13px;color:#8A8680;margin:5px 0 0">{{ $history->note }}</p>@endif
+            </li>
+        @empty
+            <li style="padding-left:20px;color:#8A8680;font-size:13px">Chưa có lịch sử trạng thái.</li>
+        @endforelse
+    </ol>
+</section>
 
 <!-- Lịch sử giao dịch thanh toán -->
 <div class="bg-white rounded-[32px] p-8 border border-green-border shadow-sm">

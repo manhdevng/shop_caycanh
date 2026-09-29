@@ -10,11 +10,15 @@ use App\Models\PaymentTransaction;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Voucher;
+use App\Models\OrderStatusHistory;
 use App\Services\GHNOrderService;
 use App\Services\GHNService;
+use App\Services\GHNShipmentSyncService;
 use App\Services\MomoService;
 use App\Services\OrderCancellationService;
+use App\Support\OrderChangeContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -386,6 +390,7 @@ class OrderController extends Controller
             $this->sendOrderConfirmationEmail($order);
 
             return redirect()->route('orders.show', $order)
+                ->with('order_just_placed', true)
                 ->with('success', 'Đặt hàng thành công! Vui lòng chuyển khoản theo thông tin ngân hàng và chờ xác nhận. Mã đơn hàng #'.$order->id.'.');
         }
 
@@ -403,20 +408,18 @@ class OrderController extends Controller
         $order->load(['items.product', 'items.variant']);
         $ghnResponse = $ghnOrderService->create($order, isPaid: false);
 
-        if (($ghnResponse['code'] ?? null) === 200 && isset($ghnResponse['data']['order_code'])) {
-            $order->update([
-                'ghn_order_code' => $ghnResponse['data']['order_code'],
-                'ghn_total_fee' => $ghnResponse['data']['total_fee'] ?? $shippingFee,
-                'shipping_status' => 'ready_to_pick',
-            ]);
-        } else {
-            Log::warning('GHN createOrder failed for order #'.$order->id, ['response' => $ghnResponse]);
-        }
+        // Lưu kết quả tạo vận đơn qua helper dùng chung (GHNOrderService) để
+        // 3 luồng tạo vận đơn (COD ở đây, MoMo, admin xác nhận chuyển khoản)
+        // cùng ghi một bộ cột và cùng sinh history/thông báo 'ready_to_pick'.
+        OrderChangeContext::run(['source' => 'system'], function () use ($ghnOrderService, $order, $ghnResponse, $shippingFee) {
+            $ghnOrderService->applyCreateResponse($order, $ghnResponse, $shippingFee);
+        });
 
         // Gửi email xác nhận đơn hàng — xem chú thích ở nhánh MoMo phía trên.
         $this->sendOrderConfirmationEmail($order);
 
         return redirect()->route('orders.show', $order)
+            ->with('order_just_placed', true)
             ->with('success', 'Đặt hàng thành công! Mã đơn hàng #'.$order->id.'.');
     }
 
@@ -443,14 +446,48 @@ class OrderController extends Controller
         }
     }
 
-    public function orderHistory()
+    /**
+     * Trang "Đơn mua" — danh sách đơn của khách, lọc theo tab giống Shopee.
+     * Tab lạ (gõ tay trên URL) bị ép về 'tat-ca' thay vì báo lỗi 404.
+     */
+    public function orderHistory(Request $request)
     {
+        $tab = (string) $request->query('tab', 'tat-ca');
+
+        if (! array_key_exists($tab, Order::TABS)) {
+            $tab = 'tat-ca';
+        }
+
         $orders = Order::where('user_id', Auth::id())
+            ->forTab($tab)
             ->with('items.product', 'paymentTransactions')
             ->orderByDesc('created_at')
-            ->paginate(10);
+            ->paginate(10)
+            ->withQueryString();
 
-        return view('orders.history', compact('orders'));
+        return view('orders.history', [
+            'orders' => $orders,
+            'tab' => $tab,
+            'tabCounts' => $this->tabCounts(),
+        ]);
+    }
+
+    /**
+     * Số đơn của từng tab để hiện badge trên thanh tab. Mỗi tab là 1 count
+     * nhẹ trên cùng một index (user_id) — rẻ hơn và dễ đọc hơn một câu SQL
+     * CASE WHEN khổng lồ phải đồng bộ tay với scopeForTab().
+     *
+     * @return array<string, int>
+     */
+    private function tabCounts(): array
+    {
+        $counts = [];
+
+        foreach (array_keys(Order::TABS) as $key) {
+            $counts[$key] = Order::where('user_id', Auth::id())->forTab($key)->count();
+        }
+
+        return $counts;
     }
 
     public function show(Order $order)
@@ -459,9 +496,108 @@ class OrderController extends Controller
             abort(403);
         }
 
-        $order->load('items.product', 'paymentTransactions');
+        $order->load('items.product', 'paymentTransactions', 'statusHistories', 'voucher');
 
-        return view('orders.show', compact('order'));
+        return view('orders.show', [
+            'order' => $order,
+            'timeline' => $this->buildTimeline($order),
+        ]);
+    }
+
+    /**
+     * Hành trình đơn hàng để vẽ timeline dọc: gộp các mốc shipping_status và
+     * milestone (placed/completed) thành một danh sách {time, title, note,
+     * source}, MỚI NHẤT TRƯỚC.
+     *
+     * Bỏ qua field 'status' (chờ thanh toán -> đã thanh toán...) trừ mốc
+     * 'paid': khách quan tâm hành trình gói hàng, các chuyển dịch nội bộ của
+     * trạng thái thanh toán chỉ làm timeline rối.
+     *
+     * @return Collection<int, array{time: \Illuminate\Support\Carbon, title: string, note: ?string, source: string}>
+     */
+    private function buildTimeline(Order $order): Collection
+    {
+        $milestoneLabels = [
+            'placed' => 'Đơn hàng đã được đặt',
+            'completed' => 'Đơn hàng hoàn thành',
+        ];
+
+        return $order->statusHistories
+            ->filter(function (OrderStatusHistory $history) {
+                if ($history->field === OrderStatusHistory::FIELD_STATUS) {
+                    return in_array($history->to_value, ['paid', 'cancelled'], true);
+                }
+
+                return true;
+            })
+            ->map(function (OrderStatusHistory $history) use ($milestoneLabels) {
+                $title = match ($history->field) {
+                    OrderStatusHistory::FIELD_SHIPPING_STATUS => Order::SHIPPING_LABELS[$history->to_value] ?? $history->to_value,
+                    OrderStatusHistory::FIELD_STATUS => Order::STATUS_LABELS[$history->to_value] ?? $history->to_value,
+                    default => $milestoneLabels[$history->to_value] ?? $history->to_value,
+                };
+
+                return [
+                    'time' => $history->occurred_at,
+                    'title' => $title,
+                    'note' => $history->note,
+                    'source' => $history->source,
+                ];
+            })
+            ->sortByDesc('time')
+            ->values();
+    }
+
+    /**
+     * Khách bấm "Đã nhận được hàng" — chốt mốc hoàn thành. Chỉ chủ đơn mới
+     * được bấm, và chỉ khi GHN đã báo giao thành công (canConfirmReceived()).
+     */
+    public function confirmReceived(Order $order)
+    {
+        if ($order->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        if (! $order->canConfirmReceived()) {
+            return back()->with('error', 'Đơn hàng chưa được giao xong hoặc bạn đã xác nhận trước đó.');
+        }
+
+        OrderChangeContext::run([
+            'source' => 'customer',
+            'actor_id' => Auth::id(),
+            'note' => 'Khách xác nhận đã nhận được hàng.',
+        ], function () use ($order) {
+            $order->update(['completed_at' => now()]);
+        });
+
+        return back()->with('success', 'Cảm ơn bạn! Đơn hàng đã hoàn thành, mời bạn đánh giá sản phẩm.');
+    }
+
+    /**
+     * Nút "Cập nhật" ở khối theo dõi vận chuyển — hỏi thẳng GHN trạng thái
+     * mới nhất. Cần thiết vì máy dev chạy 127.0.0.1 nên GHN không gọi webhook
+     * tới được (lỗi L2 trong kế hoạch). Route có throttle để không ai bấm
+     * liên tục làm ta bị GHN chặn.
+     */
+    public function refreshTracking(Order $order, GHNShipmentSyncService $sync)
+    {
+        if ($order->user_id !== Auth::id() && ! Auth::user()->isAdmin()) {
+            abort(403);
+        }
+
+        if (blank($order->ghn_order_code)) {
+            return back()->with('error', 'Đơn hàng chưa có mã vận đơn GHN để tra cứu.');
+        }
+
+        $result = $sync->syncFromDetail($order);
+
+        if (! ($result['ok'] ?? false)) {
+            return back()->with('error', $result['message'] ?? 'Không tra cứu được trạng thái vận đơn, vui lòng thử lại sau.');
+        }
+
+        return back()->with('success', ($result['changed'] ?? false)
+            ? 'Đã cập nhật trạng thái vận chuyển mới nhất từ GHN.'
+            : 'Trạng thái vận chuyển đã là mới nhất.');
     }
 
     // C3/G5: khách tự huỷ đơn hàng chưa thanh toán/chưa vào giai đoạn giao hàng.
@@ -499,11 +635,16 @@ class OrderController extends Controller
             }
         }
 
-        $result = $cancellation->cancel(
+        // Bọc ngữ cảnh để OrderObserver ghi đúng "ai huỷ" vào lịch sử đơn.
+        $result = OrderChangeContext::run([
+            'source' => 'customer',
+            'actor_id' => Auth::id(),
+            'note' => 'Khách huỷ đơn',
+        ], fn () => $cancellation->cancel(
             $order,
             'Khách hàng tự huỷ đơn.',
             guard: fn (Order $locked) => $locked->canCustomerCancel() ? null : 'Đơn hàng không thể huỷ ở trạng thái hiện tại.',
-        );
+        ));
 
         if (! $result['success']) {
             return back()->with('error', $result['message']);

@@ -6,6 +6,8 @@ use App\Models\Post;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Voucher;
+use App\Notifications\OrderStatusChanged;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Collection;
 
 /**
@@ -90,10 +92,45 @@ class NotificationFeed
     }
 
     /**
+     * Thông báo CÁ NHÂN về đơn hàng của user (bảng `notifications`, do
+     * App\Notifications\OrderStatusChanged ghi vào). Khác hẳn recentItems()
+     * ở trên: recentItems là tin chung cho mọi người (bài viết, voucher, sản
+     * phẩm mới), còn đây là "đơn #40 của bạn đang được giao".
+     *
+     * @return Collection<int, DatabaseNotification>
+     */
+    public static function orderNotifications(?User $user, int $limit = 5): Collection
+    {
+        if ($user === null) {
+            return collect();
+        }
+
+        return $user->notifications()
+            ->where('type', OrderStatusChanged::class)
+            ->latest()
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Số thông báo đơn hàng chưa đọc (read_at IS NULL) — phần "cá nhân" của
+     * badge chuông.
+     */
+    public static function unreadOrderCount(?User $user): int
+    {
+        if ($user === null) {
+            return 0;
+        }
+
+        return $user->unreadNotifications()->count();
+    }
+
+    /**
      * Đếm số thông báo mới kể từ lần cuối user mở chuông thông báo. Nếu
      * chưa từng xem (notifications_last_seen_at = null), tính từ thời điểm
      * đăng ký tài khoản (created_at) — tránh badge hiển thị số khổng lồ vô
-     * nghĩa với tài khoản cũ.
+     * nghĩa với tài khoản cũ. Cộng thêm số thông báo đơn hàng chưa đọc để
+     * badge là TỔNG của cả 2 tab trong dropdown chuông.
      */
     public static function unreadCount(?User $user): int
     {
@@ -103,8 +140,11 @@ class NotificationFeed
 
         $baseline = $user->notifications_last_seen_at ?? $user->created_at;
 
-        return self::recentItems(50)
+        $promo = self::recentItems(50)
             ->filter(fn (array $item) => $item['created_at'] !== null && $item['created_at']->gt($baseline))
             ->count();
+
+        // Badge chuông = thông báo đơn hàng chưa đọc + tin khuyến mãi mới.
+        return self::unreadOrderCount($user) + $promo;
     }
 }

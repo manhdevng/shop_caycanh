@@ -148,6 +148,15 @@
             <div style="font-size:40px;margin-bottom:16px">🌿</div>
             <p style="font-size:15px;color:#6B6B66;margin:0 0 24px">Giỏ hàng của bạn đang trống.</p>
             <a href="{{ route('shop.index') }}" style="display:inline-block;padding:14px 28px;border-radius:999px;background:#5C2323;color:#FFFFFF;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase">Tiếp tục mua sắm</a>
+
+            {{-- L14: giỏ trống ngay sau khi đặt hàng xong -> chỉ đường tới đơn
+                 vừa đặt, thay vì để khách tự đi tìm "Đơn mua" trong menu. --}}
+            @if(($pendingOrderCount ?? 0) > 0)
+                <p style="margin:20px 0 0;font-size:13px;color:#6B6B66">
+                    Bạn đang có {{ $pendingOrderCount }} đơn hàng đang xử lý.
+                    <a href="{{ route('orders.history') }}" style="color:#4A6B1F;font-weight:700;text-decoration:underline">Theo dõi đơn hàng</a>
+                </p>
+            @endif
         </div>
     @endif
 </section>

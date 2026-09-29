@@ -33,6 +33,18 @@ return [
 
     'email' => 'hotro@caycanhshop.vn',
 
+    /*
+    |--------------------------------------------------------------------------
+    | Tự động hoàn thành đơn đã giao
+    |--------------------------------------------------------------------------
+    |
+    | Đơn ở trạng thái "delivered" mà khách không bấm "Đã nhận được hàng" sẽ
+    | được lệnh `orders:auto-complete` tự chốt sau số ngày này (giống Shopee).
+    | Xem app/Console/Commands/AutoCompleteOrders.php.
+    |
+    */
+    'auto_complete_days' => (int) env('ORDER_AUTO_COMPLETE_DAYS', 3),
+
     'hours' => null,
     'facebook' => null,
     'instagram' => null,

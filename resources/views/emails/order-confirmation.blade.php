@@ -10,7 +10,7 @@
             <td align="center">
                 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:8px; overflow:hidden; border:1px solid #e0e0e0;">
                     <tr>
-                        <td style="background-color:#2f7d32; padding:20px 32px;">
+                        <td style="background-color:#4A6B1F; padding:20px 32px;">
                             <h1 style="margin:0; font-size:20px; color:#ffffff;">Cây Cảnh Shop</h1>
                         </td>
                     </tr>
@@ -39,11 +39,7 @@
                                 <tr>
                                     <td style="padding:4px 0; color:#666666;">Phương thức thanh toán:</td>
                                     <td style="padding:4px 0; text-align:right;">
-                                        @if(optional($order->latestPaymentTransaction)->gateway === 'momo')
-                                            Ví MoMo
-                                        @else
-                                            Thanh toán khi nhận hàng (COD)
-                                        @endif
+                                        {{ $order->payment_method_label }}
                                     </td>
                                 </tr>
                             </table>
@@ -77,15 +73,17 @@
                             </table>
 
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px; margin-bottom:24px;">
+                                <tr><td style="padding:4px 0;color:#666666">Tạm tính:</td><td style="padding:4px 0;text-align:right">{{ number_format($order->subtotal(), 0, ',', '.') }}đ</td></tr>
+                                <tr><td style="padding:4px 0;color:#666666">Phí vận chuyển:</td><td style="padding:4px 0;text-align:right">{{ number_format($order->ghn_total_fee, 0, ',', '.') }}đ</td></tr>
                                 @if($order->discount_amount > 0)
                                     <tr>
-                                        <td style="padding:4px 0; color:#666666;">Giảm giá:</td>
+                                        <td style="padding:4px 0; color:#666666;">Giảm giá @if($order->voucher)({{ $order->voucher->code }})@endif:</td>
                                         <td style="padding:4px 0; text-align:right; color:#c0392b;">-{{ number_format($order->discount_amount, 0, ',', '.') }}đ</td>
                                     </tr>
                                 @endif
                                 <tr>
                                     <td style="padding:8px 0; font-size:16px; font-weight:bold;">Tổng cộng:</td>
-                                    <td style="padding:8px 0; text-align:right; font-size:16px; font-weight:bold; color:#2f7d32;">{{ number_format($order->total_price, 0, ',', '.') }}đ</td>
+                                    <td style="padding:8px 0; text-align:right; font-size:16px; font-weight:bold; color:#4A6B1F;">{{ number_format($order->total_price, 0, ',', '.') }}đ</td>
                                 </tr>
                             </table>
 
@@ -96,12 +94,7 @@
                                 {{ $order->address }}
                             </p>
 
-                            <p style="font-size:14px; line-height:1.6; margin:0 0 8px;">
-                                Bạn có thể xem chi tiết đơn hàng tại đường dẫn dưới đây (yêu cầu đăng nhập tài khoản của bạn):
-                            </p>
-                            <p style="font-size:14px; margin:0 0 24px; word-break:break-all;">
-                                <a href="{{ route('orders.show', $order) }}" style="color:#2f7d32;">{{ route('orders.show', $order) }}</a>
-                            </p>
+                            <p style="text-align:center;margin:0 0 24px"><a href="{{ route('orders.show', $order) }}" style="display:inline-block;padding:12px 24px;border-radius:999px;background:#5C2323;color:#FFFFFF;text-decoration:none;font-size:13px;font-weight:bold">Xem đơn hàng</a></p>
 
                             <p style="font-size:13px; color:#888888; margin:0;">
                                 Cảm ơn bạn đã tin tưởng và ủng hộ Cây Cảnh Shop. Nếu có thắc mắc, vui lòng liên hệ với chúng tôi.

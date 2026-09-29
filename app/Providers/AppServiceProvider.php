@@ -43,6 +43,13 @@ class AppServiceProvider extends ServiceProvider
             // hiển thị dropdown; unreadNotificationCount là số badge.
             $view->with('headerNotifications', NotificationFeed::recentItems(8));
             $view->with('unreadNotificationCount', auth()->check() ? NotificationFeed::unreadCount(auth()->user()) : 0);
+
+            // Tab "Đơn hàng" của chuông: thông báo CÁ NHÂN về đơn của user
+            // (bảng notifications). $unreadOrderCount quyết định tab nào mở
+            // mặc định khi bấm chuông.
+            $user = auth()->user();
+            $view->with('orderNotifications', NotificationFeed::orderNotifications($user, 5));
+            $view->with('unreadOrderCount', NotificationFeed::unreadOrderCount($user));
         });
     }
 }

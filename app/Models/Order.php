@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Observers\OrderObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[ObservedBy([OrderObserver::class])]
 class Order extends Model
 {
     use HasFactory;
@@ -31,6 +36,11 @@ class Order extends Model
         'transfer_ref',
         'transfer_confirmed_at',
         'transfer_confirmed_by',
+        // Mốc theo dõi đơn (kế hoạch "luồng sau thanh toán"):
+        'delivered_at',
+        'completed_at',
+        'ghn_expected_delivery_at',
+        'ghn_last_synced_at',
     ];
 
     /**
@@ -43,6 +53,10 @@ class Order extends Model
         return [
             'points_awarded' => 'boolean',
             'transfer_confirmed_at' => 'datetime',
+            'delivered_at' => 'datetime',
+            'completed_at' => 'datetime',
+            'ghn_expected_delivery_at' => 'datetime',
+            'ghn_last_synced_at' => 'datetime',
         ];
     }
 
@@ -86,7 +100,7 @@ class Order extends Model
         'pending' => 'Chờ tạo vận đơn', 'not_shipped' => 'Chưa giao hàng', 'processing' => 'Đang tạo vận đơn',
         'ready_to_pick' => 'Chờ lấy hàng', 'picking' => 'Đang lấy hàng', 'picked' => 'Đã lấy hàng',
         'storing' => 'Đang lưu kho', 'transporting' => 'Đang trung chuyển', 'sorting' => 'Đang phân loại',
-        'delivering' => 'Đang giao hàng', 'delivered' => 'Giao hàng thành công',
+        'delivering' => 'Đang giao hàng', 'delivery_fail' => 'Giao không thành công', 'delivered' => 'Giao hàng thành công',
         'return' => 'Chờ hoàn hàng', 'returning' => 'Đang hoàn hàng', 'returned' => 'Đã hoàn hàng',
         'return_transporting' => 'Đang chuyển hoàn', 'return_sorting' => 'Đang phân loại hoàn', 'cancelled' => 'Đã hủy',
     ];
@@ -103,7 +117,7 @@ class Order extends Model
     const SHIPPING_STAGE_GROUPS = [
         'pending' => 1, 'not_shipped' => 1, 'processing' => 1,
         'ready_to_pick' => 2, 'picking' => 2, 'picked' => 2,
-        'storing' => 3, 'transporting' => 3, 'sorting' => 3, 'delivering' => 3,
+        'storing' => 3, 'transporting' => 3, 'sorting' => 3, 'delivering' => 3, 'delivery_fail' => 3,
         'delivered' => 4,
     ];
 
@@ -119,6 +133,51 @@ class Order extends Model
      * Các shipping_status thuộc luồng hoàn hàng của GHN.
      */
     const SHIPPING_RETURN_STATUSES = ['return', 'returning', 'returned', 'return_transporting', 'return_sorting'];
+
+    /**
+     * Các tab của trang "Đơn mua" (orders.history) — key dùng trong ?tab=,
+     * giá trị là nhãn hiển thị. Thứ tự ở đây chính là thứ tự hiển thị.
+     * Xem scopeForTab() cho điều kiện lọc tương ứng.
+     */
+    const TABS = [
+        'tat-ca' => 'Tất cả',
+        'cho-thanh-toan' => 'Chờ thanh toán',
+        'cho-lay-hang' => 'Chờ lấy hàng',
+        'dang-giao' => 'Đang giao',
+        'da-giao' => 'Đã giao',
+        'da-huy' => 'Đã huỷ',
+        'tra-hang' => 'Trả hàng',
+    ];
+
+    /**
+     * shipping_status thuộc giai đoạn "chờ lấy hàng" dưới mắt khách hàng
+     * (đã trả tiền/COD nhưng GHN chưa lấy hàng đi).
+     */
+    const STAGE_TO_SHIP_SHIPPING_STATUSES = ['pending', 'not_shipped', 'processing', 'ready_to_pick', 'picking'];
+
+    /**
+     * shipping_status thuộc giai đoạn "đang giao" dưới mắt khách hàng
+     * (hàng đã rời kho shop, đang trên đường tới khách).
+     */
+    const STAGE_SHIPPING_SHIPPING_STATUSES = ['picked', 'storing', 'transporting', 'sorting', 'delivering', 'delivery_fail'];
+
+    /**
+     * orders.status khách đang chờ thanh toán (chưa trả tiền, chưa COD).
+     */
+    const STAGE_AWAITING_PAYMENT_STATUSES = ['pending', 'awaiting_transfer'];
+
+    /**
+     * Nhãn tiếng Việt cho từng giai đoạn của customerStage().
+     */
+    const CUSTOMER_STAGE_LABELS = [
+        'awaiting_payment' => 'Chờ thanh toán',
+        'to_ship' => 'Chờ lấy hàng',
+        'shipping' => 'Đang giao',
+        'delivered' => 'Đã giao',
+        'completed' => 'Hoàn thành',
+        'cancelled' => 'Đã huỷ',
+        'returning' => 'Trả hàng',
+    ];
 
     /**
      * Luật chuyển shipping_status khi ADMIN đổi tay (AdminOrderController::updateStatus()).
@@ -317,6 +376,149 @@ class Order extends Model
     public function items()
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    /**
+     * Nhật ký đổi trạng thái của đơn, cũ → mới theo thời điểm THẬT của sự
+     * kiện (occurred_at), phá hoà bằng id để thứ tự luôn ổn định.
+     */
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(OrderStatusHistory::class)
+            ->orderBy('occurred_at')
+            ->orderBy('id');
+    }
+
+    /**
+     * Giai đoạn đơn hàng dưới mắt KHÁCH (khác với status/shipping_status thô
+     * trong DB): awaiting_payment|to_ship|shipping|delivered|completed|
+     * cancelled|returning. Xem bảng mục 1 của kế hoạch.
+     *
+     * Thứ tự kiểm tra quan trọng: huỷ và hoàn hàng là "thoát luồng" nên xét
+     * trước; hoàn thành (khách đã xác nhận nhận hàng) đè lên "đã giao".
+     */
+    public function customerStage(): string
+    {
+        if ($this->status === 'cancelled' || $this->shipping_status === 'cancelled') {
+            return 'cancelled';
+        }
+
+        if (in_array($this->shipping_status, self::SHIPPING_RETURN_STATUSES, true)) {
+            return 'returning';
+        }
+
+        if ($this->completed_at !== null) {
+            return 'completed';
+        }
+
+        if ($this->shipping_status === 'delivered') {
+            return 'delivered';
+        }
+
+        if (in_array($this->status, self::STAGE_AWAITING_PAYMENT_STATUSES, true)) {
+            return 'awaiting_payment';
+        }
+
+        if (in_array($this->shipping_status, self::STAGE_SHIPPING_SHIPPING_STATUSES, true)) {
+            return 'shipping';
+        }
+
+        return 'to_ship';
+    }
+
+    /**
+     * Nhãn tiếng Việt của customerStage() — dùng thẳng trong view
+     * ($order->customer_stage_label).
+     */
+    public function getCustomerStageLabelAttribute(): string
+    {
+        $stage = $this->customerStage();
+
+        return self::CUSTOMER_STAGE_LABELS[$stage] ?? $stage;
+    }
+
+    /**
+     * Lọc đơn theo tab của trang "Đơn mua". Tab lạ (hoặc 'tat-ca') không lọc
+     * gì — validate ở controller, ở đây chỉ im lặng bỏ qua để không vỡ trang.
+     *
+     * Điều kiện phải khớp với customerStage() ở trên, nhưng viết bằng SQL để
+     * còn phân trang và đếm được.
+     */
+    public function scopeForTab(Builder $query, string $tab): Builder
+    {
+        return match ($tab) {
+            'cho-thanh-toan' => $query->whereIn('status', self::STAGE_AWAITING_PAYMENT_STATUSES),
+
+            'cho-lay-hang' => $query
+                ->whereIn('status', self::PAID_OR_COD_STATUSES)
+                ->whereIn('shipping_status', self::STAGE_TO_SHIP_SHIPPING_STATUSES)
+                ->whereNull('completed_at'),
+
+            'dang-giao' => $query
+                ->where('status', '!=', 'cancelled')
+                ->whereIn('shipping_status', self::STAGE_SHIPPING_SHIPPING_STATUSES)
+                ->whereNull('completed_at'),
+
+            // "Đã giao" gộp luôn đơn đã hoàn thành: khách vẫn coi đó là đơn
+            // đã nhận được hàng, không cần tách thêm một tab nữa.
+            'da-giao' => $query
+                ->where('status', '!=', 'cancelled')
+                ->where('shipping_status', 'delivered'),
+
+            'da-huy' => $query->where(function (Builder $q) {
+                $q->where('status', 'cancelled')->orWhere('shipping_status', 'cancelled');
+            }),
+
+            'tra-hang' => $query->whereIn('shipping_status', self::SHIPPING_RETURN_STATUSES),
+
+            default => $query,
+        };
+    }
+
+    /**
+     * Khách được bấm "Đã nhận được hàng" — GHN đã báo giao thành công nhưng
+     * khách chưa xác nhận.
+     */
+    public function canConfirmReceived(): bool
+    {
+        return $this->shipping_status === 'delivered' && $this->completed_at === null;
+    }
+
+    /**
+     * Khách được đánh giá sản phẩm trong đơn — đã trả tiền (hoặc COD đã thu)
+     * VÀ hàng đã giao tới nơi. Sửa lỗi L12: trước đây chỉ chấp nhận
+     * paid/cod_ordered nên đơn COD (đã đổi sang cod_paid sau khi giao) bị
+     * chặn đánh giá, còn đơn chưa giao lại đánh giá được.
+     */
+    public function canReview(): bool
+    {
+        return in_array($this->status, self::PAID_OR_COD_STATUSES, true)
+            && $this->shipping_status === 'delivered';
+    }
+
+    /**
+     * Tiền hàng trước phí ship và giảm giá (tổng price * quantity của items).
+     * Dùng quan hệ đã eager-load nếu có để không sinh thêm truy vấn.
+     */
+    public function subtotal(): int
+    {
+        if ($this->relationLoaded('items')) {
+            return (int) $this->items->sum(fn (OrderItem $item) => $item->price * $item->quantity);
+        }
+
+        return (int) $this->items()->selectRaw('COALESCE(SUM(price * quantity), 0) AS s')->value('s');
+    }
+
+    /**
+     * Link tra cứu vận đơn trên trang của GHN; null khi đơn chưa có mã.
+     */
+    public function ghnTrackingUrl(): ?string
+    {
+        if (blank($this->ghn_order_code)) {
+            return null;
+        }
+
+        return 'https://donhang.ghn.vn/?order_code='.urlencode($this->ghn_order_code);
     }
 
     // Một đơn hàng có thể có nhiều lần thử thanh toán (1 - N)

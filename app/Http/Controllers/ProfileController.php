@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -22,7 +23,39 @@ class ProfileController extends Controller
     {
         return view('profile.show', [
             'user' => $request->user(),
+            'orderStageCounts' => $this->orderStageCounts($request->user()->id),
         ]);
+    }
+
+    /**
+     * Dải "Đơn mua" trên trang hồ sơ: 4 con số dẫn sang các tab của
+     * orders.history. 3 khoá đầu trùng key tab của Order::TABS nên view link
+     * thẳng được; 'cho-danh-gia' là con số riêng (không có tab tương ứng,
+     * view trỏ về tab 'da-giao').
+     *
+     * @return array<string, int>
+     */
+    private function orderStageCounts(int $userId): array
+    {
+        $base = fn () => Order::where('user_id', $userId);
+
+        return [
+            'cho-thanh-toan' => $base()->forTab('cho-thanh-toan')->count(),
+            'cho-lay-hang' => $base()->forTab('cho-lay-hang')->count(),
+            'dang-giao' => $base()->forTab('dang-giao')->count(),
+            // Chờ đánh giá: đơn đã nhận hàng mà khách chưa viết đánh giá nào
+            // cho đơn đó (reviews.order_id do ReviewController ghi lại).
+            'cho-danh-gia' => $base()
+                ->whereIn('status', Order::PAID_OR_COD_STATUSES)
+                ->where('shipping_status', 'delivered')
+                ->whereNotExists(function ($query) use ($userId) {
+                    $query->selectRaw(1)
+                        ->from('reviews')
+                        ->whereColumn('reviews.order_id', 'orders.id')
+                        ->where('reviews.user_id', $userId);
+                })
+                ->count(),
+        ];
     }
 
     /** Cập nhật thông tin cá nhân (tên, điện thoại, địa chỉ, ảnh đại diện). */

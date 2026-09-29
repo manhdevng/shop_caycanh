@@ -21,11 +21,18 @@ class ReviewController extends Controller
             'comment.max' => 'Nhận xét không được vượt quá 1000 ký tự.',
         ]);
 
-        // Chỉ cho phép đánh giá nếu người dùng đã mua sản phẩm này thành công
-        // (đơn hàng của chính họ, trạng thái đã thanh toán hoặc đã đặt COD).
+        // Chỉ cho phép đánh giá khi khách đã mua VÀ đã NHẬN được sản phẩm:
+        // đơn của chính họ, đã trả tiền/COD (PAID_OR_COD_STATUSES) và GHN đã
+        // báo giao thành công.
+        //
+        // Sửa lỗi L12: điều kiện cũ là whereIn('status', ['paid','cod_ordered'])
+        // nên đơn COD bị CodSettlementService đổi sang 'cod_paid' sau khi giao
+        // lại KHÔNG đánh giá được (đúng lúc đáng ra được đánh giá nhất), trong
+        // khi đơn vừa đặt chưa nhận hàng thì lại đánh giá được.
         $purchasedOrder = Order::query()
             ->where('user_id', $request->user()->id)
-            ->whereIn('status', ['paid', 'cod_ordered'])
+            ->whereIn('status', Order::PAID_OR_COD_STATUSES)
+            ->where('shipping_status', 'delivered')
             ->whereHas('items', function ($query) use ($product) {
                 $query->where('product_id', $product->id);
             })

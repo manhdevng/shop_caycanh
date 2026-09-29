@@ -8,6 +8,7 @@ use App\Models\PaymentTransaction;
 use App\Services\GHNOrderService;
 use App\Services\MomoService;
 use App\Services\OrderCancellationService;
+use App\Support\OrderChangeContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -140,7 +141,12 @@ class ExpireUnpaidOrders extends Command
     // nhất quán với các luồng huỷ khác).
     private function cancelExpired(Order $order, OrderCancellationService $cancellation, GHNOrderService $ghnOrderService, string $reason, \Closure $guard): bool
     {
-        $result = $cancellation->cancel($order, $reason, guard: $guard);
+        // Nguồn 'scheduler' để lịch sử đơn phân biệt rõ "hệ thống tự huỷ vì
+        // quá hạn" với "khách/admin bấm huỷ".
+        $result = OrderChangeContext::run([
+            'source' => 'scheduler',
+            'note' => $reason,
+        ], fn () => $cancellation->cancel($order, $reason, guard: $guard));
 
         if (! $result['success']) {
             $this->warn("  -> Bỏ qua: {$result['message']}");
