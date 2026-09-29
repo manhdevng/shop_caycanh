@@ -122,13 +122,32 @@ class MomoController extends Controller
                 $this->markFailed($request->all(), $momo);
             }
 
-            return redirect()->route('orders.history')->with('error', 'Giao dịch MoMo thất bại hoặc đã bị huỷ.');
+            // L13: thất bại thì đưa khách về CHI TIẾT đơn vừa đặt (nơi có nút
+            // "Thanh toán lại"), không phải danh sách đơn — khách vừa mất tiền
+            // hụt không nên phải tự đi tìm lại đơn của mình.
+            // Chỉ tin extraData khi CHỮ KÝ hợp lệ; chữ ký sai nghĩa là payload
+            // có thể do người khác dựng lên, khi đó về danh sách là an toàn
+            // (route orders.show vẫn chặn 403 nếu không phải chủ đơn, nhưng
+            // không việc gì phải chuyển hướng theo dữ liệu không xác thực).
+            $failedOrderId = $momo->isValidResponse($request->all())
+                ? $momo->orderId($request->all())
+                : null;
+
+            return $failedOrderId
+                ? redirect()->route('orders.show', $failedOrderId)->with('error', 'Giao dịch MoMo thất bại hoặc đã bị huỷ. Bạn có thể bấm "Thanh toán lại" ngay tại đây.')
+                : redirect()->route('orders.history')->with('error', 'Giao dịch MoMo thất bại hoặc đã bị huỷ.');
         }
 
         $result = $this->completePayment($request->all(), $ghnOrders, $momo);
 
         if ($result === 'invalid') {
-            return redirect()->route('orders.history')->with('error', 'Dữ liệu thanh toán MoMo không hợp lệ hoặc số tiền không khớp.');
+            // Tới được đây nghĩa là chữ ký ĐÃ hợp lệ (isValidSuccessfulResponse
+            // ở trên), nên extraData tin được -> vẫn đưa khách về đúng đơn.
+            $invalidOrderId = $momo->orderId($request->all());
+
+            return $invalidOrderId
+                ? redirect()->route('orders.show', $invalidOrderId)->with('error', 'Dữ liệu thanh toán MoMo không hợp lệ hoặc số tiền không khớp.')
+                : redirect()->route('orders.history')->with('error', 'Dữ liệu thanh toán MoMo không hợp lệ hoặc số tiền không khớp.');
         }
 
         $message = in_array($result, ['created', 'already_created'], true)
@@ -249,9 +268,11 @@ class MomoController extends Controller
     {
         $result = $momo->createPayment($order, $transaction, $requestType);
 
+        // Không gọi được MoMo -> quay về chính đơn đó để khách bấm thử lại,
+        // thay vì đẩy ra danh sách (L13).
         return isset($result['payUrl'])
             ? redirect()->away($result['payUrl'])
-            : redirect()->route('orders.history')->with('error', 'Không thể kết nối tới MoMo. Vui lòng thử lại.');
+            : redirect()->route('orders.show', $order)->with('error', 'Không thể kết nối tới MoMo. Vui lòng thử lại.');
     }
 
     // Xác nhận thanh toán (đối chiếu giao dịch + số tiền) và tạo vận đơn GHN.
