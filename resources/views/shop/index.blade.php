@@ -10,7 +10,7 @@
         ->flatMap(fn ($g) => $g->children)
         ->values();
     // Nhóm gốc Cây cảnh / Hoa ("mục to", vd: Cây cảnh trong nhà, Hoa sự kiện)
-    // — hiện thành thẻ trên carousel danh mục trang chủ. Hoa giờ đi theo NHÓM
+    // — hiện thành thẻ trong lưới danh mục trang chủ. Hoa giờ đi theo NHÓM
     // giống cây, không còn lấy lẻ từng danh mục con. Nhóm chưa có danh mục con
     // thì ẩn, vì bấm vào sẽ ra trang trống.
     $plantGroups = $categoryGroups->where('scope', 'plant')
@@ -65,23 +65,13 @@
 @endpush
 @include('shop.partials.home.home-motion')
 
-{{-- Hành trình mua (kế hoạch ke-hoach-ui-ux-ban-cay.md, mục 3):
-       nhận ra bán cây -> chọn nhanh theo không gian -> thấy hàng thật + giá
-       -> cảnh trong nhà + cây mua được -> cảnh sân vườn + cây mua được
-       -> hoa -> quà tặng -> khám phá thêm -> cam kết -> lời mời cuối.
-
-     Thay đổi so với bản cũ: lưới hàng đầu tiên trước đây nằm SAU cảnh ghim
-     "vườn trong nhà", tức khách phải cuộn qua ~5 màn hình mới thấy cây có giá.
-     Nay hai khối mua (chọn nhanh + lưới nổi bật) được đưa lên ngay dưới hero.
-
-     Carousel vòng cung (categories) chuyển xuống làm phần KHÁM PHÁ PHỤ sau
-     các hàng hàng hoá: nó cao gần một màn hình và tự trôi, để ngay đầu trang
-     sẽ đẩy hàng thật xuống quá sâu. grid-plants bị bỏ khỏi luồng vì lưới "cây
-     nổi bật" mới đã thay đúng vai trò đó (file vẫn còn trên đĩa, không dùng). --}}
+{{-- Hành trình trang chủ: hero -> danh mục -> sản phẩm nổi bật
+     -> các khu cây, hoa -> quà tặng -> cam kết -> lời mời cuối.
+     Danh mục đứng thứ hai để khách chọn nhóm cây hoặc hoa ngay sau khi vào trang. --}}
 <div class="sc-home">
 @include('shop.partials.home.hero')
 
-@include('shop.partials.home.quick-picks')
+@include('shop.partials.home.categories')
 
 @include('shop.partials.home.grid-featured')
 
@@ -96,8 +86,6 @@
 @include('shop.partials.home.grid-flowers')
 
 @include('shop.partials.home.gift')
-
-@include('shop.partials.home.categories')
 
 @include('shop.partials.home.promises')
 

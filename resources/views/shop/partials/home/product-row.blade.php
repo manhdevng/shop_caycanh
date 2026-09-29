@@ -64,12 +64,14 @@
 
 @once
 <style>
-.sc-home .sc-row__inner { max-width: 1400px; margin: 0 auto; padding: clamp(36px, 5vw, 64px) var(--sc-gutter, 24px); }
+.sc-home .sc-row__inner { max-width: 1400px; margin: 0 auto; padding: calc(var(--header-h, 76px) + 24px) var(--sc-gutter, 24px) clamp(36px, 5vw, 64px); }
 .sc-home .sc-row__head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 26px; }
 .sc-home .sc-row__kicker { margin: 0 0 10px; font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #5C2323; }
 .sc-home .sc-row__title { margin: 0; font-family: 'Anton', sans-serif; font-size: clamp(22px, 3vw, 30px); letter-spacing: .01em; text-transform: uppercase; color: #1C1C1A; }
 .sc-home .sc-row__note { margin: 8px 0 0; font-size: 14px; color: #6B6B66; }
 .sc-home .sc-row__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px 24px; }
+.sc-home .sc-row__grid .sc-card { display: flex; flex-direction: column; min-width: 0; }
+.sc-home .sc-row__grid .sc-card > :last-child { margin-top: auto; }
 @media (max-width: 860px) {
     .sc-home .sc-row__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 16px; }
 }

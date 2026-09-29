@@ -15,7 +15,7 @@
      Cam kết         Thân dây mọc dài, lá thật ở ngọn.
      Quà tặng        GHIM. Ảnh cảnh 2 mọc từ đáy lên phủ cảnh 1, chữ đổi lượt.
 
-   Hai cảnh ghim giữa trang nối nhau liền mạch như carousel danh mục: ảnh trước
+   Hai cảnh ghim giữa trang nối nhau liền mạch: ảnh trước
    rời cảnh, ảnh sau mở ngang nhưng luôn đứng thẳng.
 
    Ba động từ cho mọi chuyển động: Mọc (vào từ gốc lên), Lay (quán tính, lắc
@@ -42,9 +42,8 @@
     scrub: 0.78                    // phản hồi gần tay cuộn, vẫn đủ độ mượt
   };
 
-  // Vị trí thẻ trên VÒNG CUNG — dùng lại đúng công thức của carousel danh mục
-  // (category-arc.blade.php, "Arc Flow Carousel"): các thẻ nằm trên một cung
-  // tròn bán kính rất lớn, tâm nằm sâu phía dưới màn hình. Trôi dọc cung đó thì
+  // Vị trí thẻ trên VÒNG CUNG: các thẻ nằm trên một cung tròn bán kính rất
+  // lớn, tâm nằm sâu phía dưới màn hình. Trôi dọc cung đó thì
   // thẻ vừa xoay nhẹ, vừa dạt ngang, vừa hụp xuống một chút — mắt đọc ra ngay
   // là "thẻ kế tiếp của cùng một băng chuyền", khác hẳn kiểu khung thu/nở tại
   // chỗ như cánh cửa.
@@ -111,7 +110,6 @@
       // được đo SAU pin spacer của các khối ghim phía trên nó.
       var scenes = [
         ['#heroSection', heroScene],
-        ['.sc-picks', picksScene],
         ['#catArcSection', categoriesScene],
         ['.sc-gate--garden', gardenScene],
         ['.sc-gate--season', seasonScene],
@@ -121,6 +119,7 @@
         for (var i = 0; i < scenes.length; i++) {
           if (block.matches(scenes[i][0])) scenes[i][1](block, env);
         }
+        if (block.tagName === 'SECTION' && !block.matches('#heroSection, .sc-gate, #giftSection')) revealSection(block);
         if (block.querySelector('[data-grow]')) growGrid(block);
         if (block.querySelector('[data-vine]')) vines(block, env.lay);
       });
@@ -141,11 +140,8 @@
 
   function extend(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
 
-  /* ------------------------------------------------ Header mờ trong cảnh --
-     Các cảnh tối chiếm trọn màn hình (danh mục, hai cảnh ghim) nằm ngay dưới
-     header fixed: thanh nền TRẮNG của header cắt ngang đúng phần đang chuyển
-     động. Khi một cảnh như vậy đang ở dưới header thì bỏ nền + viền, chỉ để
-     lại chữ trắng — giao diện chính là cảnh, không phải thanh điều hướng.
+  /* ------------------------------------------- Header trên cảnh nền tối --
+     Header giữ nền trong suốt trên danh mục và các cảnh ghim nền tối.
      Dùng bộ đếm chứ không phải cờ bật/tắt: hai cảnh liền nhau có thể cùng
      active trong một nhịp cuộn, nếu dùng cờ thì cảnh ra sẽ tắt nhầm cảnh vào.
      CHỈ gắn cho cảnh nền TỐI — cảnh quà tặng nền kem (#F7F4EF) mà để chữ
@@ -245,76 +241,56 @@
      danh mục -> đáy hero và đỉnh danh mục cùng một màu, không có nhát cắt. */
   function heroScene(hero) {
     var copy = hero.querySelector('.hero-copy');
-    var card = hero.querySelector('[data-hero-card]');
     var veil = hero.querySelector('.hero-veil');
     var media = hero.querySelectorAll('video, canvas');
 
     // Parallax rất nhẹ, KHÔNG khóa cuộn. Chữ chỉ bắt đầu mờ ở nửa sau quãng
     // hero (opacity giữ 1 tới 0.45) thay vì mờ dần ngay từ pixel đầu tiên —
-    // hai nút mua phải còn đọc và bấm được trong gần hết màn hình đầu.
-    // Thẻ cây chỉ trôi chậm hơn nền một chút: không xoay, không đổi tỉ lệ,
-    // không mờ, vì nó là ảnh hàng bán chứ không phải lớp trang trí.
+    // nút khám phá phải còn đọc và bấm được trong gần hết màn hình đầu.
     gsap.timeline({
       defaults: { ease: 'none' },
       scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: M.scrub }
     })
       .to(copy, { yPercent: -14 }, 0)
       .fromTo(copy, { autoAlpha: 1 }, { autoAlpha: 0, ease: 'power1.in' }, 0.45)
-      .to(card, { yPercent: -6 }, 0)
       .to(media, { scale: 1.08 }, 0)
       .to(veil, { opacity: 1 }, 0.35);
   }
 
-  /* --------------------------------------------------- Lối chọn nhanh --
-     Bốn thẻ mở lên một lượt khi vào khung, lệch nhau một nhịp ngắn. Chạy MỘT
-     lần (once) và không scrub: dải này nằm ngay trong màn hình thứ hai, nếu
-     buộc nó vào tiến độ cuộn thì khách cuộn ngược lên sẽ thấy nó biến mất —
-     một dải điều hướng thì không được phép nhấp nháy như vậy. */
-  function picksScene(sec) {
-    var items = gsap.utils.toArray(sec.querySelectorAll('[data-picks] > li'));
-    if (!items.length) return;
+  // Mỗi phần chỉ hiện khi người xem cuộn tới. Nội dung vẫn hiện sẵn nếu JS
+  // không chạy hoặc người dùng bật giảm chuyển động.
+  function revealSection(section) {
+    if (section.getBoundingClientRect().top <= window.innerHeight * 0.78) return;
 
-    // Chỉ giấu những thẻ còn nằm dưới nếp gấp — thẻ đã trong màn hình đầu thì
-    // chẳng có gì để "mở ra".
-    var below = items.filter(function (el) {
-      return el.getBoundingClientRect().top > window.innerHeight * 0.94;
-    });
-    if (!below.length) return;
-
-    // Dùng opacity chứ KHÔNG dùng autoAlpha. autoAlpha kèm visibility:hidden,
-    // mà phần tử visibility:hidden bị Tab bỏ qua hoàn toàn: người đi bằng bàn
-    // phím sẽ nhảy thẳng từ nút "Xem tất cả" xuống lưới sản phẩm, và tới lúc
-    // cuộn làm dải hiện ra thì focus đã đi qua mất rồi — cả dải điều hướng
-    // thành không bao giờ với tới được. Với opacity, thẻ vẫn nằm trong thứ tự
-    // Tab; trình duyệt cuộn tới nó và reveal chạy như thường.
-    gsap.set(below, { opacity: 0, y: 16 });
-
-    function show(batch) {
-      gsap.to(batch, { opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: M.grow, clearProps: 'transform' });
+    var content = section.querySelector('.cat-arc-content, .sc-row__inner') || section.firstElementChild;
+    if (!content) return;
+    gsap.set(content, { opacity: 0, y: 24 });
+    var shown = false;
+    function show() {
+      if (shown) return;
+      shown = true;
+      gsap.to(content, { opacity: 1, y: 0, duration: 0.7, ease: M.grow, clearProps: 'opacity,transform' });
     }
 
-    ScrollTrigger.batch(below, {
-      start: 'top 94%',
-      once: true,
-      onEnter: show,
-      // Nhảy thẳng qua (anchor / phím End): vẫn phải hiện, không để lại ô trống.
-      onLeave: function (batch) { gsap.set(batch, { opacity: 1, y: 0, clearProps: 'transform' }); }
-    });
-
-    // Chốt chặn cuối: Tab vào một thẻ khi nó còn mờ -> hiện ngay cả dải, không
-    // để ai phải bấm một thứ mình không nhìn thấy.
-    sec.addEventListener('focusin', function () {
-      gsap.set(below, { opacity: 1, y: 0, clearProps: 'transform' });
-    }, { once: true });
+    ScrollTrigger.create({ trigger: section, start: 'top 78%', once: true, onEnter: show, onLeave: show });
+    section.addEventListener('focusin', show, { once: true });
   }
 
   /* ------------------------------------------------------------ Danh mục --
      Ảnh lá nền trôi ngược một chút so với trang -> có chiều sâu, và là lớp lá
-     đầu tiên của lối đi trước khi vào vườn. Carousel vòng cung tự chạy vòng
-     rAF riêng (category-arc.blade.php), không đụng tới. */
+     đầu tiên của lối đi trước khi vào vườn. Lưới danh mục đứng yên để người
+     xem chọn nhóm dễ dàng. */
   function categoriesScene(sec, env) {
-    // Nền gần như đen: header phải mờ suốt quãng khối này nằm dưới nó.
-    ScrollTrigger.create({ trigger: sec, start: 'top top', end: 'bottom top', onToggle: env.ghost.toggle });
+    // Giữ chữ trắng trên ảnh danh mục cho đến khi phần này rời khỏi header.
+    ScrollTrigger.create({
+      trigger: sec,
+      start: 'top top',
+      end: function () {
+        var header = document.getElementById('siteHeader');
+        return 'bottom ' + (header ? header.offsetHeight : 76) + 'px';
+      },
+      onToggle: env.ghost.toggle
+    });
 
     var bg = sec.querySelector('.cat-arc-bg');
     if (!bg) return;

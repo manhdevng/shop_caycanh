@@ -1,8 +1,7 @@
 {{--
-    Khối C — Lưới mua sắm ĐẦU TIÊN, ngay sau dải chọn nhanh.
+    Lưới mua sắm đầu tiên, ngay sau khối danh mục.
 
-    Đây là điểm mà khách phải thấy hàng thật + giá trong vòng ~1,5 màn hình
-    cuộn. $homeFeatured do ShopController dựng: có số liệu bán chạy thì dùng
+    $homeFeatured do ShopController dựng: có số liệu bán chạy thì dùng
     bán chạy, chưa có thì rơi về cây mới về — nhưng LUÔN là một lưới hàng mua
     được, không bao giờ rơi về banner như bản cũ (banner không mua được gì).
 
