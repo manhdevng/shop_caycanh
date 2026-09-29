@@ -6,6 +6,7 @@ use App\Http\Controllers\AdminChatController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminFaqController;
 use App\Http\Controllers\AdminOrderController;
+use App\Http\Controllers\AdminReviewController;
 use App\Http\Controllers\AdminPageController;
 use App\Http\Controllers\AdminPostController;
 use App\Http\Controllers\AdminReportController;
@@ -98,12 +99,37 @@ Route::get('/thong-bao', [NotificationController::class, 'index'])->name('notifi
 Route::get('/san-ma-giam-gia', [VoucherController::class, 'browse'])->name('vouchers.browse');
 Route::get('/hoi-dap', [FaqController::class, 'index'])->name('faq.index');
 
+// Danh sách đánh giá của 1 sản phẩm — trả về PARTIAL HTML, trang sản phẩm
+// nạp bằng AJAX để đổi bộ lọc / sang trang mà không tải lại cả trang. Công
+// khai: khách chưa đăng nhập vẫn đọc được đánh giá.
+// Cùng URI với reviews.store phía dưới nhưng khác method (GET vs POST) nên
+// không xung đột.
+Route::get('/san-pham/{product}/danh-gia', [ReviewController::class, 'index'])->name('reviews.index');
+
 // ----------------------------------------------------
 // Khu vực KHÁCH HÀNG (cần đăng nhập + đã xác thực email)
 // ----------------------------------------------------
 Route::middleware(['auth', 'verified'])->group(function () {
-    // Đánh giá sản phẩm: bắt buộc đăng nhập (giữ nguyên trong nhóm này)
+    // Đánh giá sản phẩm: bắt buộc đăng nhập (giữ nguyên trong nhóm này).
+    // Route cũ này giờ chỉ chuyển hướng sang trang đánh giá của đơn đủ điều
+    // kiện gần nhất — đánh giá làm theo TỪNG DÒNG HÀNG trong đơn.
     Route::post('/san-pham/{product}/danh-gia', [ReviewController::class, 'store'])->name('reviews.store');
+
+    // Đánh giá theo đơn hàng: liệt kê từng dòng hàng, gửi 1 lần cho cả đơn.
+    // storeForOrder có throttle vì mỗi lần gửi kèm tối đa 5 ảnh/dòng.
+    Route::get('/orders/{order}/danh-gia', [ReviewController::class, 'createForOrder'])->name('reviews.createForOrder');
+    Route::post('/orders/{order}/danh-gia', [ReviewController::class, 'storeForOrder'])
+        ->middleware('throttle:10,1')
+        ->name('reviews.storeForOrder');
+
+    // Bình chọn "Hữu ích" cho 1 đánh giá (toggle, trả JSON).
+    Route::post('/danh-gia/{review}/huu-ich', [ReviewController::class, 'toggleHelpful'])
+        ->middleware('throttle:30,1')
+        ->name('reviews.helpful');
+
+    // "Mua ngay" / "Mua với voucher" — đặt đúng số lượng vào giỏ rồi sang
+    // thẳng checkout CHỈ với sản phẩm này (?items[]=<cart_key>).
+    Route::post('/mua-ngay/{product}', [CartController::class, 'buyNow'])->name('shop.buyNow');
 
     // Hồ sơ cá nhân
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
@@ -217,6 +243,12 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'admin'])->group(functio
     // Đồng bộ bù trạng thái vận chuyển từ GHN (dùng khi webhook bị lỡ — máy
     // dev chạy 127.0.0.1 nên GHN không gọi tới được).
     Route::post('/orders/{order}/sync-ghn', [AdminOrderController::class, 'syncGhn'])->name('admin.orders.syncGhn');
+
+    // Kiểm duyệt đánh giá: ẩn/hiện và phản hồi (admin không xoá hay sửa nội
+    // dung của khách, chỉ ẩn khỏi trang sản phẩm).
+    Route::get('/reviews', [AdminReviewController::class, 'index'])->name('admin.reviews.index');
+    Route::patch('/reviews/{review}/an-hien', [AdminReviewController::class, 'toggle'])->name('admin.reviews.toggle');
+    Route::post('/reviews/{review}/phan-hoi', [AdminReviewController::class, 'reply'])->name('admin.reviews.reply');
 
     // Đối soát chuyển khoản ngân hàng (C4.1). Chỉ áp dụng cho đơn đang ở
     // trạng thái 'awaiting_transfer'; hai method này ĐÃ tồn tại thật trong

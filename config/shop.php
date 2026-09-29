@@ -45,6 +45,22 @@ return [
     */
     'auto_complete_days' => (int) env('ORDER_AUTO_COMPLETE_DAYS', 3),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Đánh giá sản phẩm
+    |--------------------------------------------------------------------------
+    |
+    | review_window_days : số ngày kể từ khi giao thành công mà khách còn được
+    |                      viết / sửa đánh giá (Shopee dùng 30 ngày).
+    | review_reward_points: điểm thưởng cho đánh giá "chất lượng" (có ảnh VÀ
+    |                      nhận xét >= 50 ký tự), chỉ cộng 1 lần mỗi đánh giá.
+    | review_max_images  : số ảnh tối đa mỗi đánh giá.
+    |
+    */
+    'review_window_days' => (int) env('REVIEW_WINDOW_DAYS', 30),
+    'review_reward_points' => (int) env('REVIEW_REWARD_POINTS', 20),
+    'review_max_images' => (int) env('REVIEW_MAX_IMAGES', 5),
+
     'hours' => null,
     'facebook' => null,
     'instagram' => null,

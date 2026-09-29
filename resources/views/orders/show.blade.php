@@ -176,7 +176,9 @@
                     <a href="{{ $item->product ? route('shop.show', $item->product) : route('orders.show', $order) }}" style="font-size:14px;font-weight:600">{{ $item->product_name ?: ($item->product?->name ?? 'Sản phẩm đã xoá') }}</a>
                     @if($item->variant_name)<div style="font-size:12px;color:#8A8680;margin-top:3px">Phân loại: {{ $item->variant_name }}</div>@endif
                     <div style="font-size:12px;color:#8A8680;margin-top:3px">Số lượng: {{ $item->quantity }}</div>
-                    @if($order->canReview() && $item->product)<a href="{{ route('shop.show', $item->product) }}" style="display:inline-block;color:#5C2323;font-size:12px;text-decoration:underline;margin-top:5px">Đánh giá</a>@endif
+                    {{-- R4: trước đây trỏ sang trang sản phẩm (không đánh giá được nhiều
+                         món trong 1 đơn) — nay dẫn thẳng tới trang đánh giá theo đơn. --}}
+                    @if($order->canReview())<a href="{{ route('reviews.createForOrder', $order) }}" style="display:inline-block;color:#5C2323;font-size:12px;text-decoration:underline;margin-top:5px">Đánh giá</a>@endif
                 </div>
                 <span style="flex:none;font-size:13px;font-weight:600">{{ number_format($item->price * $item->quantity, 0, ',', '.') }} đ</span>
             </div>

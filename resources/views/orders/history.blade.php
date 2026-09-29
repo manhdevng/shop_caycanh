@@ -57,7 +57,9 @@
                     @if($order->canCustomerCancel())<a href="{{ route('orders.show', $order) }}#cancel-order" style="padding:9px 14px;border:1px solid #5C2323;border-radius:999px;color:#5C2323;font-size:12px">Huỷ đơn</a>@endif
                     <a href="{{ route('orders.show', $order) }}#tracking" style="padding:9px 14px;border:1px solid #E5E2DC;border-radius:999px;font-size:12px">Theo dõi</a>
                     @if($order->canConfirmReceived())<button type="button" class="js-confirm-received" data-form="confirm-received-{{ $order->id }}" style="padding:9px 14px;background:#4A6B1F;color:#FFFFFF;border:0;border-radius:999px;font-size:12px;cursor:pointer">Đã nhận được hàng</button><form id="confirm-received-{{ $order->id }}" method="POST" action="{{ route('orders.confirmReceived', $order) }}" style="display:none">@csrf</form>@endif
-                    @if($order->canReview() && $firstItem?->product)<a href="{{ route('shop.show', $firstItem->product) }}" style="padding:9px 14px;border:1px solid #E5E2DC;border-radius:999px;font-size:12px">Đánh giá</a>@endif
+                    {{-- R4: trước đây trỏ sang trang sản phẩm (không đánh giá được nhiều
+                         món trong 1 đơn) — nay dẫn thẳng tới trang đánh giá theo đơn. --}}
+                    @if($order->canReview())<a href="{{ route('reviews.createForOrder', $order) }}" style="padding:9px 14px;border:1px solid #E5E2DC;border-radius:999px;font-size:12px">Đánh giá</a>@endif
                     @if(in_array($order->customerStage(), ['delivered', 'completed']) && $firstItem?->product)<a href="{{ route('shop.show', $firstItem->product) }}" style="padding:9px 14px;background:#5C2323;color:#FFFFFF;border-radius:999px;font-size:12px">Mua lại</a>@endif
                 </div>
             </article>

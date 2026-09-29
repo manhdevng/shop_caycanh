@@ -8,6 +8,8 @@ use App\Models\Category;
 use App\Models\HomeFeature;
 use App\Models\Order;
 use App\Models\ProductView;
+use App\Models\Review;
+use App\Support\VoucherPricing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -309,30 +311,70 @@ class ShopController extends Controller
 
         $product->load(['categories', 'variants']);
 
-        $reviews = $product->reviews()->with('user')->latest()->get();
-        $reviewsCount = $reviews->count();
-        $averageRating = $reviewsCount > 0 ? round($reviews->avg('rating'), 1) : null;
-        $myReview = auth()->check()
-            ? $reviews->firstWhere('user_id', auth()->id())
-            : null;
+        $user = auth()->user();
 
-        // Chỉ cho phép hiện form đánh giá khi khách đã mua sản phẩm này thành
-        // công (điều kiện phải khớp với ReviewController::store()).
-        $canReview = auth()->check()
-            && Order::query()
-                ->where('user_id', auth()->id())
-                ->whereIn('status', ['paid', 'cod_ordered'])
+        // Số liệu tổng quan khối đánh giá (điểm trung bình, số đánh giá mỗi
+        // mức sao, số có bình luận / có ảnh) — 3 truy vấn gọn thay cho việc
+        // nạp toàn bộ đánh giá vào bộ nhớ. DANH SÁCH đánh giá không còn load
+        // ở đây nữa: nó được tải bằng AJAX qua ReviewController@index để lọc
+        // và phân trang không phải nạp lại cả trang sản phẩm.
+        $reviewStats = $this->reviewStatsFor($product);
+        $reviewsCount = $reviewStats['count'];
+        $averageRating = $reviewStats['avg'];
+
+        // R1: điều kiện cũ (`status ∈ paid, cod_ordered`) không cần hàng đã
+        // giao và bỏ sót `cod_paid` -> lệch với ReviewController. Giờ dùng
+        // đúng một nguồn luật: Order::canReview() + reviewableLines().
+        $pendingReviewOrderId = null;
+
+        if ($user !== null) {
+            $candidateOrders = Order::query()
+                ->where('user_id', $user->id)
+                ->whereIn('status', Order::PAID_OR_COD_STATUSES)
+                ->where('shipping_status', 'delivered')
                 ->whereHas('items', function ($q) use ($product) {
                     $q->where('product_id', $product->id);
                 })
-                ->exists();
+                ->with('items.product')
+                ->latest('id')
+                ->get();
+
+            foreach ($candidateOrders as $candidate) {
+                if (! $candidate->canReview()) {
+                    continue;
+                }
+
+                // Đơn còn dòng hàng CỦA SẢN PHẨM NÀY chưa đánh giá -> đây là
+                // đơn để nút "Viết đánh giá" dẫn tới.
+                $hasPendingLine = $candidate->reviewableLines($user)->contains(
+                    fn (array $line) => $line['can_review'] && $line['item']->product_id === $product->id
+                );
+
+                if ($hasPendingLine) {
+                    $pendingReviewOrderId = $candidate->id;
+                    break;
+                }
+            }
+        }
+
+        $canReview = $pendingReviewOrderId !== null;
+
+        // Giá sau voucher (mục 3.A). Tính theo phân loại đầu tiên (đúng cái
+        // view hiển thị mặc định) ở số lượng 1; JS dùng $voucherMatrix để đổi
+        // giá ngay khi khách chọn phân loại khác mà không gọi lại server.
+        $defaultUnitPrice = (float) ($product->variants->first()->price ?? $product->base_price);
+        $bestVoucher = VoucherPricing::bestFor($product, $defaultUnitPrice, 1, $user);
+        $voucherMatrix = VoucherPricing::variantMatrix($product, $user);
+        $voucherCandidates = VoucherPricing::candidatesFor($product, $user);
 
         $bestSellerIds = $this->bestSellerIds();
 
         // Mã giảm giá áp dụng được cho sản phẩm này (toàn shop + gắn trực
         // tiếp + gắn qua danh mục nó thuộc về) — hiển thị ngay tại trang chi
         // tiết sản phẩm để khách biết mà "săn mã".
-        $productVouchers = $product->availableVouchers();
+        // Dải mã hiện ở trang sản phẩm: dùng lại danh sách ứng viên đã lọc
+        // "mã khách đã dùng" ở trên thay vì truy vấn lại lần nữa.
+        $productVouchers = $voucherCandidates;
 
         $relatedLimit = 4;
         $categoryIds = $product->categories->pluck('id');
@@ -455,15 +497,63 @@ class ShopController extends Controller
         return view('shop.show', compact(
             'product',
             'relatedProducts',
-            'reviews',
             'reviewsCount',
             'averageRating',
-            'myReview',
+            'reviewStats',
             'canReview',
+            'pendingReviewOrderId',
             'bestSellerIds',
             'productVouchers',
+            'bestVoucher',
+            'voucherMatrix',
+            'voucherCandidates',
             'faqs'
         ));
+    }
+
+    /**
+     * Số liệu khối "ĐÁNH GIÁ SẢN PHẨM": điểm trung bình, tổng số, số đánh giá
+     * theo từng mức sao, số có bình luận, số có ảnh. Chỉ tính đánh giá KHÁCH
+     * NHÌN THẤY ĐƯỢC (scopeVisible — admin đã ẩn thì không tính vào điểm).
+     *
+     * 1 truy vấn group by rating (ra luôn avg + tổng + đếm từng sao) + 2 truy
+     * vấn đếm, thay vì nạp toàn bộ bảng reviews lên PHP như trước.
+     *
+     * @return array{avg: ?float, count: int, by_star: array<int, int>, with_comment: int, with_media: int}
+     */
+    private function reviewStatsFor(Product $product): array
+    {
+        $rows = Review::visible()
+            ->where('product_id', $product->id)
+            ->groupBy('rating')
+            ->selectRaw('rating, COUNT(*) AS total')
+            ->pluck('total', 'rating');
+
+        $byStar = [];
+        $count = 0;
+        $sum = 0;
+
+        foreach ([5, 4, 3, 2, 1] as $star) {
+            $total = (int) ($rows[$star] ?? 0);
+            $byStar[$star] = $total;
+            $count += $total;
+            $sum += $total * $star;
+        }
+
+        return [
+            'avg' => $count > 0 ? round($sum / $count, 1) : null,
+            'count' => $count,
+            'by_star' => $byStar,
+            'with_comment' => Review::visible()
+                ->where('product_id', $product->id)
+                ->whereNotNull('comment')
+                ->where('comment', '!=', '')
+                ->count(),
+            'with_media' => Review::visible()
+                ->where('product_id', $product->id)
+                ->whereHas('images')
+                ->count(),
+        ];
     }
 
     /**

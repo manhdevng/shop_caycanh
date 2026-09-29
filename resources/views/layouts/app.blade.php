@@ -98,6 +98,7 @@
                 ['label' => 'Bán hàng', 'icon' => 'shopping-bag', 'items' => [
                     ['orders.index', ['orders.index', 'admin.orders.*'], 'package-open', 'Đơn hàng'],
                     ['admin.vouchers.index', ['admin.vouchers.*'], 'tag', 'Mã giảm giá'],
+                    ['admin.reviews.index', ['admin.reviews.*'], 'star', 'Đánh giá'],
                 ]],
                 ['label' => 'Sản phẩm', 'icon' => 'package', 'items' => [
                     ['products.index', ['products.*'], 'package', 'Sản phẩm'],
