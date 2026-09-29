@@ -79,6 +79,7 @@
             #siteHeader .header-tools{grid-column:2;grid-row:1;gap:14px;justify-self:end}
             #siteHeader .site-search{grid-column:1 / -1;grid-row:3;width:100%;height:36px !important;min-width:0 !important;max-width:none !important;flex:none !important}
             #siteHeader .header-auth{display:none !important}
+            #notificationPanel{position:fixed !important;left:16px;right:16px;top:var(--header-h,76px) !important;width:auto !important;max-width:none !important;max-height:min(420px,calc(100dvh - var(--header-h,76px) - 16px)) !important}
         }
 
         /* ==== Mega-menu danh mục (Cây cảnh / Hoa) - dạng full-width chỉ chữ (kiểu Uniqlo) ==== */
@@ -195,12 +196,12 @@
                         <a href="{{ route('profile.show') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Hồ sơ của tôi</a>
                         <a href="{{ route('wishlist.index') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Yêu thích</a>
                         <a href="{{ route('vouchers.wallet') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Ví voucher</a>
-                        <a href="{{ route('history.index') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Lịch sử</a>
+                        <a href="{{ route('orders.history') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Đơn mua</a>
+                        <a href="{{ route('history.purchased') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Sản phẩm đã mua</a>
+                        <a href="{{ route('history.index') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Đã xem gần đây</a>
                         <a href="{{ route('tickets.index') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Hỗ trợ của tôi</a>
                         @if(Auth::user()->isAdmin())
                             <a href="{{ route('admin.dashboard') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Trang quản trị</a>
-                        @else
-                            <a href="{{ route('orders.history') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Đơn hàng của tôi</a>
                         @endif
                         <form action="{{ route('logout') }}" method="POST" style="margin:0">
                             @csrf
@@ -213,35 +214,44 @@
             <div style="position:relative;display:inline-flex">
                 <button type="button" id="notificationToggle" aria-label="Thông báo" class="header-icon" style="position:relative;display:inline-flex;background:none;border:none;padding:0;cursor:pointer">
                     <i data-lucide="bell" style="width:19px;height:19px"></i>
-                    <span id="notificationBadge" style="display:{{ $unreadNotificationCount > 0 ? 'block' : 'none' }};position:absolute;top:-4px;right:-4px;min-width:9px;height:9px;border-radius:999px;background:#5C2323;border:2px solid #FFFFFF"></span>
+                    <span id="notificationBadge" style="display:{{ $unreadNotificationCount > 0 ? 'block' : 'none' }};position:absolute;top:-9px;right:-12px;min-width:20px;height:20px;padding:0 4px;border-radius:999px;background:#5C2323;color:#FFFFFF;font-family:'Space Mono',monospace;font-size:10px;line-height:20px;text-align:center;border:1px solid #FFFFFF">{{ $unreadNotificationCount > 9 ? '9+' : $unreadNotificationCount }}</span>
                 </button>
-                <div id="notificationPanel" style="display:none;position:absolute;right:0;top:28px;background:#FFFFFF;border:1px solid #E5E2DC;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,0.12);width:340px;max-width:calc(100vw - 32px);max-height:420px;overflow-y:auto;z-index:60">
-                    <div style="padding:14px 16px;border-bottom:1px solid #E5E2DC">
-                        <span style="font-family:'Anton',sans-serif;font-size:15px;letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A">Thông báo</span>
+                <div id="notificationPanel" style="display:none;position:absolute;right:0;top:28px;background:#FFFFFF;border:1px solid #E5E2DC;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,0.12);width:340px;max-width:calc(100vw - 32px);max-height:420px;overflow:hidden;z-index:60">
+                    <div style="padding:14px 16px;border-bottom:1px solid #E5E2DC;font-family:'Anton',sans-serif;font-size:16px">Thông báo</div>
+                    <div role="tablist" aria-label="Loại thông báo" style="display:flex;border-bottom:1px solid #E5E2DC">
+                        <button type="button" class="notification-tab" data-notification-tab="orders" aria-selected="{{ $unreadOrderCount > 0 ? 'true' : 'false' }}" style="flex:1;border:0;border-bottom:2px solid {{ $unreadOrderCount > 0 ? '#5C2323' : 'transparent' }};background:#FFFFFF;padding:11px;font-family:'Space Mono',monospace;font-size:11px;cursor:pointer">Đơn hàng</button>
+                        <button type="button" class="notification-tab" data-notification-tab="promo" aria-selected="{{ $unreadOrderCount > 0 ? 'false' : 'true' }}" style="flex:1;border:0;border-bottom:2px solid {{ $unreadOrderCount > 0 ? 'transparent' : '#5C2323' }};background:#FFFFFF;padding:11px;font-family:'Space Mono',monospace;font-size:11px;cursor:pointer">Khuyến mãi</button>
                     </div>
-                    @forelse($headerNotifications as $item)
-                        @php
-                            $typeBorderColors = [
-                                'voucher' => '#5C2323',
-                                'post' => '#7CA6D8',
-                                'product' => '#4A6B1F',
-                            ];
-                            $borderColor = $typeBorderColors[$item['type']] ?? '#E5E2DC';
-                        @endphp
-                        <a href="{{ $item['url'] }}" style="display:flex;gap:10px;padding:12px 16px;border-left:3px solid {{ $borderColor }};border-bottom:1px solid #F1F0EC">
-                            <span style="flex:none;font-size:18px;line-height:1">{{ $item['icon'] }}</span>
-                            <span style="flex:1 1 auto;min-width:0">
-                                <span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13px;font-weight:600;color:#1C1C1A;line-height:1.4">{{ $item['title'] }}</span>
-                                @if($item['description'])
-                                    <span style="display:block;font-size:12px;color:#6B6B66;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ $item['description'] }}</span>
-                                @endif
-                                <span style="display:block;font-family:'Space Mono',monospace;font-size:10.5px;color:#8A8680;margin-top:4px">{{ $item['created_at']->diffForHumans() }}</span>
-                            </span>
-                        </a>
-                    @empty
-                        <p style="text-align:center;color:#8A8680;font-size:13px;padding:32px 16px;margin:0">Chưa có thông báo nào.</p>
-                    @endforelse
-                    <a href="{{ route('notifications.index') }}" style="display:block;text-align:center;padding:12px 16px;font-family:'Space Mono',monospace;font-size:11.5px;letter-spacing:0.06em;text-transform:uppercase;color:#5C2323">Xem tất cả</a>
+                    <div id="notificationOrders" style="display:{{ $unreadOrderCount > 0 ? 'block' : 'none' }};max-height:310px;overflow-y:auto">
+                        @forelse($orderNotifications as $n)
+                            <a href="{{ route('notifications.open', $n->id) }}" style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #E5E2DC;background:{{ $n->read_at ? '#FFFFFF' : '#F7F5F0' }}">
+                                <i data-lucide="{{ data_get($n->data, 'icon', 'package') }}" style="width:18px;height:18px;flex:none;color:#4A6B1F"></i>
+                                <span style="min-width:0;flex:1;overflow-wrap:anywhere">
+                                    <strong style="display:block;font-size:13px;color:#1C1C1A">{{ data_get($n->data, 'title', 'Cập nhật đơn hàng') }}</strong>
+                                    <span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;color:#8A8680;margin-top:3px">{{ data_get($n->data, 'message') }}</span>
+                                    <time style="display:block;font-family:'Space Mono',monospace;font-size:10px;color:#8A8680;margin-top:5px">{{ $n->created_at->diffForHumans() }}</time>
+                                </span>
+                            </a>
+                        @empty
+                            <p style="text-align:center;color:#8A8680;font-size:13px;padding:28px 16px;margin:0">Chưa có thông báo đơn hàng.</p>
+                        @endforelse
+                        <a href="{{ route('notifications.index', ['tab' => 'don-hang']) }}" style="display:block;text-align:center;padding:12px;font-family:'Space Mono',monospace;font-size:11px;color:#5C2323">Xem tất cả đơn hàng</a>
+                    </div>
+                    <div id="notificationPromos" style="display:{{ $unreadOrderCount > 0 ? 'none' : 'block' }};max-height:310px;overflow-y:auto">
+                        @forelse($headerNotifications as $item)
+                            <a href="{{ $item['url'] }}" style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #E5E2DC">
+                                <span style="flex:none;font-size:18px">{{ $item['icon'] }}</span>
+                                <span style="min-width:0;flex:1;overflow-wrap:anywhere">
+                                    <strong style="display:block;font-size:13px;color:#1C1C1A">{{ $item['title'] }}</strong>
+                                    @if($item['description'])<span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;color:#8A8680;margin-top:3px">{{ $item['description'] }}</span>@endif
+                                    <time style="display:block;font-family:'Space Mono',monospace;font-size:10px;color:#8A8680;margin-top:5px">{{ $item['created_at']->diffForHumans() }}</time>
+                                </span>
+                            </a>
+                        @empty
+                            <p style="text-align:center;color:#8A8680;font-size:13px;padding:28px 16px;margin:0">Chưa có thông báo khuyến mãi.</p>
+                        @endforelse
+                        <a href="{{ route('notifications.index', ['tab' => 'khuyen-mai']) }}" style="display:block;text-align:center;padding:12px;font-family:'Space Mono',monospace;font-size:11px;color:#5C2323">Xem tất cả khuyến mãi</a>
+                    </div>
                 </div>
             </div>
 
@@ -550,37 +560,51 @@
     const notificationBadge = document.getElementById('notificationBadge');
     if (notificationToggle && notificationPanel) {
         let notificationMarkedSeen = false;
-
-        notificationToggle.addEventListener('click', function (e) {
-            e.stopPropagation();
-            const willOpen = notificationPanel.style.display === 'none' || !notificationPanel.style.display;
-            notificationPanel.style.display = willOpen ? 'block' : 'none';
-
-            if (willOpen && !notificationMarkedSeen) {
-                notificationMarkedSeen = true;
-                @auth
-                fetch('{{ route('notifications.mark-seen') }}', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                        'Accept': 'application/json',
-                    },
-                })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data && data.success && notificationBadge) {
-                            notificationBadge.style.display = 'none';
-                        }
-                    })
-                    .catch(() => {});
-                @endauth
-            }
+        const tabs = document.querySelectorAll('.notification-tab');
+        function renderNotificationBadge(count) {
+            if (!notificationBadge) return;
+            notificationBadge.style.display = count > 0 ? 'block' : 'none';
+            notificationBadge.textContent = count > 9 ? '9+' : String(count);
+        }
+        function markPromosSeen() {
+            if (notificationMarkedSeen) return;
+            notificationMarkedSeen = true;
+            @auth
+            fetch('{{ route('notifications.mark-seen') }}', {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json' },
+            }).then(function () { loadNotificationCount(); }).catch(function () {});
+            @endauth
+        }
+        function selectNotificationTab(name) {
+            document.getElementById('notificationOrders').style.display = name === 'orders' ? 'block' : 'none';
+            document.getElementById('notificationPromos').style.display = name === 'promo' ? 'block' : 'none';
+            tabs.forEach(function (tab) {
+                const active = tab.dataset.notificationTab === name;
+                tab.style.borderBottomColor = active ? '#5C2323' : 'transparent';
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            if (name === 'promo') markPromosSeen();
+        }
+        tabs.forEach(function (tab) { tab.addEventListener('click', function () { selectNotificationTab(tab.dataset.notificationTab); }); });
+        notificationToggle.addEventListener('click', function (event) {
+            event.stopPropagation();
+            notificationPanel.style.display = notificationPanel.style.display === 'none' ? 'block' : 'none';
+            if (notificationPanel.style.display === 'block' && document.getElementById('notificationPromos').style.display === 'block') markPromosSeen();
         });
-        document.addEventListener('click', function (e) {
-            if (!notificationPanel.contains(e.target) && e.target !== notificationToggle) {
-                notificationPanel.style.display = 'none';
-            }
+        document.addEventListener('click', function (event) {
+            if (!notificationPanel.contains(event.target) && !notificationToggle.contains(event.target)) notificationPanel.style.display = 'none';
         });
+        @auth
+        function loadNotificationCount() {
+            if (document.hidden) return;
+            fetch('{{ route('notifications.unreadCount') }}', { headers: { 'Accept': 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (data) { renderNotificationBadge(Number(data.total) || 0); })
+                .catch(function () {});
+        }
+        setInterval(loadNotificationCount, 60000);
+        @endauth
     }
 
     // ==== Thêm giỏ hàng trực tiếp (không rời trang) ====

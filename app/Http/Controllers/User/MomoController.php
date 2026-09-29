@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Services\GHNOrderService;
 use App\Services\MomoService;
+use App\Support\OrderChangeContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -259,84 +260,88 @@ class MomoController extends Controller
     // hoàn tất thanh toán thay vì huỷ, dùng đúng 1 luồng xử lý duy nhất.
     public function completePayment(array $payload, GHNOrderService $ghnOrders, MomoService $momo): string
     {
-        $result = DB::transaction(function () use ($payload, $momo) {
-            $transaction = PaymentTransaction::where('gateway', 'momo')
-                ->where('gateway_order_id', $payload['orderId'] ?? '')
-                ->lockForUpdate()
-                ->first();
+        // Mọi thay đổi orders.status/shipping_status trong hàm này đều đến
+        // từ MoMo (IPN hoặc khách tự kiểm tra lại) -> đặt nguồn 'momo' một
+        // lần cho toàn bộ hàm để OrderObserver (laravel-backend) ghi đúng
+        // "source" vào order_status_histories, không cần lặp lại ở từng
+        // update() bên dưới. run() tự reset về mặc định khi hàm kết thúc
+        // (kể cả khi có exception) nên không rò rỉ sang request khác.
+        return OrderChangeContext::run(['source' => 'momo'], function () use ($payload, $ghnOrders, $momo) {
+            $result = DB::transaction(function () use ($payload, $momo) {
+                $transaction = PaymentTransaction::where('gateway', 'momo')
+                    ->where('gateway_order_id', $payload['orderId'] ?? '')
+                    ->lockForUpdate()
+                    ->first();
 
-            if (! $transaction) {
-                return 'invalid';
+                if (! $transaction) {
+                    return 'invalid';
+                }
+
+                $order = Order::lockForUpdate()->find($transaction->order_id);
+
+                if (! $order) {
+                    return 'invalid';
+                }
+
+                if ($order->ghn_order_code) {
+                    return 'already_created';
+                }
+
+                if ($order->shipping_status === 'processing') {
+                    return 'processing';
+                }
+
+                if ((int) $transaction->amount !== (int) ($payload['amount'] ?? 0)) {
+                    $momo->markFailed($transaction, $payload);
+
+                    return 'invalid';
+                }
+
+                $order->update(['status' => 'paid', 'shipping_status' => 'processing']);
+                $momo->markPaid($transaction, $payload);
+
+                return ['create', $order->id];
+            });
+
+            if (! is_array($result)) {
+                return (string) $result;
             }
 
-            $order = Order::lockForUpdate()->find($transaction->order_id);
+            $order = Order::with('items.product', 'items.variant')->find($result[1]);
 
-            if (! $order) {
-                return 'invalid';
+            // G9: GHNService/Http có thể ném exception (timeout, lỗi kết nối...)
+            // — không để văng ra ngoài completePayment() (đơn đã 'paid' phải luôn
+            // được trả lời cho khách/IPN), và không được để shipping_status kẹt ở
+            // 'processing' mãi mãi (khi đó completePayment() lần sau sẽ luôn trả
+            // về 'processing' ở nhánh phía trên, không bao giờ thử tạo lại vận
+            // đơn) — đưa về 'not_shipped' để nút "Tạo lại vận đơn GHN" (C5) dùng được.
+            try {
+                $response = $ghnOrders->create($order, isPaid: true);
+            } catch (\Throwable $e) {
+                Log::error('GHN order threw exception after MoMo payment', [
+                    'order_id' => $order->id,
+                    'exception_class' => get_class($e),
+                    'exception_message' => $e->getMessage(),
+                ]);
+                $order->update(['shipping_status' => 'not_shipped']);
+
+                return 'failed';
             }
 
-            if ($order->ghn_order_code) {
-                return 'already_created';
+            // Phí ship đã ước tính lúc checkout (orders.ghn_total_fee) dùng
+            // làm phương án dự phòng khi phản hồi GHN không kèm total_fee.
+            if ($ghnOrders->applyCreateResponse($order, $response, (int) ($order->ghn_total_fee ?? 0))) {
+                return 'created';
             }
 
-            if ($order->shipping_status === 'processing') {
-                return 'processing';
-            }
-
-            if ((int) $transaction->amount !== (int) ($payload['amount'] ?? 0)) {
-                $momo->markFailed($transaction, $payload);
-
-                return 'invalid';
-            }
-
-            $order->update(['status' => 'paid', 'shipping_status' => 'processing']);
-            $momo->markPaid($transaction, $payload);
-
-            return ['create', $order->id];
-        });
-
-        if (! is_array($result)) {
-            return (string) $result;
-        }
-
-        $order = Order::with('items.product', 'items.variant')->find($result[1]);
-
-        // G9: GHNService/Http có thể ném exception (timeout, lỗi kết nối...)
-        // — không để văng ra ngoài completePayment() (đơn đã 'paid' phải luôn
-        // được trả lời cho khách/IPN), và không được để shipping_status kẹt ở
-        // 'processing' mãi mãi (khi đó completePayment() lần sau sẽ luôn trả
-        // về 'processing' ở nhánh phía trên, không bao giờ thử tạo lại vận
-        // đơn) — đưa về 'not_shipped' để nút "Tạo lại vận đơn GHN" (C5) dùng được.
-        try {
-            $response = $ghnOrders->create($order, isPaid: true);
-        } catch (\Throwable $e) {
-            Log::error('GHN order threw exception after MoMo payment', [
+            Log::error('GHN order failed after MoMo payment', [
                 'order_id' => $order->id,
-                'exception_class' => get_class($e),
-                'exception_message' => $e->getMessage(),
+                'response' => $response,
             ]);
             $order->update(['shipping_status' => 'not_shipped']);
 
             return 'failed';
-        }
-
-        if (($response['code'] ?? null) === 200 && ! empty($response['data']['order_code'])) {
-            $order->update([
-                'ghn_order_code' => $response['data']['order_code'],
-                'ghn_total_fee' => $response['data']['total_fee'] ?? $order->ghn_total_fee,
-                'shipping_status' => 'ready_to_pick',
-            ]);
-
-            return 'created';
-        }
-
-        Log::error('GHN order failed after MoMo payment', [
-            'order_id' => $order->id,
-            'response' => $response,
-        ]);
-        $order->update(['shipping_status' => 'not_shipped']);
-
-        return 'failed';
+        });
     }
 
     // Ghi nhận giao dịch thất bại/bị huỷ.

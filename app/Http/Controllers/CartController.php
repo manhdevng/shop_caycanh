@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Voucher;
 use Illuminate\Http\Request;
@@ -42,7 +43,16 @@ class CartController extends Controller
             $savableVouchers = Voucher::available()->with(['products:id,name', 'categories:id,name'])->get();
         }
 
-        return view('cart.index', compact('cart', 'availableVouchers', 'savableVouchers'));
+        // L14: giỏ trống sau khi mua xong thì khách không biết xem đơn ở đâu.
+        // Đếm số đơn đang trong quá trình (chưa huỷ, chưa hoàn thành) để view
+        // hiện lối tắt "Theo dõi N đơn đang xử lý" thay vì chỉ có nút "Tiếp
+        // tục mua sắm".
+        $pendingOrderCount = $user === null ? 0 : Order::where('user_id', $user->id)
+            ->where('status', '!=', 'cancelled')
+            ->whereNull('completed_at')
+            ->count();
+
+        return view('cart.index', compact('cart', 'availableVouchers', 'savableVouchers', 'pendingOrderCount'));
     }
 
     // Thêm sản phẩm vào giỏ hàng (gọi qua script trên trang chủ / trang chi tiết)

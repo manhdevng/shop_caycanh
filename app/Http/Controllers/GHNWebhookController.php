@@ -3,17 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use App\Services\CodSettlementService;
-use App\Services\LoyaltyService;
-use App\Services\OrderCancellationService;
+use App\Services\GHNShipmentSyncService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Nhận webhook GHN báo cập nhật trạng thái vận đơn (server-to-server, không
  * có session người dùng — KHÔNG dùng auth()). Đây là kênh cập nhật tự động
- * bổ sung cho AdminOrderController::updateStatus() (admin tự tay đổi).
+ * cho luồng theo dõi đơn (xem GHNShipmentSyncService — nơi thật sự chứa
+ * logic áp trạng thái, dùng chung với lệnh `ghn:sync-orders`, `ghn:simulate`
+ * và các nút "Cập nhật"/"Đồng bộ GHN" của khách/admin).
  *
  * Xác thực nguồn gốc request: GHN không ký HMAC như MoMo. Cơ chế xác thực ở
  * đây dựa trên một token bí mật do TA tự đặt khi khai báo Webhook URL trên
@@ -25,47 +25,25 @@ use Illuminate\Support\Facades\Log;
 class GHNWebhookController extends Controller
 {
     /**
-     * Bảng ánh xạ trạng thái GHN (theo tài liệu GHN Webhook API) sang giá trị
-     * nội bộ đang dùng trong Order::SHIPPING_LABELS. ĐÂY LÀ NƠI DUY NHẤT chứa
-     * quy tắc map — cần chỉnh khi GHN đổi định dạng thật thì chỉ sửa ở đây.
-     *
-     * Các mã GHN không có mặt ở đây (exception, damage, lost, delivery_fail,
-     * money_collect_picking, money_collect_delivering...) cố ý KHÔNG được map
-     * vì ý nghĩa nghiệp vụ chưa rõ ràng/cần admin can thiệp thủ công — webhook
-     * sẽ chỉ log lại, không tự ý đoán trạng thái.
+     * `Type` payload GHN cần xử lý trạng thái vận chuyển. Các loại khác
+     * (update_weight, update_cod, update_fee...) chỉ cần trả 200 để GHN
+     * không retry, không có gì để cập nhật ở đây.
      */
-    private const GHN_STATUS_MAP = [
-        'ready_to_pick' => 'ready_to_pick',
-        'picking' => 'picking',
-        'picked' => 'picked',
-        'storing' => 'storing',
-        'transporting' => 'transporting',
-        'sorting' => 'sorting',
-        'delivering' => 'delivering',
-        'delivered' => 'delivered',
-        'waiting_to_return' => 'return',
-        'return' => 'return',
-        'return_transporting' => 'return_transporting',
-        'return_sorting' => 'return_sorting',
-        'returning' => 'returning',
-        'return_fail' => 'returning',
-        'returned' => 'returned',
-        'cancel' => 'cancelled',
-    ];
+    private const HANDLED_TYPES = ['create', 'switch_status'];
 
-    // Các trạng thái nội bộ coi là "đã hủy" -> huỷ đơn qua
-    // OrderCancellationService (đồng bộ orders.status, hoàn kho, trả voucher,
-    // đồng bộ thanh toán) giống AdminOrderController::cancel().
-    private const CANCELLED_STATUSES = ['cancelled'];
-
-    public function handle(Request $request, OrderCancellationService $cancellation)
+    public function handle(Request $request, GHNShipmentSyncService $sync)
     {
         $payload = $request->all();
 
+        $ghnOrderCode = $this->extractOrderCode($payload);
+        $ghnStatus = $this->extractStatus($payload);
+        $type = $this->extractType($payload);
+
         // Không log giá trị token để tránh lộ bí mật dùng để xác thực webhook.
         Log::info('GHN webhook received', [
-            'order_code' => $this->extractOrderCode($payload),
-            'status' => $this->extractStatus($payload),
+            'order_code' => $ghnOrderCode,
+            'status' => $ghnStatus,
+            'type' => $type,
         ]);
 
         if (! $this->verifyRequest($request)) {
@@ -76,8 +54,14 @@ class GHNWebhookController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $ghnOrderCode = $this->extractOrderCode($payload);
-        $ghnStatus = $this->extractStatus($payload);
+        if ($type !== null && ! in_array($type, self::HANDLED_TYPES, true)) {
+            Log::info('GHN webhook: loại sự kiện không cần cập nhật trạng thái vận chuyển, bỏ qua', [
+                'order_code' => $ghnOrderCode,
+                'type' => $type,
+            ]);
+
+            return response()->json(['message' => 'Received']);
+        }
 
         if (! $ghnOrderCode || ! $ghnStatus) {
             Log::warning('GHN webhook thiếu OrderCode hoặc Status, bỏ qua', ['payload' => $payload]);
@@ -85,10 +69,12 @@ class GHNWebhookController extends Controller
             return response()->json(['message' => 'Received']);
         }
 
-        $internalStatus = self::GHN_STATUS_MAP[$ghnStatus] ?? null;
+        // Không tìm thấy đơn -> vẫn trả 200 (tránh GHN gọi lại vô ích 10 lần
+        // cho một đơn không tồn tại phía shop, ví dụ dữ liệu test/demo).
+        $order = Order::where('ghn_order_code', $ghnOrderCode)->first();
 
-        if ($internalStatus === null) {
-            Log::warning('GHN webhook: trạng thái GHN chưa được ánh xạ, cần kiểm tra thủ công', [
+        if (! $order) {
+            Log::warning('GHN webhook: không tìm thấy đơn hàng khớp ghn_order_code', [
                 'ghn_order_code' => $ghnOrderCode,
                 'ghn_status' => $ghnStatus,
             ]);
@@ -96,7 +82,13 @@ class GHNWebhookController extends Controller
             return response()->json(['message' => 'Received']);
         }
 
-        $this->applyStatus($ghnOrderCode, $ghnStatus, $internalStatus, $cancellation);
+        $sync->apply(
+            $order,
+            $ghnStatus,
+            $this->extractTime($payload),
+            'ghn_webhook',
+            $this->extractReason($payload)
+        );
 
         return response()->json(['message' => 'Received']);
     }
@@ -136,80 +128,43 @@ class GHNWebhookController extends Controller
         return $value !== null ? (string) $value : null;
     }
 
-    // Tìm đơn hàng + khoá bản ghi, đối chiếu luật chuyển trạng thái (dùng
-    // chung Order::SHIPPING_STAGE_GROUPS với AdminOrderController), rồi cập
-    // nhật. Bọc trong transaction + lockForUpdate để idempotent khi GHN gọi
-    // lại webhook nhiều lần cho cùng một sự kiện.
-    private function applyStatus(string $ghnOrderCode, string $ghnStatus, string $internalStatus, OrderCancellationService $cancellation): void
+    // 'create'|'switch_status'|'update_weight'|'update_cod'|'update_fee'...
+    // (theo tài liệu GHN Webhook API).
+    private function extractType(array $payload): ?string
     {
-        DB::transaction(function () use ($ghnOrderCode, $ghnStatus, $internalStatus, $cancellation) {
-            $order = Order::where('ghn_order_code', $ghnOrderCode)->lockForUpdate()->first();
+        $value = $payload['Type'] ?? $payload['type'] ?? null;
 
-            if (! $order) {
-                Log::warning('GHN webhook: không tìm thấy đơn hàng khớp ghn_order_code', [
-                    'ghn_order_code' => $ghnOrderCode,
-                    'ghn_status' => $ghnStatus,
-                ]);
+        return $value !== null ? (string) $value : null;
+    }
 
-                return;
-            }
+    private function extractReason(array $payload): ?string
+    {
+        $value = $payload['Reason'] ?? $payload['reason'] ?? null;
 
-            // Idempotent: nếu trạng thái không đổi thì không ghi lại (tránh
-            // vô hiệu hoá lịch sử/tránh update trùng khi GHN gọi lại).
-            if ($order->shipping_status === $internalStatus) {
-                return;
-            }
+        return $value !== null ? (string) $value : null;
+    }
 
-            $currentStage = Order::SHIPPING_STAGE_GROUPS[$order->shipping_status] ?? null;
-            $newStage = Order::SHIPPING_STAGE_GROUPS[$internalStatus] ?? null;
+    // GHN gửi thời điểm THẬT của sự kiện trong trường "Time" — dùng làm
+    // occurred_at của lịch sử thay vì thời điểm server nhận được webhook
+    // (có thể trễ vài giây/phút). Quy đổi về giờ Việt Nam để nhất quán với
+    // phần còn lại của hệ thống. Định dạng lạ/parse lỗi -> trả null, caller
+    // (GHNShipmentSyncService::apply) tự dùng now() làm mặc định.
+    private function extractTime(array $payload): ?Carbon
+    {
+        $value = $payload['Time'] ?? $payload['time'] ?? null;
 
-            // Cùng luật với AdminOrderController::updateStatus(): chỉ chặn
-            // lùi khi cả hai trạng thái đều nằm trong nhóm mốc tiến trình
-            // thông thường. Trạng thái ngoại lệ (huỷ, hoàn hàng...) luôn được
-            // phép vì có thể xảy ra bất kỳ lúc nào.
-            if ($currentStage !== null && $newStage !== null && $newStage < $currentStage) {
-                Log::warning('GHN webhook: bỏ qua vì trạng thái mới lùi về giai đoạn trước đó', [
-                    'order_id' => $order->id,
-                    'current' => $order->shipping_status,
-                    'incoming' => $internalStatus,
-                ]);
+        if (! $value) {
+            return null;
+        }
 
-                return;
-            }
-
-            if (in_array($internalStatus, self::CANCELLED_STATUSES, true)) {
-                // Đơn bị huỷ phía GHN (ví dụ huỷ trên app/web GHN) -> huỷ đơn
-                // qua service để không "kẹt" đơn (đã shipping_status=cancelled
-                // nhưng chưa hoàn kho). Không áp luật chặn của admin vì GHN đã
-                // xác nhận vận đơn bị huỷ; service tự bỏ qua nếu đơn đã huỷ
-                // trước đó (không hoàn kho 2 lần). Đọc lại đơn sau khi service
-                // cập nhật để phần phía dưới không ghi đè bằng dữ liệu cũ.
-                $cancellation->cancel($order, 'GHN báo hủy vận đơn.', enforceAdminRules: false);
-                $order->refresh();
-            }
-
-            // Đơn đã huỷ trước đó nhưng shipping_status chưa khớp (hoặc trạng
-            // thái không phải huỷ) -> chỉ cập nhật shipping_status.
-            if ($order->shipping_status !== $internalStatus) {
-                $order->update(['shipping_status' => $internalStatus]);
-            }
-
-            // Cộng điểm thành viên (nếu đủ điều kiện) ngay khi GHN báo đơn đã
-            // giao thành công — service tự kiểm tra idempotent (points_awarded),
-            // an toàn khi gọi lồng trong transaction hiện tại (savepoint).
-            LoyaltyService::awardIfDelivered($order);
-
-            // G6: đơn COD giao thành công -> đồng bộ giao dịch sang "paid" để
-            // vào báo cáo tài chính — tự kiểm tra idempotent, an toàn khi gọi
-            // lồng trong transaction hiện tại (savepoint).
-            CodSettlementService::settleIfDelivered($order);
-
-            Log::info('GHN webhook: đã cập nhật trạng thái vận chuyển', [
-                'order_id' => $order->id,
-                'ghn_order_code' => $ghnOrderCode,
-                'ghn_status' => $ghnStatus,
-                'shipping_status' => $internalStatus,
+        try {
+            return Carbon::parse($value)->setTimezone('Asia/Ho_Chi_Minh');
+        } catch (\Throwable $e) {
+            Log::warning('GHN webhook: không parse được trường Time, dùng thời điểm hiện tại', [
+                'raw_time' => $value,
             ]);
-        });
+
+            return null;
+        }
     }
 }

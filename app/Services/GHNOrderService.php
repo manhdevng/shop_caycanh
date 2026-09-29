@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -63,6 +64,60 @@ class GHNOrderService
             'service_type_id' => 2,
             'items' => $items,
         ]);
+    }
+
+    /**
+     * Áp kết quả gọi GHNService::createOrder() (hoặc phản hồi tương đương) vào
+     * Order: mã vận đơn, phí ship, dự kiến giao hàng, và mở màn hành trình
+     * (`shipping_status = ready_to_pick`).
+     *
+     * NƠI DUY NHẤT nên dùng để "chốt" kết quả tạo vận đơn — thay cho việc mỗi
+     * controller tự viết lại đoạn `$order->update([...])` (từng lặp lại ở
+     * User\MomoController, User\OrderController, AdminOrderController).
+     *
+     * $fallbackFee: phí ship đã ước tính từ trước (ví dụ lúc checkout) — dùng
+     * khi phản hồi GHN không kèm `total_fee` (một số response tạo đơn không
+     * trả trường này).
+     *
+     * Trả false (và Log::warning, KHÔNG throw) nếu response không hợp lệ
+     * (code khác 200 hoặc thiếu order_code) — caller tự quyết định nhánh lỗi
+     * (thường là đặt shipping_status = 'not_shipped' để hiện nút "Tạo lại
+     * vận đơn").
+     */
+    public function applyCreateResponse(Order $order, array $resp, int $fallbackFee): bool
+    {
+        $code = $resp['code'] ?? null;
+        $orderCode = $resp['data']['order_code'] ?? null;
+
+        if ($code !== 200 || empty($orderCode)) {
+            Log::warning('Không thể áp dụng kết quả tạo vận đơn GHN: response không hợp lệ hoặc thiếu order_code', [
+                'order_id' => $order->id,
+                'response' => $resp,
+            ]);
+
+            return false;
+        }
+
+        $data = $resp['data'];
+
+        $expectedDeliveryAt = null;
+        if (! empty($data['expected_delivery_time'])) {
+            try {
+                $expectedDeliveryAt = Carbon::parse($data['expected_delivery_time']);
+            } catch (Throwable $e) {
+                // Định dạng thời gian lạ -> bỏ qua, không chặn luồng đặt hàng.
+                $expectedDeliveryAt = null;
+            }
+        }
+
+        $order->update([
+            'ghn_order_code' => $orderCode,
+            'ghn_total_fee' => $data['total_fee'] ?? $fallbackFee,
+            'ghn_expected_delivery_at' => $expectedDeliveryAt,
+            'shipping_status' => 'ready_to_pick',
+        ]);
+
+        return true;
     }
 
     /**

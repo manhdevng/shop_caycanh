@@ -10,12 +10,36 @@
 
 <section style="max-width:900px;margin:0 auto;padding:20px 24px 16px">
     <h1 style="font-family:'Anton',sans-serif;font-size:clamp(32px,5vw,54px);line-height:1.1;letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 8px">Thông báo</h1>
-    <p style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#8A8680;margin:0">{{ $items->count() }} thông báo gần đây</p>
+    <p style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#8A8680;margin:0">Theo dõi đơn mua và ưu đãi mới nhất</p>
 </section>
 
-<section style="max-width:900px;margin:0 auto;padding:0 24px clamp(64px,8vw,96px)">
+<section style="max-width:900px;margin:0 auto;padding:0 20px clamp(64px,8vw,96px);min-width:0">
+    <nav aria-label="Loại thông báo" style="display:flex;gap:24px;border-bottom:1px solid #E5E2DC;margin-bottom:24px;overflow-x:auto">
+        <a href="{{ route('notifications.index', ['tab' => 'don-hang']) }}" style="white-space:nowrap;padding:10px 0;border-bottom:3px solid {{ $tab === 'don-hang' ? '#5C2323' : 'transparent' }};font-family:'Space Mono',monospace;font-size:11px;color:{{ $tab === 'don-hang' ? '#5C2323' : '#8A8680' }}">Đơn hàng</a>
+        <a href="{{ route('notifications.index', ['tab' => 'khuyen-mai']) }}" style="white-space:nowrap;padding:10px 0;border-bottom:3px solid {{ $tab === 'khuyen-mai' ? '#5C2323' : 'transparent' }};font-family:'Space Mono',monospace;font-size:11px;color:{{ $tab === 'khuyen-mai' ? '#5C2323' : '#8A8680' }}">Khuyến mãi</a>
+    </nav>
+    @if($tab === 'don-hang')
+        @auth
+        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+            <form method="POST" action="{{ route('notifications.readAll') }}">@csrf<button type="submit" style="border:1px solid #E5E2DC;border-radius:999px;background:#FFFFFF;padding:9px 14px;font-family:'Space Mono',monospace;font-size:11px;cursor:pointer">Đánh dấu đã đọc tất cả</button></form>
+        </div>
+        <div style="display:grid;gap:12px">
+            @forelse($orderNotifications as $n)
+                <a href="{{ route('notifications.open', $n->id) }}" style="display:flex;gap:14px;min-width:0;background:{{ $n->read_at ? '#FFFFFF' : '#F7F5F0' }};border:1px solid #E5E2DC;border-radius:16px;padding:18px">
+                    <i data-lucide="{{ data_get($n->data, 'icon', 'package') }}" style="width:20px;height:20px;flex:none;color:#4A6B1F"></i>
+                    <span style="min-width:0;overflow-wrap:anywhere"><strong style="display:block;font-size:14px;color:#1C1C1A">{{ data_get($n->data, 'title', 'Cập nhật đơn hàng') }}</strong><span style="display:block;font-size:13px;color:#8A8680;margin-top:5px">{{ data_get($n->data, 'message') }}</span><time style="display:block;font-family:'Space Mono',monospace;font-size:10px;color:#8A8680;margin-top:8px">{{ $n->created_at->diffForHumans() }}</time></span>
+                </a>
+            @empty
+                <div style="text-align:center;border:1px dashed #E5E2DC;border-radius:16px;padding:60px 20px"><i data-lucide="bell" style="width:32px;height:32px;color:#8A8680;margin:auto"></i><p style="color:#8A8680">Chưa có thông báo đơn hàng.</p><a href="{{ route('orders.history') }}" style="color:#5C2323;text-decoration:underline">Xem đơn mua</a></div>
+            @endforelse
+        </div>
+        @if($orderNotifications->hasPages())<div style="margin-top:24px">{{ $orderNotifications->appends(['tab' => $tab])->links() }}</div>@endif
+        @else
+            <div style="text-align:center;border:1px dashed #E5E2DC;border-radius:16px;padding:60px 20px"><p style="color:#8A8680">Đăng nhập để xem thông báo đơn hàng của bạn.</p><a href="{{ route('login') }}" style="display:inline-block;padding:10px 18px;background:#5C2323;color:#FFFFFF;border-radius:999px;font-size:12px">Đăng nhập</a></div>
+        @endauth
+    @else
 
-    @if($items->isNotEmpty())
+    @if($promoItems->isNotEmpty())
         {{-- Thanh lọc dạng tab/pill — lọc phía client bằng JS, không gọi lại server --}}
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:20px">
             <button type="button" class="notif-filter-tab" data-filter="all" onclick="filterNotifications('all', this)" style="padding:8px 18px;border-radius:999px;border:1px solid #5C2323;background:#5C2323;color:#FFFFFF;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer">Tất cả</button>
@@ -29,7 +53,7 @@
         </div>
 
         <div id="notif-list" style="display:flex;flex-direction:column;gap:12px">
-            @foreach($items as $item)
+            @foreach($promoItems as $item)
                 <div class="notif-card" data-type="{{ $item['type'] }}" style="display:flex;align-items:flex-start;gap:14px;background:#FFFFFF;border:1px solid #E5E2DC;border-radius:16px;padding:18px 20px">
                     <div style="flex:none;font-size:26px;line-height:1">{{ $item['icon'] }}</div>
                     <div style="min-width:0;flex:1 1 auto">
@@ -54,6 +78,7 @@
             <p style="font-size:15px;color:#6B6B66;margin:0 0 24px">Chưa có thông báo nào.</p>
             <a href="{{ route('shop.index') }}" style="display:inline-block;padding:14px 28px;border-radius:999px;background:#5C2323;color:#FFFFFF;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;text-decoration:none">Về trang chủ</a>
         </div>
+    @endif
     @endif
 </section>
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductView;
+use App\Models\Review;
 use Illuminate\Http\Request;
 
 class HistoryController extends Controller
@@ -48,5 +49,59 @@ class HistoryController extends Controller
             ->values();
 
         return view('history.index', compact('recentlyViewed', 'purchasedProducts'));
+    }
+
+    /**
+     * Trang "Sản phẩm đã mua": gom order_items của khách theo sản phẩm, mỗi
+     * sản phẩm 1 dòng kèm lần mua gần nhất, số lần mua, đơn nguồn và cờ "chưa
+     * đánh giá" để hiện nút Đánh giá / Mua lại.
+     *
+     * Chỉ tính đơn KHÔNG bị huỷ — sản phẩm trong đơn đã huỷ thì khách chưa
+     * từng nhận, không coi là "đã mua".
+     *
+     * @return \Illuminate\View\View
+     */
+    public function purchased(Request $request)
+    {
+        $userId = $request->user()->id;
+
+        $items = OrderItem::whereHas('order', function ($q) use ($userId) {
+                $q->where('user_id', $userId)->where('status', '!=', 'cancelled');
+            })
+            ->whereHas('product')
+            ->with(['product.variants', 'order'])
+            ->get();
+
+        // Sản phẩm khách đã tự đánh giá rồi -> không mời đánh giá lại nữa.
+        $reviewedProductIds = Review::where('user_id', $userId)
+            ->pluck('product_id')
+            ->flip();
+
+        $purchased = $items
+            ->groupBy('product_id')
+            ->map(function ($group) use ($reviewedProductIds) {
+                // Đơn gần nhất chứa sản phẩm này (theo thời điểm đặt).
+                $latestItem = $group->sortByDesc(fn (OrderItem $item) => $item->order->created_at)->first();
+                $lastOrder = $latestItem->order;
+
+                // Chỉ mời đánh giá khi đã NHẬN được hàng — cùng luật với
+                // Order::canReview() và ReviewController@store.
+                $deliveredOrder = $group
+                    ->filter(fn (OrderItem $item) => $item->order->canReview())
+                    ->sortByDesc(fn (OrderItem $item) => $item->order->created_at)
+                    ->first();
+
+                return [
+                    'product' => $latestItem->product,
+                    'last_order' => $lastOrder,
+                    'last_purchased_at' => $lastOrder->created_at,
+                    'times' => $group->count(),
+                    'can_review' => $deliveredOrder !== null && ! $reviewedProductIds->has($latestItem->product_id),
+                ];
+            })
+            ->sortByDesc('last_purchased_at')
+            ->values();
+
+        return view('history.purchased', compact('purchased'));
     }
 }

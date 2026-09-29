@@ -6,8 +6,10 @@ use App\Mail\BankTransferConfirmedMail;
 use App\Models\Order;
 use App\Services\CodSettlementService;
 use App\Services\GHNOrderService;
+use App\Services\GHNShipmentSyncService;
 use App\Services\LoyaltyService;
 use App\Services\OrderCancellationService;
+use App\Support\OrderChangeContext;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -124,7 +126,7 @@ class AdminOrderController extends Controller
     // Chi tiết một đơn hàng: sản phẩm trong đơn + lịch sử các giao dịch thanh toán liên quan.
     public function show(Order $order)
     {
-        $order->load(['user', 'items.product', 'paymentTransactions']);
+        $order->load(['user', 'items.product', 'paymentTransactions', 'statusHistories.actor']);
 
         return view('admin.orders.show', compact('order'));
     }
@@ -135,9 +137,15 @@ class AdminOrderController extends Controller
         $validated = $request->validate([
             // Không cho chọn "cancelled" ở đây — huỷ đơn phải qua cancel().
             'shipping_status' => ['required', Rule::in(array_diff(array_keys(Order::SHIPPING_LABELS), ['cancelled']))],
+            // GHN là nguồn chuẩn của trạng thái vận chuyển; admin chỉ đổi tay
+            // khi có ngoại lệ (webhook lỡ, hàng thất lạc, khách khiếu nại) nên
+            // bắt buộc ghi rõ lý do vào lịch sử đơn.
+            'note' => ['required', 'string', 'max:255'],
         ], [
             'shipping_status.required' => 'Vui lòng chọn trạng thái vận chuyển.',
             'shipping_status.in' => 'Trạng thái vận chuyển không hợp lệ. Muốn hủy đơn vui lòng dùng nút "Hủy đơn".',
+            'note.required' => 'Vui lòng ghi rõ lý do đổi trạng thái vận chuyển bằng tay.',
+            'note.max' => 'Lý do không được vượt quá 255 ký tự.',
         ]);
 
         $newStatus = $validated['shipping_status'];
@@ -145,7 +153,11 @@ class AdminOrderController extends Controller
         // Khoá dòng đơn để kiểm tra + cập nhật trên dữ liệu mới nhất, tránh
         // đua với webhook GHN cùng đổi shipping_status. Luật chuyển trạng
         // thái nằm tập trung ở Order::shippingTransitionError().
-        $error = DB::transaction(function () use ($order, $newStatus) {
+        $error = OrderChangeContext::run([
+            'source' => 'admin',
+            'actor_id' => auth()->id(),
+            'note' => $validated['note'],
+        ], fn () => DB::transaction(function () use ($order, $newStatus) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
 
             if (! $locked) {
@@ -159,7 +171,7 @@ class AdminOrderController extends Controller
             }
 
             return $error;
-        });
+        }));
 
         if ($error !== null) {
             return back()->with('error', $error);
@@ -181,7 +193,11 @@ class AdminOrderController extends Controller
     // OrderCancellationService xử lý; sau đó huỷ vận đơn GHN (nếu có).
     public function cancel(Order $order, GHNOrderService $ghnOrderService, OrderCancellationService $cancellation)
     {
-        $result = $cancellation->cancel($order, 'Admin hủy đơn hàng.');
+        $result = OrderChangeContext::run([
+            'source' => 'admin',
+            'actor_id' => auth()->id(),
+            'note' => 'Admin huỷ đơn hàng',
+        ], fn () => $cancellation->cancel($order, 'Admin hủy đơn hàng.'));
 
         if (! $result['success']) {
             return back()->with('error', $result['message']);
@@ -216,7 +232,13 @@ class AdminOrderController extends Controller
 
         // Khoá đơn + kiểm tra lại điều kiện trên dòng đã khoá trước khi đặt
         // "processing" (tránh 2 admin cùng bấm tạo lại vận đơn 1 lúc).
-        $locked = DB::transaction(function () use ($order) {
+        $adminContext = [
+            'source' => 'admin',
+            'actor_id' => auth()->id(),
+            'note' => 'Admin tạo lại vận đơn GHN',
+        ];
+
+        $locked = OrderChangeContext::run($adminContext, fn () => DB::transaction(function () use ($order) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
 
             if (! $locked || ! $locked->canRetryGhn()) {
@@ -226,7 +248,7 @@ class AdminOrderController extends Controller
             $locked->update(['shipping_status' => 'processing']);
 
             return $locked;
-        });
+        }));
 
         if (! $locked) {
             return back()->with('error', 'Đơn hàng không đủ điều kiện để tạo lại vận đơn GHN.');
@@ -237,13 +259,12 @@ class AdminOrderController extends Controller
         $isPaid = in_array($order->status, ['paid', 'paid_momo'], true);
         $ghnResponse = $ghnOrderService->create($order, isPaid: $isPaid);
 
-        if (($ghnResponse['code'] ?? null) === 200 && ! empty($ghnResponse['data']['order_code'])) {
-            $order->update([
-                'ghn_order_code' => $ghnResponse['data']['order_code'],
-                'ghn_total_fee' => $ghnResponse['data']['total_fee'] ?? $order->ghn_total_fee,
-                'shipping_status' => 'ready_to_pick',
-            ]);
+        $applied = OrderChangeContext::run(
+            $adminContext,
+            fn () => $ghnOrderService->applyCreateResponse($order, $ghnResponse, (int) $order->ghn_total_fee)
+        );
 
+        if ($applied) {
             return back()->with('success', 'Đã tạo lại vận đơn GHN cho đơn hàng #'.$order->id.'.');
         }
 
@@ -251,7 +272,13 @@ class AdminOrderController extends Controller
             'order_id' => $order->id,
             'response' => $ghnResponse,
         ]);
-        $order->update(['shipping_status' => 'not_shipped']);
+
+        // Trả về 'not_shipped' để đơn còn hiện nút "Tạo lại vận đơn GHN"
+        // (canRetryGhn()) thay vì kẹt mãi ở 'processing'.
+        OrderChangeContext::run(
+            array_merge($adminContext, ['note' => 'Tạo lại vận đơn GHN thất bại']),
+            fn () => $order->update(['shipping_status' => 'not_shipped'])
+        );
 
         return back()->with('error', 'Tạo lại vận đơn GHN thất bại. Vui lòng thử lại sau.');
     }
@@ -273,8 +300,14 @@ class AdminOrderController extends Controller
             return back()->with('error', 'Đơn hàng không ở trạng thái chờ chuyển khoản nên không thể xác nhận.');
         }
 
+        $adminContext = [
+            'source' => 'admin',
+            'actor_id' => auth()->id(),
+            'note' => $request->input('admin_note') ?: 'Admin xác nhận đã nhận được tiền chuyển khoản',
+        ];
+
         try {
-            DB::transaction(function () use ($order, $cancellation) {
+            OrderChangeContext::run($adminContext, fn () => DB::transaction(function () use ($order, $cancellation) {
                 // Khoá lại đơn để đọc trạng thái mới nhất, tránh 2 request xử
                 // lý (ví dụ admin bấm 2 lần / 2 tab) cùng xác nhận một đơn.
                 $locked = Order::whereKey($order->id)->lockForUpdate()->first();
@@ -305,7 +338,7 @@ class AdminOrderController extends Controller
                         'message' => 'Admin xác nhận đã nhận được tiền chuyển khoản.',
                     ]);
                 }
-            });
+            }));
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -322,18 +355,21 @@ class AdminOrderController extends Controller
         $order = Order::with(['items.product', 'items.variant'])->find($order->id);
         $ghnResponse = $ghnOrderService->create($order, isPaid: true);
 
-        if (($ghnResponse['code'] ?? null) === 200 && ! empty($ghnResponse['data']['order_code'])) {
-            $order->update([
-                'ghn_order_code' => $ghnResponse['data']['order_code'],
-                'ghn_total_fee' => $ghnResponse['data']['total_fee'] ?? $order->ghn_total_fee,
-                'shipping_status' => 'ready_to_pick',
-            ]);
-        } else {
+        $applied = OrderChangeContext::run(
+            $adminContext,
+            fn () => $ghnOrderService->applyCreateResponse($order, $ghnResponse, (int) $order->ghn_total_fee)
+        );
+
+        if (! $applied) {
             Log::warning('Xác nhận chuyển khoản đơn #'.$order->id.' thành công nhưng tạo vận đơn GHN thất bại', [
                 'order_id' => $order->id,
                 'response' => $ghnResponse,
             ]);
-            $order->update(['shipping_status' => 'not_shipped']);
+
+            OrderChangeContext::run(
+                array_merge($adminContext, ['note' => 'Tạo vận đơn GHN thất bại sau khi xác nhận chuyển khoản']),
+                fn () => $order->update(['shipping_status' => 'not_shipped'])
+            );
         }
 
         return back()->with('success', 'Đã xác nhận thanh toán chuyển khoản cho đơn hàng #'.$order->id.'.');
@@ -380,11 +416,15 @@ class AdminOrderController extends Controller
             return back()->with('error', $notAwaitingMessage);
         }
 
-        $result = $cancellation->cancel(
+        $result = OrderChangeContext::run([
+            'source' => 'admin',
+            'actor_id' => auth()->id(),
+            'note' => $request->input('admin_note') ?: 'Admin từ chối: không nhận được tiền chuyển khoản',
+        ], fn () => $cancellation->cancel(
             $order,
             'Admin từ chối - không nhận được chuyển khoản.',
             guard: fn (Order $locked) => $locked->status !== 'awaiting_transfer' ? $notAwaitingMessage : null,
-        );
+        ));
 
         if (! $result['success']) {
             return back()->with('error', $result['message']);
@@ -407,5 +447,30 @@ class AdminOrderController extends Controller
         }
 
         return back()->with('success', 'Đã từ chối và hủy đơn hàng chuyển khoản #'.$order->id.'.');
+    }
+
+    /**
+     * Nút "Đồng bộ GHN" ở trang chi tiết đơn (admin): hỏi thẳng GHN trạng
+     * thái + hành trình mới nhất của vận đơn rồi áp vào đơn.
+     *
+     * Dùng khi webhook GHN bị lỡ (máy dev chạy 127.0.0.1 nên GHN không gọi
+     * tới được — lỗi L2 của kế hoạch) thay vì để admin đổi trạng thái bằng
+     * tay và làm sai lệch nguồn dữ liệu chuẩn.
+     */
+    public function syncGhn(Order $order, GHNShipmentSyncService $sync)
+    {
+        if (blank($order->ghn_order_code)) {
+            return back()->with('error', 'Đơn hàng chưa có mã vận đơn GHN để đồng bộ.');
+        }
+
+        $result = $sync->syncFromDetail($order);
+
+        if (! ($result['ok'] ?? false)) {
+            return back()->with('error', $result['message'] ?? 'Không tra cứu được trạng thái vận đơn từ GHN.');
+        }
+
+        return back()->with('success', ($result['changed'] ?? false)
+            ? 'Đã đồng bộ trạng thái vận chuyển mới nhất từ GHN.'
+            : 'Trạng thái vận chuyển đã khớp với GHN, không có gì thay đổi.');
     }
 }

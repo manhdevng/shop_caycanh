@@ -123,6 +123,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Lịch sử duyệt / mua hàng (P1.1)
     Route::get('/lich-su', [HistoryController::class, 'index'])->name('history.index');
 
+    // Sản phẩm đã mua — lưới sản phẩm kèm lần mua gần nhất, nút Mua lại/Đánh giá.
+    Route::get('/san-pham-da-mua', [HistoryController::class, 'purchased'])->name('history.purchased');
+
     // Ticket hỗ trợ (P3.3)
     Route::get('/ho-tro', [TicketController::class, 'index'])->name('tickets.index');
     Route::get('/ho-tro/tao', [TicketController::class, 'create'])->name('tickets.create');
@@ -136,8 +139,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/voucher/save', [VoucherController::class, 'save'])->name('voucher.save');
     Route::get('/vi-voucher', [VoucherController::class, 'wallet'])->name('vouchers.wallet');
 
-    // Thông báo (chuông header) — đánh dấu đã xem
+    // Thông báo (chuông header) — đánh dấu đã xem tab "Khuyến mãi"
     Route::post('/thong-bao/danh-dau-da-xem', [NotificationController::class, 'markSeen'])->name('notifications.mark-seen');
+
+    // Thông báo cá nhân về đơn hàng.
+    // THỨ TỰ QUAN TRỌNG: 2 route tĩnh phải đứng TRƯỚC '/thong-bao/{id}/mo',
+    // nếu không '{id}' sẽ nuốt mất 'so-chua-doc' / 'doc-tat-ca'.
+    Route::get('/thong-bao/so-chua-doc', [NotificationController::class, 'unreadCount'])->name('notifications.unreadCount');
+    Route::post('/thong-bao/doc-tat-ca', [NotificationController::class, 'readAll'])->name('notifications.readAll');
+    Route::get('/thong-bao/{id}/mo', [NotificationController::class, 'open'])->name('notifications.open');
 
     // Thanh toán / Đặt hàng (tính phí ship qua GHN)
     Route::get('/checkout', [OrderController::class, 'index'])->name('checkout');
@@ -147,6 +157,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/orders', [OrderController::class, 'orderHistory'])->name('orders.history');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{order}/huy', [OrderController::class, 'cancel'])->name('orders.cancel');
+
+    // Khách xác nhận đã nhận hàng (chốt mốc "Hoàn thành") và tự tra cứu lại
+    // hành trình GHN. refreshTracking gọi ra API GHN nên chặn bấm liên tục
+    // bằng throttle, tránh bị GHN chặn IP.
+    Route::post('/orders/{order}/da-nhan-hang', [OrderController::class, 'confirmReceived'])->name('orders.confirmReceived');
+    Route::post('/orders/{order}/cap-nhat-van-chuyen', [OrderController::class, 'refreshTracking'])
+        ->middleware('throttle:3,1')
+        ->name('orders.refreshTracking');
 
     // Thanh toán MoMo (thẻ nội địa / thẻ quốc tế / ví MoMo)
     Route::get('/orders/{order}/start-momo', [MomoController::class, 'start'])->name('momo.start');
@@ -195,6 +213,10 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'admin'])->group(functio
     Route::patch('/orders/{order}/status', [AdminOrderController::class, 'updateStatus'])->name('admin.orders.updateStatus');
     Route::post('/orders/{order}/cancel', [AdminOrderController::class, 'cancel'])->name('admin.orders.cancel');
     Route::post('/orders/{order}/retry-ghn', [AdminOrderController::class, 'retryGhn'])->name('admin.orders.retryGhn');
+
+    // Đồng bộ bù trạng thái vận chuyển từ GHN (dùng khi webhook bị lỡ — máy
+    // dev chạy 127.0.0.1 nên GHN không gọi tới được).
+    Route::post('/orders/{order}/sync-ghn', [AdminOrderController::class, 'syncGhn'])->name('admin.orders.syncGhn');
 
     // Đối soát chuyển khoản ngân hàng (C4.1). Chỉ áp dụng cho đơn đang ở
     // trạng thái 'awaiting_transfer'; hai method này ĐÃ tồn tại thật trong

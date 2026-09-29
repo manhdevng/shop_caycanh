@@ -5,6 +5,26 @@
 <div class="max-w-2xl mx-auto">
     <h1 class="text-3xl md:text-4xl mb-6" style="font-family:'Gloock',serif">Hồ sơ của tôi</h1>
 
+    <section style="margin-bottom:32px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px"><h2 style="font-family:'Anton',sans-serif;font-size:24px;text-transform:uppercase;margin:0">Đơn mua</h2><a href="{{ route('orders.history') }}" style="font-size:12px;color:#5C2323;text-decoration:underline">Xem tất cả</a></div>
+        @php
+            $orderStats = [
+                ['tab' => 'cho-thanh-toan', 'label' => 'Chờ thanh toán', 'icon' => 'credit-card', 'count' => data_get($orderStageCounts, 'cho-thanh-toan', 0)],
+                ['tab' => 'cho-lay-hang', 'label' => 'Chờ lấy hàng', 'icon' => 'package', 'count' => data_get($orderStageCounts, 'cho-lay-hang', 0)],
+                ['tab' => 'dang-giao', 'label' => 'Đang giao', 'icon' => 'truck', 'count' => data_get($orderStageCounts, 'dang-giao', 0)],
+                ['tab' => 'da-giao', 'label' => 'Chờ đánh giá', 'icon' => 'star', 'count' => data_get($orderStageCounts, 'cho-danh-gia', 0)],
+            ];
+        @endphp
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+            @foreach($orderStats as $stat)
+                <a href="{{ route('orders.history', ['tab' => $stat['tab']]) }}" style="display:flex;align-items:center;gap:10px;min-width:0;border:1px solid #E5E2DC;border-radius:16px;padding:14px;background:#FFFFFF">
+                    <i data-lucide="{{ $stat['icon'] }}" style="width:20px;height:20px;flex:none;color:#4A6B1F"></i>
+                    <span style="min-width:0"><strong style="display:block;font-family:'Anton',sans-serif;font-size:22px;line-height:1">{{ $stat['count'] }}</strong><span style="display:block;font-family:'Space Mono',monospace;font-size:10px;color:#8A8680;overflow-wrap:anywhere">{{ $stat['label'] }}</span></span>
+                </a>
+            @endforeach
+        </div>
+    </section>
+
     {{-- Điểm thành viên & hạng (P2.2) --}}
     @php
         $tierLabels = [
