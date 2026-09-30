@@ -1,0 +1,42 @@
+# Không đưa vào build context của Docker (khác .gitignore: cái này chỉ áp dụng cho `docker build`)
+.git
+.github
+.agents
+.claude
+.codex
+.cursor
+.idea
+.vscode
+.zed
+.DS_Store
+.env
+.env.*
+**/.env
+**/.env.*
+auth.json
+vendor
+node_modules
+tests
+playwright.config.js
+playwright-report
+test-results
+.phpunit.cache
+.phpunit.result.cache
+bootstrap/cache/*.php
+public/hot
+public/storage
+# storage: chỉ bỏ dữ liệu sinh ra lúc chạy; GIỮ storage/app/public (ảnh sản phẩm nếu đã commit)
+storage/logs
+storage/framework
+storage/pail
+storage/app/private
+storage/*.key
+# ghi chú/kế hoạch cá nhân, công cụ phụ
+Claude outputs
+ke-hoach-2-agent
+scrollcraft
+docs
+*.md
+!README.md
+Dockerfile
+.dockerignore

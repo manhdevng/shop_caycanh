@@ -17,10 +17,17 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // Factory cần Faker (gói require-dev). Image production cài `composer install --no-dev`
+        // nên KHÔNG có Faker -> chỉ tạo user thử ở máy local/testing, tránh lỗi
+        // "Class Faker\Factory not found" khi Render chạy db:seed.
+        if (app()->environment(['local', 'testing'])) {
+            if (! User::where('email', 'test@example.com')->exists()) {
+                User::factory()->create([
+                    'name' => 'Test User',
+                    'email' => 'test@example.com',
+                ]);
+            }
+        }
 
         $this->call([
             AdminUserSeeder::class,

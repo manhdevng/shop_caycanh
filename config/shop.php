@@ -20,6 +20,7 @@
 return [
     // Tài khoản admin do AdminUserSeeder tạo — đặt trong .env, KHÔNG viết cứng ở đây.
     'admin' => [
+        'name' => env('ADMIN_NAME', 'Admin User'),
         'email' => env('ADMIN_EMAIL'),
         'password' => env('ADMIN_PASSWORD'),
     ],
