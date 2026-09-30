@@ -16,6 +16,17 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
         ]);
 
+        // Render (và mọi reverse proxy) chuyển HTTPS -> HTTP vào container. Tin header
+        // X-Forwarded-* từ proxy để Laravel biết request gốc là HTTPS: asset()/url()
+        // sinh https://, cookie SESSION_SECURE_COOKIE hoạt động. Local không đặt biến
+        // này nên không bị ảnh hưởng.
+        $trustedProxies = env('TRUSTED_PROXIES');
+        if (filled($trustedProxies)) {
+            $middleware->trustProxies(
+                at: $trustedProxies === '*' ? '*' : array_map('trim', explode(',', $trustedProxies)),
+            );
+        }
+
         // MoMo/GHN gọi thẳng từ máy chủ của họ (server-to-server), không mang theo
         // CSRF token của Laravel -> phải loại trừ các route webhook khỏi middleware CSRF.
         $middleware->validateCsrfTokens(except: [
