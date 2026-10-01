@@ -60,7 +60,7 @@
 
     @if($products->hasPages())
         <div style="margin-top:56px">
-            {{ $products->links() }}
+            @include('shop.partials.pagination', ['paginator' => $products])
         </div>
     @endif
 </section>

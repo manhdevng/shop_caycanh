@@ -239,10 +239,7 @@
                     @endfor
                 </div>
             </div>
-            <div style="display:flex;align-items:center;gap:10px">
-                <a href="{{ $products->previousPageUrl() ?? '#' }}" aria-label="Trang trước" style="width:40px;height:40px;border-radius:999px;border:1px solid #E5E2DC;background:#FFFFFF;color:{{ $products->onFirstPage() ? '#C7C3BB' : '#1C1C1A' }};font-size:16px;display:flex;align-items:center;justify-content:center;pointer-events:{{ $products->onFirstPage() ? 'none' : 'auto' }}">&lsaquo;</a>
-                <a href="{{ $products->nextPageUrl() ?? '#' }}" aria-label="Trang sau" style="width:40px;height:40px;border-radius:999px;border:1px solid #E5E2DC;background:#FFFFFF;color:{{ $products->hasMorePages() ? '#1C1C1A' : '#C7C3BB' }};font-size:16px;display:flex;align-items:center;justify-content:center;pointer-events:{{ $products->hasMorePages() ? 'auto' : 'none' }}">&rsaquo;</a>
-            </div>
+            @include('shop.partials.pagination', ['paginator' => $products])
         </div>
     @endif
 </section>
