@@ -88,6 +88,13 @@ trap 'exit 0' TERM INT
 php-fpm -F &
 server_pids+=("$!")
 
+# Chờ PHP-FPM mở cổng 9000 rồi mới bật Nginx, tránh vài request đầu (health
+# check của Render) bị 502 "connect() failed (111: Connection refused)".
+for _ in $(seq 1 50); do
+    (echo > /dev/tcp/127.0.0.1/9000) 2>/dev/null && break
+    sleep 0.2
+done
+
 nginx -g 'daemon off;' &
 server_pids+=("$!")
 
