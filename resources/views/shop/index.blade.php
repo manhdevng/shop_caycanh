@@ -61,6 +61,7 @@
 {{-- ==================== TRANG CHỦ ==================== --}}
 
 @push('styles')
+    <link rel="preload" as="image" href="{{ asset('images/hero-bonsai.webp') }}" fetchpriority="high">
     <link rel="stylesheet" href="{{ asset('vendor/scrollcraft/scrollcraft-shop.css') }}">
 @endpush
 @include('shop.partials.home.home-motion')

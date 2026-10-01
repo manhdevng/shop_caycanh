@@ -43,7 +43,7 @@
                                 @if($feature->isVideo())
                                     <video src="{{ $feature->media_url }}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>
                                 @else
-                                    <img src="{{ $feature->media_url }}" alt="{{ $feature->title }}" style="width:100%;height:100%;object-fit:cover;display:block">
+                                    <img src="{{ $feature->media_url }}" alt="{{ $feature->title }}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;display:block">
                                 @endif
                             </div>
                         @else
