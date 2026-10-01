@@ -241,6 +241,12 @@
     });
 
     function useVideo() {
+        // Video không gắn src sẵn (xem hero.blade.php) -> chỉ tải khi thật sự cần.
+        if (!video.getAttribute('src') && video.dataset.src) {
+            video.preload = 'auto';
+            video.src = video.dataset.src;
+            video.play().catch(function () {});
+        }
         if (reduceMotion) return;                           // giảm chuyển động + không có ảnh -> để video gốc
         resize();
         if (video.readyState >= 2) start();
