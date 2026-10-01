@@ -270,14 +270,17 @@
 </header>
 
 <main id="mainContent" class="{{ $isHomeHero ? '' : 'page-with-header-offset' }}">
-    @if (session('success'))
-        <div style="max-width:1400px;margin:16px auto 0;padding:0 24px">
-            <div style="background:#EEF3EA;border:1px solid #C9D8C0;color:#3F5B45;border-radius:12px;padding:12px 16px;font-size:13px">{{ session('success') }}</div>
-        </div>
-    @endif
-    @if (session('error'))
-        <div style="max-width:1400px;margin:16px auto 0;padding:0 24px">
-            <div style="background:#FBEAEA;border:1px solid #E7C6C6;color:#B3261E;border-radius:12px;padding:12px 16px;font-size:13px">{{ session('error') }}</div>
+    @if (session('success') || session('error'))
+        <style>
+            .flash-toast{position:fixed;top:calc(var(--header-h,76px) + 12px);left:50%;transform:translateX(-50%);z-index:var(--z-toast,300);width:max-content;max-width:calc(100vw - 32px);padding:12px 40px 12px 16px;border-radius:12px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,0.12);animation:flashToastOut .4s ease 4.5s forwards}
+            .flash-toast--success{background:#EEF3EA;border:1px solid #C9D8C0;color:#3F5B45}
+            .flash-toast--error{background:#FBEAEA;border:1px solid #E7C6C6;color:#B3261E}
+            .flash-toast button{position:absolute;top:50%;right:12px;transform:translateY(-50%);background:none;border:0;color:inherit;font-size:18px;line-height:1;cursor:pointer;padding:0}
+            @keyframes flashToastOut{to{opacity:0;visibility:hidden}}
+        </style>
+        <div class="flash-toast {{ session('success') ? 'flash-toast--success' : 'flash-toast--error' }}" role="status">
+            {{ session('success') ?? session('error') }}
+            <button type="button" aria-label="Đóng" onclick="this.parentElement.remove()">&times;</button>
         </div>
     @endif
 
