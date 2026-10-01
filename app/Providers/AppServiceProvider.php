@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Models\Category;
 use App\Support\NotificationFeed;
+use Illuminate\Auth\Notifications\VerifyEmail;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -22,6 +24,23 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Thư xác nhận email khi đăng ký — viết bằng tiếng Việt thay cho mẫu
+        // tiếng Anh mặc định của Laravel. $url là link có chữ ký, hết hạn sau
+        // config('auth.verification.expire', 60) phút.
+        VerifyEmail::toMailUsing(function (object $notifiable, string $url) {
+            $shop = config('shop.name', 'Cây Cảnh Shop');
+            $minutes = config('auth.verification.expire', 60);
+
+            return (new MailMessage)
+                ->subject('Xác nhận email – '.$shop)
+                ->greeting('Xin chào '.($notifiable->name ?: 'bạn').'!')
+                ->line('Cảm ơn bạn đã đăng ký tài khoản tại '.$shop.'.')
+                ->line('Vui lòng bấm nút bên dưới để xác nhận địa chỉ email của bạn.')
+                ->action('Xác nhận email', $url)
+                ->line('Link có hiệu lực trong '.$minutes.' phút. Nếu bạn không đăng ký tài khoản, hãy bỏ qua email này.')
+                ->salutation('Trân trọng,'."\n\n".$shop);
+        });
+
         // Menu "Danh mục cây cảnh / Hoa" trên navbar — dùng chung cho mọi
         // trang khách hàng (layouts.shop). Chỉ lấy nhóm gốc scope
         // plant/flower (Phase 4 chia 2 cột theo scope); nhóm scope='both' là
