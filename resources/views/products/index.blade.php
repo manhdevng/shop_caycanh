@@ -6,7 +6,16 @@
 <div class="bg-white rounded-[32px] p-8 border border-green-border shadow-sm">
     <div class="flex justify-between items-center mb-6">
         <h2 class="text-5xl font-medium gloock text-text-primary tracking-tight">Quản lý Sản phẩm</h2>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+            @if(\Illuminate\Support\Facades\Route::has('admin.inventory.index'))
+                <a class="px-5 py-3 bg-white text-text-secondary rounded-pill font-medium hover:bg-green-background transition-colors flex items-center gap-2 text-decoration-none border border-green-border text-sm" href="{{ route('admin.inventory.index') }}">
+                    <i data-lucide="boxes" class="w-4 h-4"></i>
+                    Tồn kho
+                    @if($outOfStockCount > 0)
+                        <span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-pill text-xs mono" title="Sản phẩm đang bán đã hết hàng">{{ $outOfStockCount }} hết</span>
+                    @endif
+                </a>
+            @endif
             <a class="px-5 py-3 bg-white text-text-secondary rounded-pill font-medium hover:bg-green-background transition-colors flex items-center gap-2 text-decoration-none border border-green-border text-sm" href="{{ route('products.trashed') }}">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                 Thùng rác
@@ -100,6 +109,7 @@
                     <th class="py-4 pr-4 font-semibold text-text-secondary mono text-xs uppercase tracking-wider">Tên sản phẩm</th>
                     <th class="py-4 pr-4 font-semibold text-text-secondary mono text-xs uppercase tracking-wider">Loại</th>
                     <th class="py-4 pr-4 font-semibold text-text-secondary mono text-xs uppercase tracking-wider">Giá</th>
+                    <th class="py-4 pr-4 font-semibold text-text-secondary mono text-xs uppercase tracking-wider text-right">Tồn kho</th>
                     <th class="py-4 pr-4 font-semibold text-text-secondary mono text-xs uppercase tracking-wider">Trạng thái</th>
                     <th class="py-4 font-semibold text-text-secondary mono text-xs uppercase tracking-wider text-right">Hành động</th>
                 </tr>
@@ -143,6 +153,7 @@
                             {{ number_format($product->base_price, 0, ',', '.') }} đ
                         @endif
                     </td>
+                    <td class="py-5 pr-4 text-right mono font-semibold {{ (int) $product->stock <= 0 ? 'text-red-600' : ((int) $product->stock <= \App\Http\Controllers\AdminInventoryController::DEFAULT_LOW_THRESHOLD ? 'text-amber-600' : 'text-text-primary') }}">{{ (int) $product->stock }}</td>
                     <td class="py-5 pr-4">
                         @if($product->is_active)
                             <span class="inline-block whitespace-nowrap px-3 py-1 bg-green-primary border border-green-border/50 text-white rounded-pill text-xs mono font-semibold">Hiển thị</span>
@@ -170,7 +181,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="7" class="py-12 text-center text-text-secondary">
+                    <td colspan="8" class="py-12 text-center text-text-secondary">
                         Chưa có sản phẩm nào.
                     </td>
                 </tr>

@@ -310,10 +310,12 @@
 {{-- Lightbox xem ảnh đánh giá (dùng chung cho mọi ảnh trong #reviews-list, kể
      cả sau khi nội dung được nạp lại bằng AJAX — điều hướng bằng event
      delegation nên không cần gắn lại listener mỗi lần đổi trang/bộ lọc). --}}
+{{-- Thuộc tính hidden bị display:flex inline ghi đè nên lightbox hiện sẵn khi tải trang — ép ẩn bằng CSS. --}}
+<style>#review-lightbox[hidden]{display:none !important}</style>
 <div id="review-lightbox" role="dialog" aria-modal="true" aria-label="Xem ảnh đánh giá" hidden style="position:fixed;inset:0;z-index:var(--z-modal,400);background:rgba(28,28,26,.9);display:flex;align-items:center;justify-content:center;padding:20px">
     <button type="button" id="review-lightbox-close" aria-label="Đóng" style="position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#FFFFFF;border:none;cursor:pointer;font-size:20px">✕</button>
     <button type="button" id="review-lightbox-prev" aria-label="Ảnh trước" style="position:absolute;left:16px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);color:#FFFFFF;border:none;cursor:pointer;font-size:20px">‹</button>
-    <img id="review-lightbox-img" src="" alt="Ảnh đánh giá phóng to" style="max-width:min(90vw,720px);max-height:85vh;object-fit:contain;border-radius:8px">
+    <img id="review-lightbox-img" alt="Ảnh đánh giá phóng to" style="max-width:min(90vw,720px);max-height:85vh;object-fit:contain;border-radius:8px">
     <button type="button" id="review-lightbox-next" aria-label="Ảnh sau" style="position:absolute;right:16px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);color:#FFFFFF;border:none;cursor:pointer;font-size:20px">›</button>
 </div>
 
@@ -825,7 +827,7 @@
 
     function closeReviewLightbox() {
         if (reviewLightbox) { reviewLightbox.hidden = true; }
-        if (reviewLightboxImg) { reviewLightboxImg.src = ''; }
+        if (reviewLightboxImg) { reviewLightboxImg.removeAttribute('src'); }
     }
 
     const reviewLightboxCloseBtn = document.getElementById('review-lightbox-close');

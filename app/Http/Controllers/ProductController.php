@@ -57,7 +57,10 @@ class ProductController extends Controller
         $activeCategoryIds = array_filter((array) $request->input('categories', []));
         $activeCategories = Category::whereIn('id', $activeCategoryIds)->get();
 
-        return view('products.index', compact('products', 'categories', 'activeCategories', 'type', 'search'));
+        // Số sản phẩm đang bán đã hết hàng — hiện lối tắt sang trang tồn kho.
+        $outOfStockCount = Product::where('is_active', true)->where('stock', '<=', 0)->count();
+
+        return view('products.index', compact('products', 'categories', 'activeCategories', 'type', 'search', 'outOfStockCount'));
     }
 
     public function create()
@@ -96,6 +99,8 @@ class ProductController extends Controller
             if ($request->has('categories')) {
                 $product->categories()->attach($request->categories);
             }
+
+            $this->syncSeasonsFromRequest($request, $product);
 
             if ($request->input('pricing_mode') === 'variants') {
                 foreach ($request->input('variants', []) as $index => $variantData) {
@@ -141,7 +146,7 @@ class ProductController extends Controller
     {
         $categories = Category::whereNull('parent_id')->with('children')->get();
         $selectedCategories = $product->categories->pluck('id')->toArray();
-        $product->load('variants');
+        $product->load(['variants', 'seasons']);
 
         return view('products.edit', compact('product', 'categories', 'selectedCategories'));
     }
@@ -179,6 +184,8 @@ class ProductController extends Controller
 
             // 'categories' is required (min 1) by validation above, always sync.
             $product->categories()->sync($request->categories);
+
+            $this->syncSeasonsFromRequest($request, $product);
 
             if ($request->input('pricing_mode') === 'variants') {
                 $filesToDelete = array_merge(
@@ -266,6 +273,9 @@ class ProductController extends Controller
             'badge' => 'nullable|in:'.implode(',', array_keys(Product::BADGES)),
             'variant_label' => 'nullable|string|max:50',
             'stock' => 'required|integer|min:0',
+            // T8: mùa vụ (bảng product_seasons). Bỏ trống = chưa có dữ liệu mùa.
+            'seasons' => 'nullable|array',
+            'seasons.*' => ['string', Rule::in(array_keys(Product::SEASONS))],
         ];
 
         $messages = [
@@ -274,6 +284,7 @@ class ProductController extends Controller
             'stock.required' => 'Vui lòng nhập số lượng tồn kho.',
             'stock.integer' => 'Số lượng tồn kho phải là số nguyên.',
             'stock.min' => 'Số lượng tồn kho không được nhỏ hơn 0.',
+            'seasons.*.in' => 'Mùa vụ không hợp lệ.',
         ];
 
         if ($request->input('pricing_mode') === 'variants') {
@@ -305,7 +316,30 @@ class ProductController extends Controller
             $messages['base_price.min'] = 'Giá bán phải từ 1.000đ trở lên.';
         }
 
-        return Validator::make($request->all(), $rules, $messages);
+        $validator = Validator::make($request->all(), $rules, $messages);
+
+        $validator->after(function ($validator) use ($request) {
+            $seasons = (array) $request->input('seasons', []);
+            if (in_array('all_year', $seasons, true) && count(array_unique($seasons)) > 1) {
+                $validator->errors()->add('seasons', 'Đã chọn "Quanh năm" thì không chọn thêm mùa cụ thể.');
+            }
+        });
+
+        return $validator;
+    }
+
+    /**
+     * Ghi mùa vụ của sản phẩm (Product::syncSeasons — Agent 2) trong cùng
+     * transaction với sản phẩm. Chỉ ghi khi form có gửi khối mùa
+     * (seasons_submitted) — request không có khối này không xoá mùa đã gán.
+     */
+    private function syncSeasonsFromRequest(Request $request, Product $product): void
+    {
+        if (! $request->boolean('seasons_submitted')) {
+            return;
+        }
+
+        $product->syncSeasons((array) $request->input('seasons', []));
     }
 
     /**

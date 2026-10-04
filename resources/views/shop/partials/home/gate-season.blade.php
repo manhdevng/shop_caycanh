@@ -1,14 +1,12 @@
 @php
-    // Tìm nhóm cây cảnh có tên chứa "sân vườn" (không phân biệt hoa/thường)
-    // trong $plantGroups đã được shop/index.blade.php truyền sẵn xuống include
-    // này. Không query Eloquent mới ở đây.
-    $seasonGroup = collect($plantGroups ?? [])->first(function ($g) {
-        return \Illuminate\Support\Str::contains(\Illuminate\Support\Str::lower($g->name), 'sân vườn');
-    });
-
-    $seasonHref = $seasonGroup
-        ? route('shop.index', ['categories' => $seasonGroup->children->pluck('id')->all()])
-        : route('shop.index', ['type' => 'plant']);
+    // T6: nút cảnh sân vườn trước đây mở nhóm "Cây cảnh sân vườn & ngoài
+    // trời" — nhóm chưa có sản phẩm nào nên khách bấm vào ra trang trống. Nay
+    // mở danh mục Ngoài trời thật mà hàng sản phẩm ngay dưới đang dùng
+    // ($outdoorCategory + $outdoorNoun từ ShopController), và chỉ vẽ nút khi
+    // danh mục đó còn hàng.
+    $seasonHref = ($outdoorCategory ?? null) && ($outdoorProducts ?? collect())->isNotEmpty()
+        ? \App\Http\Controllers\ShopController::catalogUrl(['categories' => [$outdoorCategory->id]])
+        : null;
 @endphp
 
 <section class="sc-gate sc-gate--season">
@@ -22,7 +20,9 @@
         <p class="sc-gate-season__label">Cây sân vườn</p>
         <h2 class="sc-gate-season__title">Khu vườn nở theo mùa</h2>
         <p class="sc-gate-season__desc">Hồng leo, dâm bụt và những khóm hoa cam rực nắng bên lối đi lát đá. Cây sân vườn ưa sáng, bền với nắng mưa, cho khoảng sân nhà bạn đổi màu qua từng tháng.</p>
-        <a href="{{ $seasonHref }}" class="sc-home__view-all sc-home__view-all--inverse">Xem tất cả cây sân vườn <span aria-hidden="true">&rarr;</span></a>
+        @if($seasonHref)
+            <a href="{{ $seasonHref }}" class="sc-home__view-all sc-home__view-all--inverse">Xem tất cả {{ $outdoorNoun ?? 'cây' }} ngoài trời <span aria-hidden="true">&rarr;</span></a>
+        @endif
     </div>
 </section>
 

@@ -144,24 +144,28 @@
         <nav class="header-nav" aria-label="Danh mục sản phẩm" style="display:flex;align-items:center;gap:22px;flex:0 0 auto">
             <a href="{{ route('shop.bestSellers') }}" class="header-icon" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;{{ request()->routeIs('shop.bestSellers') ? 'color:#5C2323' : '' }}">Bán chạy</a>
             @foreach($megaMenus as $scopeValue => $meta)
-                @php $scopeGroups = $navCategories->where('scope', $scopeValue)->filter(fn ($g) => $g->children->isNotEmpty()); @endphp
+                @php
+                    // Chỉ đưa ra danh mục con đang có sản phẩm bán (T5): bấm vào
+                    // nhóm/danh mục rỗng chỉ dẫn tới trang trống.
+                    $scopeGroups = $navCategories->where('scope', $scopeValue)
+                        ->map(fn ($g) => $g->setRelation('children', $g->children->filter(fn ($c) => $c->products_count > 0)->values()))
+                        ->filter(fn ($g) => $g->children->isNotEmpty());
+                @endphp
                 @if($scopeGroups->isNotEmpty())
                     <div class="nav-mega" data-mega-scope="{{ $scopeValue }}">
                         <button type="button" class="nav-mega-trigger header-icon" aria-expanded="false" aria-controls="{{ $meta['panelId'] }}">{{ $meta['label'] }}</button>
                         <div class="nav-mega-panel" id="{{ $meta['panelId'] }}">
                             <div class="nav-mega-panel-inner">
-                                <a href="{{ route('shop.index', ['type' => $scopeValue]) }}" class="nav-mega-all">Tất cả {{ mb_strtolower($meta['label']) }}</a>
+                                <a href="{{ route('shop.catalog', ['type' => $scopeValue]) }}" class="nav-mega-all">Tất cả {{ mb_strtolower($meta['label']) }}</a>
                                 <div class="nav-mega-grid">
                                     @foreach($scopeGroups as $group)
                                         <div class="nav-mega-col">
-                                            <a href="{{ route('shop.index', ['categories' => $group->children->pluck('id')->all()]) }}" class="nav-mega-heading">{{ $group->name }}</a>
+                                            <a href="{{ route('shop.catalog', ['categories' => $group->children->pluck('id')->all()]) }}" class="nav-mega-heading">{{ $group->name }}</a>
                                             @foreach($group->children as $child)
-                                                <a href="{{ route('shop.index', ['categories' => [$child->id], 'type' => $scopeValue]) }}" class="nav-mega-tile">
+                                                <a href="{{ route('shop.catalog', ['categories' => [$child->id], 'type' => $scopeValue]) }}" class="nav-mega-tile">
                                                     <span class="nav-mega-tile-body">
                                                         <span class="nav-mega-tile-name">{{ $child->name }}</span>
-                                                        @if($child->products_count > 0)
-                                                            <span class="nav-mega-tile-count">{{ $child->products_count }} sản phẩm</span>
-                                                        @endif
+                                                        <span class="nav-mega-tile-count">{{ $child->products_count }} sản phẩm</span>
                                                     </span>
                                                 </a>
                                             @endforeach
@@ -173,6 +177,7 @@
                     </div>
                 @endif
             @endforeach
+            <a href="{{ route('shop.catalog') }}" class="header-icon" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;{{ request()->routeIs('shop.catalog') ? 'color:#5C2323' : '' }}">Tất cả</a>
         </nav>
 
         <div class="header-actions" style="display:flex;align-items:center;gap:22px;flex:1 1 auto;justify-content:flex-end;min-width:280px;flex-wrap:wrap">
@@ -321,8 +326,9 @@
 
             <nav class="shop-footer__column" aria-label="Mua sắm">
                 <h3>Mua sắm</h3>
-                <a href="{{ route('shop.index', ['type' => 'plant']) }}">Tất cả cây cảnh</a>
-                <a href="{{ route('shop.index', ['type' => 'flower']) }}">Hoa tươi &amp; hoa sự kiện</a>
+                <a href="{{ route('shop.catalog') }}">Tất cả sản phẩm</a>
+                <a href="{{ route('shop.catalog', ['type' => 'plant']) }}">Tất cả cây cảnh</a>
+                <a href="{{ route('shop.catalog', ['type' => 'flower']) }}">Hoa tươi &amp; hoa sự kiện</a>
                 <a href="{{ route('shop.bestSellers') }}">Sản phẩm bán chạy</a>
             </nav>
 

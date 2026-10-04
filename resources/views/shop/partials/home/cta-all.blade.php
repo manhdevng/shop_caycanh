@@ -8,8 +8,8 @@
         <h2 style="font-family:'Anton',sans-serif;font-size:clamp(26px,3.6vw,42px);line-height:1.2;text-transform:uppercase;color:#1C1C1A;margin:0 0 18px">Cả khu vườn đang chờ bạn</h2>
         <p style="font-size:15px;line-height:1.6;color:#6B6B66;max-width:52ch;margin:0 auto 32px">Hơn cả những gì bạn vừa lướt qua. Xem toàn bộ cây cảnh và hoa đang có tại cửa hàng, lọc theo giá, loại cây và nơi đặt.</p>
         <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap" class="cta-all-buttons">
-            <a href="{{ route('shop.index', ['type' => 'plant']) }}" class="sc-home__view-all sc-home__view-all--filled">Xem tất cả cây cảnh <span aria-hidden="true">&rarr;</span></a>
-            <a href="{{ route('shop.index', ['type' => 'flower']) }}" class="sc-home__view-all">Xem tất cả hoa <span aria-hidden="true">&rarr;</span></a>
+            <a href="{{ \App\Http\Controllers\ShopController::catalogUrl(['type' => 'plant']) }}" class="sc-home__view-all sc-home__view-all--filled">Xem tất cả cây cảnh <span aria-hidden="true">&rarr;</span></a>
+            <a href="{{ \App\Http\Controllers\ShopController::catalogUrl(['type' => 'flower']) }}" class="sc-home__view-all">Xem tất cả hoa <span aria-hidden="true">&rarr;</span></a>
         </div>
     </div>
 </section>

@@ -7,51 +7,71 @@
     <h2 class="text-5xl font-medium gloock text-text-primary tracking-tight">Báo cáo Doanh thu</h2>
 </div>
 
-<!-- Tab Bảng số liệu / Biểu đồ -->
-<div class="flex items-center gap-2 mb-8">
-    <a href="{{ route('admin.reports.index') }}" class="px-5 py-2 rounded-pill text-sm font-medium text-decoration-none border transition-colors bg-white text-text-secondary border-green-border hover:bg-green-background">
-        Bảng số liệu
-    </a>
-    <a href="{{ route('admin.reports.charts') }}" class="px-5 py-2 rounded-pill text-sm font-medium text-decoration-none border transition-colors bg-green-primary text-white border-green-border">
-        Biểu đồ
-    </a>
-</div>
+@include('admin.reports._tabs', ['active' => 'charts'])
+
+@include('admin.reports._filter', ['action' => route('admin.reports.charts')])
 
 <!-- Thông báo dự phòng nếu Chart.js không tải được (CDN bị chặn...) -->
 <div id="chartFallbackNotice" class="hidden mb-6 px-5 py-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-sm">
     Không thể tải thư viện biểu đồ (Chart.js) từ CDN. Vui lòng kiểm tra kết nối mạng hoặc xem báo cáo dạng
-    <a href="{{ route('admin.reports.index') }}" class="underline font-medium">bảng số liệu</a> thay thế.
+    <a href="{{ route('admin.reports.index', $period->query()) }}" class="underline font-medium">bảng số liệu</a> thay thế.
 </div>
+
+<p class="text-sm text-text-secondary mb-4">Tất cả biểu đồ dưới đây cùng kỳ <span class="font-semibold text-text-primary">{{ $period->label }}</span> — tổng doanh thu đã thu: <span class="font-semibold text-text-primary" data-testid="report-total-revenue">{{ number_format($totalRevenue, 0, ',', '.') }} đ</span>.</p>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <div class="bg-white rounded-[32px] p-8 border border-green-border shadow-sm">
         <h3 class="text-xl font-medium gloock text-text-primary mb-6">Doanh thu theo danh mục</h3>
         <div id="catChartData" class="hidden" data-labels="{{ json_encode($catLabels) }}" data-values="{{ json_encode($catRevenue) }}"></div>
+        @if (array_sum($catRevenue) > 0)
         <div class="relative h-72"><canvas id="catChart"></canvas></div>
+        @else
+        <div class="h-72 flex items-center justify-center text-center text-text-secondary italic rounded-2xl bg-green-background/40" data-chart-empty>Không có doanh thu trong kỳ này.</div>
+        @endif
     </div>
 
     <div class="bg-white rounded-[32px] p-8 border border-green-border shadow-sm">
         <h3 class="text-xl font-medium gloock text-text-primary mb-6">Doanh thu theo phương thức thanh toán</h3>
         <div id="methodChartData" class="hidden" data-labels="{{ json_encode($paymentMethodLabels) }}" data-values="{{ json_encode($paymentMethodRevenue) }}"></div>
+        @if (array_sum($paymentMethodRevenue) > 0)
         <div class="relative h-72"><canvas id="methodChart"></canvas></div>
+        @else
+        <div class="h-72 flex items-center justify-center text-center text-text-secondary italic rounded-2xl bg-green-background/40" data-chart-empty>Không có doanh thu trong kỳ này.</div>
+        @endif
     </div>
 
     <div class="bg-white rounded-[32px] p-8 border border-green-border shadow-sm lg:col-span-2">
-        <h3 class="text-xl font-medium gloock text-text-primary mb-6">Doanh thu 30 ngày gần nhất</h3>
+        <h3 class="text-xl font-medium gloock text-text-primary mb-6">Doanh thu theo ngày</h3>
         <div id="dateChartData" class="hidden" data-labels="{{ json_encode($revDateLabels) }}" data-values="{{ json_encode($revDateData) }}"></div>
+        @if ($dailyTooLong)
+        <div class="h-72 flex items-center justify-center text-center text-text-secondary italic rounded-2xl bg-green-background/40" data-chart-empty>Kỳ dài hơn 366 ngày — xem biểu đồ theo tháng/năm bên dưới hoặc thu hẹp khoảng ngày.</div>
+        @else
+        @if ($totalRevenue > 0)
         <div class="relative h-72"><canvas id="dateChart"></canvas></div>
+        @else
+        <div class="h-72 flex items-center justify-center text-center text-text-secondary italic rounded-2xl bg-green-background/40" data-chart-empty>Không có doanh thu trong kỳ này.</div>
+        @endif
+        @endif
     </div>
 
     <div class="bg-white rounded-[32px] p-8 border border-green-border shadow-sm">
-        <h3 class="text-xl font-medium gloock text-text-primary mb-6">Doanh thu 12 tháng gần nhất</h3>
+        <h3 class="text-xl font-medium gloock text-text-primary mb-6">Doanh thu theo tháng</h3>
         <div id="monthChartData" class="hidden" data-labels="{{ json_encode($revMonthLabels) }}" data-values="{{ json_encode($revMonthData) }}"></div>
+        @if ($totalRevenue > 0)
         <div class="relative h-72"><canvas id="monthChart"></canvas></div>
+        @else
+        <div class="h-72 flex items-center justify-center text-center text-text-secondary italic rounded-2xl bg-green-background/40" data-chart-empty>Không có doanh thu trong kỳ này.</div>
+        @endif
     </div>
 
     <div class="bg-white rounded-[32px] p-8 border border-green-border shadow-sm">
         <h3 class="text-xl font-medium gloock text-text-primary mb-6">Doanh thu theo năm</h3>
         <div id="yearChartData" class="hidden" data-labels="{{ json_encode($revYearLabels) }}" data-values="{{ json_encode($revYearData) }}"></div>
+        @if ($totalRevenue > 0)
         <div class="relative h-72"><canvas id="yearChart"></canvas></div>
+        @else
+        <div class="h-72 flex items-center justify-center text-center text-text-secondary italic rounded-2xl bg-green-background/40" data-chart-empty>Không có doanh thu trong kỳ này.</div>
+        @endif
     </div>
 </div>
 
@@ -77,8 +97,14 @@
         var oxbloodSoft = 'rgba(92, 35, 35, 0.55)';
         var palette = ['#5C2323', '#7A3030', '#A1B887', '#B6CC9D', '#CED1C3', '#9CA3AF'];
 
+        // Kỳ không có dữ liệu thì Blade không render canvas — bỏ qua biểu đồ đó.
+        function draw(canvasId, config) {
+            var canvas = document.getElementById(canvasId);
+            if (canvas) new Chart(canvas, config);
+        }
+
         var catData = readChartData('catChartData');
-        new Chart(document.getElementById('catChart'), {
+        draw('catChart', {
             type: 'bar',
             data: {
                 labels: catData.labels,
@@ -88,7 +114,7 @@
         });
 
         var dateData = readChartData('dateChartData');
-        new Chart(document.getElementById('dateChart'), {
+        draw('dateChart', {
             type: 'line',
             data: {
                 labels: dateData.labels,
@@ -98,7 +124,7 @@
         });
 
         var monthData = readChartData('monthChartData');
-        new Chart(document.getElementById('monthChart'), {
+        draw('monthChart', {
             type: 'bar',
             data: {
                 labels: monthData.labels,
@@ -108,7 +134,7 @@
         });
 
         var yearData = readChartData('yearChartData');
-        new Chart(document.getElementById('yearChart'), {
+        draw('yearChart', {
             type: 'bar',
             data: {
                 labels: yearData.labels,
@@ -118,7 +144,7 @@
         });
 
         var methodData = readChartData('methodChartData');
-        new Chart(document.getElementById('methodChart'), {
+        draw('methodChart', {
             type: 'pie',
             data: {
                 labels: methodData.labels,

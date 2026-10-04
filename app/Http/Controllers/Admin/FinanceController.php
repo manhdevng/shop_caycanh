@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Support\ReportPeriod;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +101,28 @@ class FinanceController extends Controller
         return [$query, $filters];
     }
 
+    /**
+     * Lối tắt kỳ nhanh cho bộ lọc tài chính. Chỉ là cách điền sẵn date_from/date_to
+     * (dữ liệu chuẩn để truy vấn), không thêm tham số lọc mới.
+     */
+    private function quickRanges(): array
+    {
+        $now = now();
+        $lastMonth = $now->copy()->startOfMonth()->subMonthNoOverflow();
+        $periods = [
+            '30 ngày gần nhất' => ReportPeriod::make('last30'),
+            'Tháng này' => ReportPeriod::make('month', ['year' => $now->year, 'month' => $now->month]),
+            'Tháng trước' => ReportPeriod::make('month', ['year' => $lastMonth->year, 'month' => $lastMonth->month]),
+            'Quý này' => ReportPeriod::make('quarter', ['year' => $now->year, 'quarter' => $now->quarter]),
+            'Năm nay' => ReportPeriod::make('year', ['year' => $now->year]),
+        ];
+
+        return collect($periods)->map(fn (ReportPeriod $period) => [
+            'date_from' => $period->from->toDateString(),
+            'date_to' => $period->lastDay()->toDateString(),
+        ])->all();
+    }
+
     public function index(Request $request)
     {
         [$query, $filters] = $this->filteredOrders($request);
@@ -125,6 +148,7 @@ class FinanceController extends Controller
             'statusTotals' => $statusTotals, 'methodTotals' => $methodTotals,
             'statuses' => self::STATUSES,
             'methods' => self::METHODS,
+            'quickRanges' => $this->quickRanges(),
         ]);
     }
 

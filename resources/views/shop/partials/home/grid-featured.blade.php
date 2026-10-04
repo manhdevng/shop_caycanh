@@ -14,7 +14,7 @@
     'rowKicker' => $homeFeaturedIsBestSeller ? 'Được yêu thích nhất' : 'Mới về vườn',
     'rowTitle' => $homeFeaturedIsBestSeller ? 'Cây bán chạy' : 'Cây nổi bật',
     'rowNote' => $homeFeaturedIsBestSeller ? 'Mua nhiều nhất trong 30 ngày qua' : null,
-    'rowHref' => $homeFeaturedIsBestSeller ? route('shop.bestSellers') : route('shop.index', ['type' => 'plant']),
+    'rowHref' => $homeFeaturedIsBestSeller ? route('shop.bestSellers') : \App\Http\Controllers\ShopController::catalogUrl(['type' => 'plant']),
     'rowLinkText' => $homeFeaturedIsBestSeller ? 'Xem tất cả bán chạy' : 'Xem tất cả cây cảnh',
     'rowBg' => '#F7F4EF',
     'rowRanked' => $homeFeaturedIsBestSeller,

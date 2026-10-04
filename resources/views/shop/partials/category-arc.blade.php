@@ -2,10 +2,12 @@
     $categoryCards = $plantGroups
         ->concat($flowerGroups)
         ->map(fn ($group) => [
-            'href' => route('shop.index', ['categories' => $group->children->pluck('id')->all()]),
+            'href' => \App\Http\Controllers\ShopController::catalogUrl(['categories' => $group->children->pluck('id')->all()]),
             'image' => $group->image ? asset('storage/' . $group->image) : null,
             'name' => $group->name,
-            'count' => $group->children->sum('products_count'),
+            // Số sản phẩm KHÁC NHAU của cả nhóm — cộng products_count từng
+            // danh mục con sẽ đếm hai lần cây nằm ở hai danh mục con.
+            'count' => $group->active_products_count,
             'type' => $group->scope === 'flower' ? 'Hoa' : 'Cây cảnh',
         ]);
 @endphp

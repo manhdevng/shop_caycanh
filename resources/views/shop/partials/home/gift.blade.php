@@ -4,18 +4,25 @@
      ảnh cảnh 2 MỌC từ đáy lên phủ ảnh cảnh 1 (cùng động từ "Mọc" với lưới sản
      phẩm), chữ cảnh 1 rời lên trên, chữ cảnh 2 nhô lên thay chỗ (home-motion.js,
      hàm giftScene). Không chuyển động: chỉ hiện cảnh 1, sạch, bấm được. --}}
+@php
+    // T6: chỉ hứa "Xem quà tặng" khi có sản phẩm được admin gắn nhãn Quà tặng
+    // thật; chưa có thì nói thật là mở toàn bộ sản phẩm. Không tạo nhãn giả.
+    [$giftHref, $giftLinkText] = ($giftProductCount ?? 0) > 0
+        ? [\App\Http\Controllers\ShopController::catalogUrl(['gift' => 1]), 'Xem quà tặng']
+        : [\App\Http\Controllers\ShopController::catalogUrl(), 'Xem tất cả sản phẩm'];
+@endphp
 <section id="giftSection" style="border-top:1px solid #1C1C1A">
     <div class="gift-stage">
         <div class="sc-gift__panel sc-gift__panel--text" style="background:#F7F4EF;position:relative;overflow:hidden">
             <div class="gift-text" data-gift-text="0" style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:clamp(40px,6vw,72px);padding-top:calc(var(--sc-safe-top, 76px) + 24px)">
                 <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#6B6B66;margin:0 0 18px">Quà tặng ý nghĩa</p>
                 <h2 style="font-family:'Anton',sans-serif;font-size:clamp(26px,3.4vw,38px);line-height:1.35;letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 28px">Được thiết kế tỉ mỉ<br>Ấn tượng ngay khi mở ra</h2>
-                <a href="{{ route('shop.index') }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#5C2323">Xem quà tặng &rarr;</a>
+                <a href="{{ $giftHref }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#5C2323">{{ $giftLinkText }} &rarr;</a>
             </div>
             <div class="gift-text" data-gift-text="1" style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:clamp(40px,6vw,72px);padding-top:calc(var(--sc-safe-top, 76px) + 24px)">
                 <p style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#6B6B66;margin:0 0 18px">Điểm nhấn không gian sống</p>
                 <h2 style="font-family:'Anton',sans-serif;font-size:clamp(26px,3.4vw,38px);line-height:1.35;letter-spacing:0.01em;text-transform:uppercase;color:#1C1C1A;margin:0 0 28px">Nhỏ gọn, tinh tế<br>Tươi mới mọi góc bàn</h2>
-                <a href="{{ route('shop.index') }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#5C2323">Xem quà tặng &rarr;</a>
+                <a href="{{ $giftHref }}" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#5C2323">{{ $giftLinkText }} &rarr;</a>
             </div>
         </div>
         <div class="sc-gift__panel sc-gift__panel--img" style="position:relative;overflow:hidden">

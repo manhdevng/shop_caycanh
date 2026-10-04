@@ -253,6 +253,23 @@
                     @endforeach
                 </select>
             </div>
+
+            <div class="md:col-span-2">
+                <span class="block text-sm font-semibold text-text-primary mb-2 mono">Mùa vụ</span>
+                <input type="hidden" name="seasons_submitted" value="1">
+                @php $selectedSeasons = old('seasons_submitted') ? (array) old('seasons', []) : $product->seasonCodes(); @endphp
+                <div class="flex flex-wrap gap-3">
+                    @foreach(\App\Models\Product::SEASONS as $seasonCode => $seasonLabel)
+                        <label class="inline-flex items-center gap-2 px-4 py-2 rounded-pill border border-green-border/50 bg-[#f8f9f5] cursor-pointer text-sm text-text-primary">
+                            <input type="checkbox" name="seasons[]" value="{{ $seasonCode }}" class="w-4 h-4 rounded border-green-border/50 focus:ring-green-primary" {{ in_array($seasonCode, $selectedSeasons, true) ? 'checked' : '' }}>
+                            {{ $seasonLabel }}
+                        </label>
+                    @endforeach
+                </div>
+                <p class="text-xs text-text-secondary mt-2">Chọn một hoặc nhiều mùa phù hợp; "Quanh năm" dùng riêng. Bỏ trống nếu chưa xác định — sản phẩm sẽ không xuất hiện khi khách lọc theo mùa.</p>
+                @error('seasons')<p class="text-red-500 text-sm mt-1">{{ $message }}</p>@enderror
+                @error('seasons.*')<p class="text-red-500 text-sm mt-1">{{ $message }}</p>@enderror
+            </div>
         </div>
     </div>
 

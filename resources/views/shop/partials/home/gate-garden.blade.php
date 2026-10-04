@@ -16,8 +16,8 @@
 @php
     $indoorGroup = $plantGroups->first(fn ($g) => \Illuminate\Support\Str::contains(\Illuminate\Support\Str::lower($g->name), 'trong nhà'));
     $indoorHref = $indoorGroup
-        ? route('shop.index', ['categories' => $indoorGroup->children->pluck('id')->all()])
-        : route('shop.index', ['type' => 'plant']);
+        ? \App\Http\Controllers\ShopController::catalogUrl(['categories' => $indoorGroup->children->pluck('id')->all()])
+        : \App\Http\Controllers\ShopController::catalogUrl(['type' => 'plant']);
 
     // Ba chiếc lá khung. ax/ay: điểm cắm cuống theo % khung. rot: góc lúc đã
     // hé (tĩnh, cũng là thế mặc định khi không có JS). from: góc lúc khép —

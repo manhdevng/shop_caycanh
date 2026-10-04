@@ -3,32 +3,29 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\SalesMetricService;
+use App\Support\ReportPeriod;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Báo cáo doanh thu. Mọi số liệu trên cả hai tab (bảng số liệu, biểu đồ) dùng
+ * CÙNG một kỳ lọc ReportPeriod và CÙNG quy tắc đơn đã bán SalesMetricService.
+ */
 class AdminReportController extends Controller
 {
-    private function paidOrders(): Builder
-    {
-        $paymentStatus = DB::table('payment_transactions')->select('status')
-            ->whereColumn('order_id', 'orders.id')
-            ->orderByRaw("CASE WHEN status IN ('paid', 'refund_pending', 'refunded') THEN 0 ELSE 1 END")
-            ->orderByDesc('id')->limit(1);
+    /** Kỳ dài hơn số ngày này thì biểu đồ theo ngày được thay bằng ghi chú. */
+    private const MAX_DAILY_POINTS = 366;
 
-        return Order::query()->where('orders.created_at', '<=', now())
-            ->where('orders.status', '!=', 'cancelled')
-            // Loại cả đơn đã huỷ vận chuyển và MỌI trạng thái thuộc luồng hoàn hàng
-            // GHN (returning, return_transporting, ...), không chỉ 'return'/'returned'.
-            ->whereNotIn('orders.shipping_status', array_merge(['cancelled'], Order::SHIPPING_RETURN_STATUSES))
-            ->where(function (Builder $query) use ($paymentStatus) {
-                $query->where($paymentStatus, 'paid')
-                    ->orWhere(function (Builder $legacy) {
-                        $legacy->whereDoesntHave('paymentTransactions')
-                            ->whereIn('orders.status', ['paid', 'cod_paid', 'paid_momo']);
-                    });
-            });
+    public function __construct(private readonly SalesMetricService $sales)
+    {
+    }
+
+    private function paidOrderIds(ReportPeriod $period)
+    {
+        return $this->sales->qualifiedOrderIds($period->from, $period->untilExclusive);
     }
 
     /**
@@ -45,7 +42,7 @@ class AdminReportController extends Controller
      * vào mục "Chưa phân loại" (category_id = null) để tổng các dòng luôn bằng
      * tổng doanh thu order_items của đơn đã thanh toán.
      */
-    private function categoryRevenue(): Collection
+    private function categoryRevenue(ReportPeriod $period): Collection
     {
         $productRoot = DB::table('category_product as cp')
             ->join('categories as c', 'c.id', '=', 'cp.category_id')
@@ -59,28 +56,26 @@ class AdminReportController extends Controller
         return DB::table('order_items')
             ->leftJoinSub($productRoot, 'product_root', 'product_root.product_id', '=', 'order_items.product_id')
             ->leftJoin('categories as root_category', 'root_category.id', '=', 'product_root.root_id')
-            ->whereIn('order_items.order_id', $this->paidOrders()->select('orders.id'))
+            ->whereIn('order_items.order_id', $this->paidOrderIds($period))
             ->select('root_category.id as category_id', 'root_category.name as category_name')
             ->selectRaw('SUM(order_items.price * order_items.quantity) as total_revenue, SUM(order_items.quantity) as total_qty')
             ->groupBy('root_category.id', 'root_category.name')
             ->orderByDesc('total_revenue')->get();
     }
 
-    private function topProducts(): Collection
+    private function topProducts(ReportPeriod $period): Collection
     {
-        return DB::table('order_items')
-            ->join('products', 'order_items.product_id', '=', 'products.id')
-            ->whereIn('order_items.order_id', $this->paidOrders()->select('orders.id'))
-            ->select('products.id as product_id', 'products.name as product_name')
-            ->selectRaw('SUM(order_items.quantity) as total_qty, SUM(order_items.quantity * order_items.price) as total_revenue')
-            ->groupBy('products.id', 'products.name')
-            ->orderByDesc('total_qty')
+        return DB::query()
+            ->fromSub($this->sales->productSales($period->from, $period->untilExclusive), 'sales')
+            ->join('products', 'sales.product_id', '=', 'products.id')
+            ->select('products.id as product_id', 'products.name as product_name', 'sales.total_qty', 'sales.total_revenue')
+            ->orderByDesc('sales.total_qty')->orderByDesc('sales.total_revenue')->orderBy('products.id')
             ->limit(10)->get();
     }
 
-    private function dailyRevenue(): Collection
+    private function dailyRevenue(ReportPeriod $period): Collection
     {
-        return $this->paidOrders()
+        return $this->sales->qualifiedOrders($period->from, $period->untilExclusive)
             ->selectRaw('DATE(orders.created_at) as date, SUM(total_price) as total_revenue, COUNT(*) as order_count')
             ->groupByRaw('DATE(orders.created_at)')->orderBy('date')->get();
     }
@@ -95,72 +90,105 @@ class AdminReportController extends Controller
             ])->values();
     }
 
-    public function index()
+    /**
+     * Khoảng vẽ biểu đồ [start, endExclusive): theo kỳ lọc, cắt ở hết hôm nay
+     * (không vẽ ngày tương lai). Kỳ "toàn thời gian" bắt đầu từ ngày có doanh
+     * thu đầu tiên. Trả null khi không có gì để vẽ.
+     *
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}|null
+     */
+    private function chartRange(ReportPeriod $period, Collection $daily): ?array
     {
-        $categoryRevenue = $this->categoryRevenue();
-        $totalOrders = Order::where('created_at', '<=', now())->count();
-        $totalCustomers = DB::table('users')->where('role', '!=', 'admin')->count();
-        $revenueByDate = $this->dailyRevenue();
+        $tomorrow = CarbonImmutable::now()->startOfDay()->addDay();
+        $start = $period->from ?? ($daily->isEmpty() ? null : CarbonImmutable::parse($daily->first()->date)->startOfDay());
+        $end = $period->untilExclusive && $period->untilExclusive->lessThan($tomorrow) ? $period->untilExclusive : $tomorrow;
+
+        return $start && $start->lessThan($end) ? [$start, $end] : null;
+    }
+
+    public function index(Request $request)
+    {
+        $period = ReportPeriod::fromRequest($request);
+
+        $categoryRevenue = $this->categoryRevenue($period);
+        $totalOrders = Order::query()->where('created_at', '<=', now())
+            ->when($period->from, fn ($query) => $query->where('created_at', '>=', $period->from))
+            ->when($period->untilExclusive, fn ($query) => $query->where('created_at', '<', $period->untilExclusive))
+            ->count();
+        // Kỳ "toàn thời gian" hiển thị tổng khách; kỳ có giới hạn hiển thị khách đăng ký mới trong kỳ.
+        $totalCustomers = DB::table('users')->where('role', '!=', 'admin')
+            ->when($period->from, fn ($query) => $query->where('created_at', '>=', $period->from))
+            ->when($period->untilExclusive, fn ($query) => $query->where('created_at', '<', $period->untilExclusive))
+            ->count();
+        $revenueByDate = $this->dailyRevenue($period);
         $revenueByMonth = $this->periodRevenue($revenueByDate, 'month');
         $revenueByYear = $this->periodRevenue($revenueByDate, 'year');
         $totalRevenue = $revenueByDate->sum('total_revenue');
-        $topProducts = $this->topProducts();
+        $paidOrderCount = $revenueByDate->sum('order_count');
+        $topProducts = $this->topProducts($period);
 
         return view('admin.reports.index', compact(
-            'categoryRevenue', 'totalOrders', 'totalCustomers', 'totalRevenue',
+            'period', 'categoryRevenue', 'totalOrders', 'totalCustomers', 'totalRevenue', 'paidOrderCount',
             'revenueByDate', 'revenueByMonth', 'revenueByYear', 'topProducts'
         ));
     }
 
-    public function charts()
+    public function charts(Request $request)
     {
-        $categories = $this->categoryRevenue();
+        $period = ReportPeriod::fromRequest($request);
+
+        $categories = $this->categoryRevenue($period);
         $catLabels = $categories->map(fn ($row) => $row->category_id === null
             ? 'Chưa phân loại'
             : ($row->category_name ?? 'Danh mục #'.$row->category_id))->all();
         $catRevenue = $categories->pluck('total_revenue')->map(fn ($value) => (float) $value)->all();
 
-        $daily = $this->dailyRevenue();
+        $daily = $this->dailyRevenue($period);
         $byDate = $daily->keyBy('date');
         $byMonth = $this->periodRevenue($daily, 'month')->keyBy('period');
-        $byYear = $this->periodRevenue($daily, 'year');
-        $startDay = Carbon::now()->startOfDay()->subDays(29);
-        $startMonth = Carbon::now()->startOfMonth()->subMonths(11);
-        $revDateLabels = $revDateData = $revMonthLabels = $revMonthData = [];
+        $byYear = $this->periodRevenue($daily, 'year')->keyBy('period');
+        $revDateLabels = $revDateData = $revMonthLabels = $revMonthData = $revYearLabels = $revYearData = [];
+        $dailyTooLong = false;
 
-        for ($i = 0; $i < 30; $i++) {
-            $date = $startDay->copy()->addDays($i)->toDateString();
-            $revDateLabels[] = $date;
-            $revDateData[] = (float) ($byDate->get($date)?->total_revenue ?? 0);
+        if ($range = $this->chartRange($period, $daily)) {
+            [$start, $end] = $range;
+            $dailyTooLong = $start->diffInDays($end) > self::MAX_DAILY_POINTS;
+            if (! $dailyTooLong) {
+                for ($day = $start; $day->lessThan($end); $day = $day->addDay()) {
+                    $revDateLabels[] = $day->format('d/m/Y');
+                    $revDateData[] = (float) ($byDate->get($day->toDateString())?->total_revenue ?? 0);
+                }
+            }
+            for ($month = $start->startOfMonth(); $month->lessThan($end); $month = $month->addMonthNoOverflow()) {
+                $revMonthLabels[] = $month->format('m/Y');
+                $revMonthData[] = (float) ($byMonth->get($month->format('Y-m'))?->total_revenue ?? 0);
+            }
+            for ($year = $start->year; $year <= $end->subDay()->year; $year++) {
+                $revYearLabels[] = (string) $year;
+                $revYearData[] = (float) ($byYear->get((string) $year)?->total_revenue ?? 0);
+            }
         }
-        for ($i = 0; $i < 12; $i++) {
-            $month = $startMonth->copy()->addMonths($i);
-            $revMonthLabels[] = $month->format('m/Y');
-            $revMonthData[] = (float) ($byMonth->get($month->format('Y-m'))?->total_revenue ?? 0);
-        }
-        $revYearLabels = $byYear->pluck('period')->all();
-        $revYearData = $byYear->pluck('total_revenue')->map(fn ($value) => (float) $value)->all();
 
         $gateway = DB::table('payment_transactions')->select('gateway')
             ->whereColumn('order_id', 'orders.id')->where('status', 'paid')->orderByDesc('id')->limit(1);
-        $paid = $this->paidOrders()->select('orders.total_price')->selectSub($gateway, 'gateway')
+        $paid = $this->sales->qualifiedOrders($period->from, $period->untilExclusive)
+            ->select('orders.total_price')->selectSub($gateway, 'gateway')
             ->selectRaw("CASE WHEN orders.status = 'cod_paid' THEN 'cod' ELSE 'momo' END as legacy_gateway");
         $methodRevenue = DB::query()->fromSub($paid, 'paid_orders')
             ->selectRaw('COALESCE(gateway, legacy_gateway) as method, SUM(total_price) as revenue')
             ->groupByRaw('COALESCE(gateway, legacy_gateway)')->pluck('revenue', 'method');
-        // Trước đây bỏ sót "bank_transfer" khỏi biểu đồ khiến doanh thu chuyển
-        // khoản ngân hàng biến mất hoàn toàn dù vẫn được tính trong tổng
-        // doanh thu ở trang bảng số liệu — nay liệt kê đủ cả 3 phương thức.
+        // Liệt kê đủ cả 3 phương thức để doanh thu chuyển khoản không biến mất khỏi biểu đồ.
         $paymentMethodLabels = ['MoMo', 'COD', 'Chuyển khoản ngân hàng'];
         $paymentMethodRevenue = [
             (float) $methodRevenue->get('momo', 0),
             (float) $methodRevenue->get('cod', 0),
             (float) $methodRevenue->get('bank_transfer', 0),
         ];
-        $topProducts = $this->topProducts();
+        $totalRevenue = (float) $daily->sum('total_revenue');
+        $topProducts = $this->topProducts($period);
 
         return view('admin.reports.charts', compact(
-            'catLabels', 'catRevenue', 'revDateLabels', 'revDateData',
+            'period', 'totalRevenue', 'catLabels', 'catRevenue', 'revDateLabels', 'revDateData', 'dailyTooLong',
             'revMonthLabels', 'revMonthData', 'revYearLabels', 'revYearData',
             'paymentMethodLabels', 'paymentMethodRevenue', 'topProducts'
         ));

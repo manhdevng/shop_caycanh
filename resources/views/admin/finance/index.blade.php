@@ -31,6 +31,23 @@
                 @endforeach
             </select>
         </div>
+        <div class="md:col-span-4 flex flex-wrap items-center gap-2">
+            <span class="text-xs font-semibold text-text-secondary uppercase mr-1">Kỳ nhanh:</span>
+            @foreach($quickRanges as $rangeLabel => $range)
+                @php $rangeActive = request('date_from') === $range['date_from'] && request('date_to') === $range['date_to']; @endphp
+                <a href="{{ route('admin.finance.index', array_merge(request()->except(['date_from', 'date_to', 'page']), $range)) }}"
+                   class="px-4 py-1.5 rounded-full text-xs font-medium border transition-colors {{ $rangeActive ? 'bg-green-primary text-white border-green-primary' : 'bg-white/60 text-text-secondary border-green-border hover:bg-green-background' }}">
+                    {{ $rangeLabel }}
+                </a>
+            @endforeach
+        </div>
+        @if($errors->any())
+            <div class="md:col-span-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-sm" role="alert">
+                @foreach($errors->all() as $message)
+                    <div>{{ $message }}</div>
+                @endforeach
+            </div>
+        @endif
         <div class="md:col-span-4 flex justify-end gap-3 mt-2">
             <a href="{{ route('admin.finance.index') }}" class="px-6 py-2 bg-white text-text-primary border border-green-border rounded-full hover:bg-green-background transition-all text-sm font-medium">Làm mới</a>
             <button type="submit" class="px-6 py-2 bg-green-primary text-white rounded-full hover:bg-green-accent transition-all text-sm font-medium">Lọc dữ liệu</button>

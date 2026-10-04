@@ -7,9 +7,14 @@ use App\Models\Product;
 use App\Models\Category;
 use App\Models\HomeFeature;
 use App\Models\Order;
-use App\Models\ProductView;
+use App\Models\ProductSeason;
 use App\Models\Review;
+use App\Services\ProductViewTracker;
+use App\Services\SalesMetricService;
 use App\Support\VoucherPricing;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -17,103 +22,21 @@ class ShopController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Product::where('is_active', true)->with(['categories', 'variants']);
+        $filters = $this->validatedFilters($request, false);
+        $categoryIds = $filters['categories'];
+        $type = $filters['type'];
+        $search = $filters['q'];
+        $sort = $filters['sort'];
 
-        $categoryIds = array_filter($request->input('categories', []));
-        if (!empty($categoryIds)) {
-            $query->whereHas('categories', function ($q) use ($categoryIds) {
-                $q->whereIn('categories.id', $categoryIds);
-            });
-        }
-
-        // Lọc theo loại sản phẩm Cây/Hoa qua cột product_type (D1, F5). Dùng
-        // chung route shop.index hiện có, không thêm route mới.
-        $type = $request->input('type');
-        if (in_array($type, ['plant', 'flower'], true)) {
-            $query->where('product_type', $type);
-        }
-
-        $search = trim((string) $request->input('q'));
-        if ($search !== '') {
-            // C1.5: mở rộng tìm kiếm ngoài tên/mô tả sản phẩm sang: nhãn phân
-            // loại (product_variants.variant_name), tên danh mục, và loại cây/hoa (map từ
-            // khóa tiếng Việt sang products.product_type). Dùng orWhereHas
-            // (EXISTS) thay vì join để không nhân bản dòng kết quả. Toàn bộ
-            // vẫn nằm trong 1 closure -> giữ nguyên AND với các bộ lọc khác
-            // (giá, danh mục, loại, ...).
-            $searchLower = mb_strtolower($search);
-            $query->where(function ($q) use ($search, $searchLower) {
-                $q->where('name', 'like', '%' . $search . '%')
-                    ->orWhere('description', 'like', '%' . $search . '%')
-                    ->orWhereHas('variants', function ($v) use ($search) {
-                        // Bảng product_variants dùng cột variant_name (không
-                        // có cột "label") để lưu nhãn phân loại, vd "Chậu S".
-                        $v->where('variant_name', 'like', '%' . $search . '%');
-                    })
-                    ->orWhereHas('categories', function ($c) use ($search) {
-                        $c->where('categories.name', 'like', '%' . $search . '%');
-                    });
-
-                if (str_contains($searchLower, 'cây') || str_contains($searchLower, 'cay')) {
-                    $q->orWhere('product_type', 'plant');
-                }
-                if (str_contains($searchLower, 'hoa')) {
-                    $q->orWhere('product_type', 'flower');
-                }
-            });
-        }
-
-        // Lọc theo khoảng giá HIỂN THỊ THỰC TẾ trên thẻ sản phẩm (khớp với
-        // $priceLineFor trong resources/views/shop/index.blade.php):
-        //   - Sản phẩm có >=2 phân loại giá khác nhau -> giá thấp nhất trong
-        //     các phân loại (products.variants.min('price')), hiển thị "Từ X₫".
-        //   - Ngược lại -> products.base_price.
-        // Dùng subquery tương quan để tính đúng giá này ngay trong SQL, tránh
-        // lọc sai trên base_price khi giá thật đến từ variant.
-        $effectivePriceExpr = '(CASE WHEN ('
-            . 'SELECT COUNT(DISTINCT pv1.price) FROM product_variants pv1 WHERE pv1.product_id = products.id'
-            . ') >= 2 THEN ('
-            . 'SELECT MIN(pv2.price) FROM product_variants pv2 WHERE pv2.product_id = products.id'
-            . ') ELSE products.base_price END)';
-
-        $priceFilters = $request->validate([
-            'price_min' => ['nullable', 'numeric', 'min:0'],
-            'price_max' => ['nullable', 'numeric', 'min:0'],
-        ], [
-            'price_min.numeric' => 'Giá tối thiểu không hợp lệ.',
-            'price_max.numeric' => 'Giá tối đa không hợp lệ.',
-        ]);
-
-        if ($request->filled('price_min')) {
-            $query->whereRaw($effectivePriceExpr . ' >= ?', [$priceFilters['price_min']]);
-        }
-        if ($request->filled('price_max')) {
-            $query->whereRaw($effectivePriceExpr . ' <= ?', [$priceFilters['price_max']]);
-        }
-
-        // Sắp xếp hiển thị (chỉ ảnh hưởng thứ tự, không đổi tập kết quả)
-        $sort = $request->input('sort', 'featured');
-        match ($sort) {
-            'price-asc' => $query->orderBy('base_price', 'asc'),
-            'price-desc' => $query->orderBy('base_price', 'desc'),
-            'name-asc' => $query->orderBy('name', 'asc'),
-            default => $query->latest(),
-        };
-
-        $products = $query->paginate(12)->withQueryString();
+        $products = $this->filteredProductQuery($filters)
+            ->paginate(12)
+            ->withQueryString();
 
         $activeCategories = Category::whereIn('id', $categoryIds)->get();
 
         // Toàn bộ nhóm danh mục (kèm số sản phẩm mỗi danh mục con) — dùng cho
         // dải "Danh mục nổi bật" và sidebar bộ lọc ở trang khách hàng.
-        $categoryGroups = Category::whereNull('parent_id')
-            ->with(['children' => function ($q) {
-                $q->withCount(['products' => function ($q) {
-                    $q->where('is_active', true);
-                }]);
-            }])
-            ->ordered()
-            ->get();
+        $categoryGroups = $this->categoryGroupsWithCounts();
 
         $bestSellerIds = $this->bestSellerIds();
 
@@ -136,7 +59,6 @@ class ShopController extends Controller
             && !$request->filled('price_min')
             && !$request->filled('price_max')
             && !$hasPriceError;
-        $featuredProduct = null;
         $newestPlants = collect();
         $newestFlowers = collect();
         $homeFeatures = collect();
@@ -144,32 +66,19 @@ class ShopController extends Controller
         $homeSoldCounts = [];
         $indoorCategory = null;
         $outdoorCategory = null;
+        $outdoorNoun = 'cây';
         $indoorProducts = collect();
         $outdoorProducts = collect();
         $homeFeatured = collect();
         $homeFeaturedIsBestSeller = false;
+        $giftProductCount = 0;
 
         if ($showFeatured) {
-            $featuredProduct = Product::where('is_active', true)
-                ->whereNotNull('main_image')
-                ->with(['categories', 'variants'])
-                ->latest()
-                ->first();
-
             // Tách hàng Cây/Hoa bằng cột products.product_type — KHÔNG còn tìm
             // theo tên nhóm danh mục (F5): đổi tên nhóm không còn làm hỏng
             // trang chủ. Xem D1.
             $newestPlants = Product::where('is_active', true)
                 ->plants()
-                ->when($featuredProduct, fn ($q) => $q->where('id', '!=', $featuredProduct->id))
-                ->with(['categories', 'variants'])
-                ->latest()
-                ->take(4)
-                ->get();
-
-            $newestFlowers = Product::where('is_active', true)
-                ->flowers()
-                ->when($featuredProduct, fn ($q) => $q->where('id', '!=', $featuredProduct->id))
                 ->with(['categories', 'variants'])
                 ->latest()
                 ->take(4)
@@ -183,13 +92,14 @@ class ShopController extends Controller
             // ở trên (top 8, cùng điều kiện với nhãn "Bán chạy" trên mỗi thẻ
             // sản phẩm) thay vì gọi lại bestSellerIds() — tránh chạy trùng
             // một query tổng hợp order_items/orders lần thứ hai trong cùng
-            // một request. orderByRaw('FIELD(id, ...)') sẽ lỗi cú pháp SQL nếu
-            // danh sách id rỗng, nên chỉ query khi $bestSellerIds không rỗng.
+            // một request.
             if (!empty($bestSellerIds)) {
-                $homeBestSellers = Product::where('is_active', true)
-                    ->whereIn('id', $bestSellerIds)
-                    ->with(['categories', 'variants'])
-                    ->orderByRaw('FIELD(id, ' . implode(',', $bestSellerIds) . ')')
+                $homeBestSellers = $this->orderByIdList(
+                    Product::where('is_active', true)
+                        ->whereIn('id', $bestSellerIds)
+                        ->with(['categories', 'variants']),
+                    $bestSellerIds
+                )
                     ->take(4)
                     ->get();
             }
@@ -212,16 +122,18 @@ class ShopController extends Controller
                 ->orderBy('id')
                 ->first();
 
+            $inCategory = fn (Category $category) => Product::where('is_active', true)
+                ->whereHas('categories', fn ($q) => $q->where('categories.id', $category->id));
+
             // $excludeIds: cửa hàng hiện chỉ có hơn chục sản phẩm, nếu mỗi hàng
             // đều lấy "mới nhất" thì cùng một cây xuất hiện 3-4 lần trên trang.
             // Loại dần những cây đã khoe ở phía trên để mỗi hàng nói một điều mới.
-            $productsInCategory = function (?Category $category, int $take, array $excludeIds = []) {
+            $productsInCategory = function (?Category $category, int $take, array $excludeIds = []) use ($inCategory) {
                 if (! $category) {
                     return collect();
                 }
 
-                return Product::where('is_active', true)
-                    ->whereHas('categories', fn ($q) => $q->where('categories.id', $category->id))
+                return $inCategory($category)
                     ->when($excludeIds, fn ($q) => $q->whereNotIn('id', $excludeIds))
                     ->with(['categories', 'variants'])
                     ->latest()
@@ -251,11 +163,44 @@ class ShopController extends Controller
             $indoorProducts = $productsInCategory($indoorCategory, 3, $usedIds);
             $outdoorProducts = $productsInCategory($outdoorCategory, 3, $usedIds);
 
-            // Hoa đã đứng ở hàng "cây ngoài trời" thì không lặp lại ở lưới hoa.
-            $shownIds = $outdoorProducts->pluck('id')->all();
-            $newestFlowers = $newestFlowers
-                ->reject(fn ($p) => in_array($p->id, $shownIds, true))
-                ->values();
+            // T5: hàng "ngoài trời" phải gọi đúng tên thứ đang bán trong danh
+            // mục đó (hiện toàn là hoa) — đọc product_type thật của cả danh
+            // mục (nút "Xem tất cả" mở cả danh mục, không chỉ 3 thẻ xem trước).
+            if ($outdoorCategory) {
+                $outdoorTypes = $inCategory($outdoorCategory)->distinct()->pluck('product_type')->all();
+                $outdoorNoun = match (true) {
+                    $outdoorTypes === ['flower'] => 'hoa',
+                    in_array('flower', $outdoorTypes, true) => 'cây & hoa',
+                    default => 'cây',
+                };
+            }
+
+            // T4: "Hoa mới nhập" — ưu tiên hoa CHƯA đứng ở hàng ngoài trời,
+            // nhưng chọn đủ từ tập còn lại TRƯỚC khi giới hạn 4 (bản cũ cắt 4
+            // rồi mới loại nên hàng hụt còn 1). Kho hoa ít thì cho phép hoa
+            // ngoài trời xuất hiện lại ở đây — hai hàng khác mục đích; trong
+            // cùng một hàng không bao giờ lặp.
+            $flowerQuery = fn () => Product::where('is_active', true)
+                ->flowers()
+                ->with(['categories', 'variants'])
+                ->latest();
+            $outdoorIds = $outdoorProducts->pluck('id')->all();
+            $newestFlowers = $flowerQuery()
+                ->when($outdoorIds, fn ($q) => $q->whereNotIn('id', $outdoorIds))
+                ->take(4)
+                ->get();
+            if ($newestFlowers->count() < 4 && $outdoorIds) {
+                $newestFlowers = $newestFlowers->concat(
+                    $flowerQuery()
+                        ->whereIn('id', $outdoorIds)
+                        ->take(4 - $newestFlowers->count())
+                        ->get()
+                )->values();
+            }
+
+            // T6: nút "Xem quà tặng" chỉ giữ lời hứa đó khi có sản phẩm thật
+            // được admin gắn nhãn Quà tặng; không thì đổi lời nút.
+            $giftProductCount = Product::where('is_active', true)->where('badge', 'gift')->count();
         }
 
         // FAQ hiển thị ở trang chủ (nhóm "general") — P3.1.
@@ -274,7 +219,6 @@ class ShopController extends Controller
             'type',
             'bestSellerIds',
             'showFeatured',
-            'featuredProduct',
             'newestPlants',
             'newestFlowers',
             'homeFeatures',
@@ -284,30 +228,277 @@ class ShopController extends Controller
             'homeFeaturedIsBestSeller',
             'indoorCategory',
             'outdoorCategory',
+            'outdoorNoun',
             'indoorProducts',
             'outdoorProducts',
+            'giftProductCount',
             'faqs'
         ));
     }
 
-    public function show(Product $product)
+    /**
+     * T8: trang danh sách toàn bộ sản phẩm có lọc (route shop.catalog,
+     * GET /cua-hang). Dùng chung validatedFilters()/filteredProductQuery()
+     * với index() nên hai trang lọc giống hệt nhau; trang này thêm lọc mùa,
+     * bán chạy và quà tặng — mỗi bộ lọc chỉ hiện khi có dữ liệu thật.
+     *
+     * Chưa có bộ lọc "Đang giảm giá": hệ thống chưa có giá giảm riêng của sản
+     * phẩm được áp dụng xuyên suốt thẻ/giỏ/thanh toán (chỉ có voucher chung).
+     */
+    public function catalog(Request $request)
+    {
+        $filters = $this->validatedFilters($request, true);
+
+        $bestSellerIds = $this->bestSellerIds();
+        $bestSellerListIds = $this->bestSellerIds(60);
+        $giftProductCount = Product::where('is_active', true)->where('badge', 'gift')->count();
+
+        // Bộ lọc không còn dữ liệu (vd link cũ ?gift=1 khi đã hết quà tặng,
+        // ?season= khi chưa gán mùa) thì bỏ qua thay vì trả trang rỗng.
+        if (empty($bestSellerListIds)) {
+            $filters['bestseller'] = false;
+        }
+        if ($giftProductCount === 0) {
+            $filters['gift'] = false;
+        }
+
+        // Chỉ đưa ra lựa chọn mùa đã có sản phẩm đang bán được gán. all_year
+        // khớp mọi mùa cụ thể (xem Product::scopeInSeason) nên có all_year là
+        // mọi mùa đều có kết quả.
+        $assignedSeasons = ProductSeason::query()
+            ->whereHas('product', fn ($q) => $q->where('is_active', true))
+            ->distinct()
+            ->pluck('season')
+            ->all();
+        $seasonOptions = collect(Product::SEASONS)
+            ->filter(fn ($label, $code) => in_array($code, $assignedSeasons, true)
+                || ($code !== 'all_year' && in_array('all_year', $assignedSeasons, true)))
+            ->all();
+
+        if ($filters['season'] !== null && ! array_key_exists($filters['season'], $seasonOptions)) {
+            $filters['season'] = null;
+        }
+
+        $products = $this->filteredProductQuery($filters, $bestSellerListIds)
+            ->paginate(12)
+            ->withQueryString();
+
+        $categoryGroups = $this->categoryGroupsWithCounts();
+
+        return view('shop.catalog', [
+            'products' => $products,
+            'filters' => $filters,
+            'categoryGroups' => $categoryGroups,
+            'bestSellerIds' => $bestSellerIds,
+            'hasBestSellers' => !empty($bestSellerListIds),
+            'giftProductCount' => $giftProductCount,
+            'seasonOptions' => $seasonOptions,
+        ]);
+    }
+
+    /**
+     * URL tới trang danh sách sản phẩm (shop.catalog) — dùng ở các nút
+     * "Xem tất cả" của trang chủ.
+     *
+     * @param  array<string, mixed>  $params
+     */
+    public static function catalogUrl(array $params = []): string
+    {
+        return route('shop.catalog', $params);
+    }
+
+    /**
+     * Đọc + kiểm tra bộ lọc danh sách sản phẩm từ query string. $extended
+     * bật các bộ lọc chỉ trang /cua-hang có (mùa, bán chạy, quà tặng).
+     *
+     * @return array{categories: array<int>, type: ?string, q: string, price_min: ?string, price_max: ?string, sort: string, season: ?string, bestseller: bool, gift: bool}
+     */
+    private function validatedFilters(Request $request, bool $extended): array
+    {
+        $request->validate([
+            'price_min' => ['nullable', 'numeric', 'min:0'],
+            'price_max' => ['nullable', 'numeric', 'min:0'],
+        ], [
+            'price_min.numeric' => 'Giá tối thiểu không hợp lệ.',
+            'price_max.numeric' => 'Giá tối đa không hợp lệ.',
+        ]);
+
+        $type = $request->input('type');
+        $sort = $request->input('sort', 'featured');
+        $season = $request->input('season');
+
+        return [
+            'categories' => array_values(array_filter(
+                array_map('intval', (array) $request->input('categories', []))
+            )),
+            'type' => in_array($type, ['plant', 'flower'], true) ? $type : null,
+            'q' => trim((string) $request->input('q')),
+            'price_min' => $request->filled('price_min') ? (string) $request->input('price_min') : null,
+            'price_max' => $request->filled('price_max') ? (string) $request->input('price_max') : null,
+            'sort' => in_array($sort, ['featured', 'price-asc', 'price-desc', 'name-asc'], true) ? $sort : 'featured',
+            'season' => $extended && is_string($season) && array_key_exists($season, Product::SEASONS) ? $season : null,
+            'bestseller' => $extended && $request->boolean('bestseller'),
+            'gift' => $extended && $request->boolean('gift'),
+        ];
+    }
+
+    /**
+     * Truy vấn sản phẩm đang bán theo bộ lọc của validatedFilters().
+     *
+     * @param  array<int>  $bestSellerListIds  thứ hạng bán chạy, chỉ cần khi lọc bestseller
+     */
+    private function filteredProductQuery(array $filters, array $bestSellerListIds = []): Builder
+    {
+        $query = Product::where('is_active', true)->with(['categories', 'variants']);
+
+        if (!empty($filters['categories'])) {
+            $query->whereHas('categories', function ($q) use ($filters) {
+                $q->whereIn('categories.id', $filters['categories']);
+            });
+        }
+
+        // Lọc theo loại sản phẩm Cây/Hoa qua cột product_type (D1, F5).
+        if ($filters['type'] !== null) {
+            $query->where('product_type', $filters['type']);
+        }
+
+        $search = $filters['q'];
+        if ($search !== '') {
+            // C1.5: mở rộng tìm kiếm ngoài tên/mô tả sản phẩm sang: nhãn phân
+            // loại (product_variants.variant_name), tên danh mục, và loại cây/hoa (map từ
+            // khóa tiếng Việt sang products.product_type). Dùng orWhereHas
+            // (EXISTS) thay vì join để không nhân bản dòng kết quả. Toàn bộ
+            // vẫn nằm trong 1 closure -> giữ nguyên AND với các bộ lọc khác
+            // (giá, danh mục, loại, ...).
+            $searchLower = mb_strtolower($search);
+            $query->where(function ($q) use ($search, $searchLower) {
+                $q->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('description', 'like', '%' . $search . '%')
+                    ->orWhereHas('variants', function ($v) use ($search) {
+                        // Bảng product_variants dùng cột variant_name (không
+                        // có cột "label") để lưu nhãn phân loại, vd "Chậu S".
+                        $v->where('variant_name', 'like', '%' . $search . '%');
+                    })
+                    ->orWhereHas('categories', function ($c) use ($search) {
+                        $c->where('categories.name', 'like', '%' . $search . '%');
+                    });
+
+                if (str_contains($searchLower, 'cây') || str_contains($searchLower, 'cay')) {
+                    $q->orWhere('product_type', 'plant');
+                }
+                if (str_contains($searchLower, 'hoa')) {
+                    $q->orWhere('product_type', 'flower');
+                }
+            });
+        }
+
+        // Lọc/sắp theo giá HIỂN THỊ THỰC TẾ trên thẻ sản phẩm (khớp với
+        // shop.partials.product-card):
+        //   - Sản phẩm có >=2 phân loại giá khác nhau -> giá thấp nhất trong
+        //     các phân loại, hiển thị "Từ X₫".
+        //   - Ngược lại -> products.base_price.
+        // Dùng subquery tương quan để tính đúng giá này ngay trong SQL, tránh
+        // lọc sai trên base_price khi giá thật đến từ variant.
+        $effectivePriceExpr = '(CASE WHEN ('
+            . 'SELECT COUNT(DISTINCT pv1.price) FROM product_variants pv1 WHERE pv1.product_id = products.id'
+            . ') >= 2 THEN ('
+            . 'SELECT MIN(pv2.price) FROM product_variants pv2 WHERE pv2.product_id = products.id'
+            . ') ELSE products.base_price END)';
+
+        if ($filters['price_min'] !== null) {
+            $query->whereRaw($effectivePriceExpr . ' >= ?', [$filters['price_min']]);
+        }
+        if ($filters['price_max'] !== null) {
+            $query->whereRaw($effectivePriceExpr . ' <= ?', [$filters['price_max']]);
+        }
+
+        if ($filters['season'] !== null) {
+            $query->inSeason($filters['season']);
+        }
+
+        // Quà tặng = sản phẩm admin gắn nhãn "Quà tặng" thật, không suy đoán.
+        if ($filters['gift']) {
+            $query->where('badge', 'gift');
+        }
+
+        if ($filters['bestseller']) {
+            $query->whereIn('id', $bestSellerListIds ?: [0]);
+        }
+
+        // Sắp xếp hiển thị (chỉ ảnh hưởng thứ tự, không đổi tập kết quả).
+        // Đang lọc bán chạy + "Đề xuất" -> giữ thứ hạng bán chạy.
+        match (true) {
+            $filters['sort'] === 'price-asc' => $query->orderByRaw($effectivePriceExpr . ' asc'),
+            $filters['sort'] === 'price-desc' => $query->orderByRaw($effectivePriceExpr . ' desc'),
+            $filters['sort'] === 'name-asc' => $query->orderBy('name', 'asc'),
+            $filters['bestseller'] => $this->orderByIdList($query, $bestSellerListIds),
+            default => $query->latest(),
+        };
+
+        return $query->orderBy('id', 'desc');
+    }
+
+    /**
+     * Nhóm danh mục gốc kèm danh mục con (products_count = số sản phẩm đang
+     * bán của từng con) và active_products_count trên mỗi nhóm = số sản phẩm
+     * đang bán KHÁC NHAU trong các danh mục con (một cây thuộc hai danh mục
+     * con chỉ tính một lần) — đúng tập mà thẻ nhóm mở ra khi bấm.
+     */
+    private function categoryGroupsWithCounts(): EloquentCollection
+    {
+        $categoryGroups = Category::whereNull('parent_id')
+            ->with(['children' => function ($q) {
+                $q->withCount(['products' => function ($q) {
+                    $q->where('is_active', true);
+                }]);
+            }])
+            ->ordered()
+            ->get();
+
+        $groupCounts = DB::table('category_product')
+            ->join('categories', 'categories.id', '=', 'category_product.category_id')
+            ->join('products', 'products.id', '=', 'category_product.product_id')
+            ->whereNotNull('categories.parent_id')
+            ->where('products.is_active', true)
+            ->whereNull('products.deleted_at')
+            ->groupBy('categories.parent_id')
+            ->selectRaw('categories.parent_id AS group_id, COUNT(DISTINCT category_product.product_id) AS total')
+            ->pluck('total', 'group_id');
+
+        foreach ($categoryGroups as $group) {
+            $group->setAttribute('active_products_count', (int) ($groupCounts[$group->id] ?? 0));
+        }
+
+        return $categoryGroups;
+    }
+
+    /**
+     * Sắp theo đúng thứ tự $ids (thứ hạng bán chạy). Dùng CASE thay cho
+     * FIELD() của MySQL để chạy được cả trên SQLite (test).
+     *
+     * @param  array<int>  $ids
+     */
+    private function orderByIdList(Builder $query, array $ids): Builder
+    {
+        if (empty($ids)) {
+            return $query;
+        }
+
+        $cases = collect(array_values($ids))
+            ->map(fn ($id, $i) => 'WHEN ' . (int) $id . ' THEN ' . $i)
+            ->implode(' ');
+
+        return $query->orderByRaw('CASE products.id ' . $cases . ' ELSE ' . count($ids) . ' END');
+    }
+
+    public function show(Request $request, Product $product, ProductViewTracker $viewTracker)
     {
         abort_unless($product->is_active, 404);
 
-        // Ghi lại lượt xem cho user đã đăng nhập — dùng để hiển thị "Sản
-        // phẩm đã xem gần đây" (P1.1). Khách chưa đăng nhập không ghi log.
-        // Bọc try/catch để lỗi ghi log (nếu có) không làm vỡ trang xem sản
-        // phẩm — thao tác insert cơ bản, không kỳ vọng lỗi xảy ra.
-        if (auth()->check()) {
-            try {
-                ProductView::create([
-                    'user_id' => auth()->id(),
-                    'product_id' => $product->id,
-                ]);
-            } catch (\Throwable $e) {
-                // Bỏ qua lỗi ghi log lượt xem, không ảnh hưởng trải nghiệm xem sản phẩm.
-            }
-        }
+        // T9: một điểm ghi lượt xem duy nhất — người đăng nhập và khách (phiên
+        // ẩn danh), chống đếm lặp 30 phút, không ghi admin/bot, không bao giờ
+        // làm vỡ trang. Lịch sử "đã xem gần đây" vẫn đọc theo user_id.
+        $viewTracker->record($product, $request);
 
         $product->load(['categories', 'variants']);
 
@@ -594,13 +785,13 @@ class ShopController extends Controller
         $soldCounts = $this->soldCountsFor($listIds);
 
         // Giữ đúng thứ tự "bán chạy nhất trước" đã được tính sẵn trong
-        // $listIds (ORDER BY SUM(quantity) DESC) bằng FIELD(). $listIds
-        // chắc chắn không rỗng ở đây (đã return sớm ở nhánh fallback phía
-        // trên), nên implode() không thể sinh ra FIELD(id, ) rỗng gây lỗi SQL.
-        $products = Product::where('is_active', true)
-            ->whereIn('id', $listIds)
-            ->with(['categories', 'variants'])
-            ->orderByRaw('FIELD(id, ' . implode(',', $listIds) . ')')
+        // $listIds (ORDER BY SUM(quantity) DESC).
+        $products = $this->orderByIdList(
+            Product::where('is_active', true)
+                ->whereIn('id', $listIds)
+                ->with(['categories', 'variants']),
+            $listIds
+        )
             ->paginate(12)
             ->withQueryString();
 
@@ -608,12 +799,11 @@ class ShopController extends Controller
     }
 
     /**
-     * Top N (mặc định 8) sản phẩm bán chạy nhất trong 30 ngày gần nhất, dùng
-     * cho nhãn "Bán chạy" tự động (D4) khi gọi không tham số. Trạng thái đơn
-     * hàng thật đã xác nhận trong User/OrderController::store()
-     * (`cod_ordered`, `pending` cho MoMo) và User/MomoController::completePayment()
-     * (chuyển 'pending' -> 'paid' sau khi thanh toán MoMo thành công) — nên
-     * đơn "đã thật sự bán được hàng" ứng với status IN ('paid', 'cod_ordered').
+     * Top N (mặc định 8) sản phẩm bán chạy nhất trong 30 ngày gần nhất (tính
+     * cả hôm nay), dùng cho nhãn "Bán chạy" tự động (D4), khối "Cây bán chạy"
+     * ở trang chủ và trang /ban-chay. Điều kiện "đơn đã bán" lấy từ
+     * SalesMetricService — cùng nguồn với báo cáo doanh số: tính paid và COD
+     * đã thu (cod_paid); không tính COD mới đặt, đơn huỷ, hoàn tiền/hoàn hàng.
      *
      * @param int $limit Số lượng id tối đa cần lấy (mặc định 8 để không đổi
      *                    hành vi nhãn "Bán chạy" ở index()/show()). Trang
@@ -623,12 +813,9 @@ class ShopController extends Controller
      */
     private function bestSellerIds(int $limit = 8): array
     {
-        return DB::table('order_items')
-            ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->whereIn('orders.status', ['paid', 'cod_ordered'])
-            ->where('orders.created_at', '>=', now()->subDays(30))
-            ->groupBy('order_items.product_id')
-            ->orderByDesc(DB::raw('SUM(order_items.quantity)'))
+        return $this->productSalesLast30Days()
+            ->orderByDesc('total_qty')
+            ->orderBy('order_items.product_id')
             ->limit($limit)
             ->pluck('order_items.product_id')
             ->map(fn ($id) => (int) $id)
@@ -636,12 +823,8 @@ class ShopController extends Controller
     }
 
     /**
-     * Tổng số lượng đã bán (trong 30 ngày gần nhất, chỉ tính đơn đã thật sự
-     * bán được hàng — status IN ('paid', 'cod_ordered')) của từng sản phẩm
-     * trong danh sách $ids truyền vào. Dùng CHUNG cho cả bestSellers() (tính
-     * cho toàn bộ sản phẩm hiển thị trên trang /ban-chay) và index() (tính
-     * cho các sản phẩm bán chạy hiển thị ở trang chủ), để không lặp lại cùng
-     * một điều kiện query ở nhiều nơi.
+     * Tổng số lượng đã bán (cùng khung 30 ngày + quy tắc đơn đã bán như
+     * bestSellerIds()) của từng sản phẩm trong $ids.
      *
      * @param array<int> $ids Danh sách product_id cần tính. Trả về [] ngay
      *                        nếu rỗng để tránh whereIn() với mảng rỗng.
@@ -653,15 +836,21 @@ class ShopController extends Controller
             return [];
         }
 
-        return DB::table('order_items')
-            ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->whereIn('orders.status', ['paid', 'cod_ordered'])
-            ->where('orders.created_at', '>=', now()->subDays(30))
+        return $this->productSalesLast30Days()
             ->whereIn('order_items.product_id', $ids)
-            ->groupBy('order_items.product_id')
-            ->select('order_items.product_id', DB::raw('SUM(order_items.quantity) as total_qty'))
             ->pluck('total_qty', 'order_items.product_id')
             ->map(fn ($qty) => (int) $qty)
             ->all();
+    }
+
+    /**
+     * Khung "30 ngày qua" dùng chung cho nhãn trang chủ và /ban-chay:
+     * [đầu ngày cách đây 29 ngày, đầu ngày mai).
+     */
+    private function productSalesLast30Days(): QueryBuilder
+    {
+        $today = now()->startOfDay();
+
+        return app(SalesMetricService::class)->productSales($today->copy()->subDays(29), $today->copy()->addDay());
     }
 }

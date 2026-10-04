@@ -8,16 +8,20 @@
     $leafCategories = $categoryGroups
         ->whereIn('scope', ['plant', 'flower'])
         ->flatMap(fn ($g) => $g->children)
+        // Danh mục chưa có sản phẩm đang bán thì không đưa ra làm nút lọc
+        // (bấm vào chỉ ra trang trống) — trừ khi khách đang đứng ở đúng nó.
+        ->filter(fn ($c) => $c->products_count > 0 || $activeCategories->contains('id', $c->id))
         ->values();
     // Nhóm gốc Cây cảnh / Hoa ("mục to", vd: Cây cảnh trong nhà, Hoa sự kiện)
     // — hiện thành thẻ trong lưới danh mục trang chủ. Hoa giờ đi theo NHÓM
-    // giống cây, không còn lấy lẻ từng danh mục con. Nhóm chưa có danh mục con
-    // thì ẩn, vì bấm vào sẽ ra trang trống.
+    // giống cây, không còn lấy lẻ từng danh mục con. Nhóm chưa có sản phẩm
+    // đang bán nào (active_products_count — đếm sản phẩm khác nhau, xem
+    // ShopController::categoryGroupsWithCounts) thì ẩn, vì bấm vào ra trang trống.
     $plantGroups = $categoryGroups->where('scope', 'plant')
-        ->filter(fn ($g) => $g->children->isNotEmpty())
+        ->filter(fn ($g) => $g->active_products_count > 0)
         ->values();
     $flowerGroups = $categoryGroups->where('scope', 'flower')
-        ->filter(fn ($g) => $g->children->isNotEmpty())
+        ->filter(fn ($g) => $g->active_products_count > 0)
         ->values();
     $currentCategory = $activeCategories->first();
     // Bấm vào một nhóm = lọc theo toàn bộ danh mục con của nhóm đó -> tiêu đề
@@ -266,38 +270,6 @@
 </section>
 @endif
 
-<script>
-    // ==== Bật/tắt yêu thích trực tiếp trên thẻ sản phẩm (không reload) ====
-    function toggleWishlist(productId, btn) {
-        btn.disabled = true;
-
-        const urlTemplate = "{{ route('wishlist.toggle', ['product' => '__ID__']) }}";
-
-        fetch(urlTemplate.replace('__ID__', productId), {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                'Accept': 'application/json',
-            },
-        })
-            .then(res => {
-                if (!res.ok) throw new Error('request-failed');
-                return res.json();
-            })
-            .then(data => {
-                btn.disabled = false;
-                const icon = btn.querySelector('.wishlist-heart-icon');
-                if (icon) icon.setAttribute('fill', data.liked ? '#5C2323' : 'none');
-                btn.setAttribute('aria-label', (data.liked ? 'Bỏ yêu thích' : 'Yêu thích'));
-                if (typeof showToast === 'function') {
-                    showToast(data.message);
-                }
-            })
-            .catch(() => {
-                // Chưa đăng nhập (401) hoặc lỗi khác -> chuyển hướng đăng nhập thay vì im lặng thất bại.
-                window.location.href = "{{ route('login') }}";
-            });
-    }
-</script>
+@include('shop.partials.wishlist-script')
 
 @endsection

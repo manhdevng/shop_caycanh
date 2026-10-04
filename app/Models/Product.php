@@ -56,9 +56,70 @@ class Product extends Model
         'Màu sắc',
     ];
 
+    /**
+     * Mã mùa vụ (bảng product_seasons, T8). Một sản phẩm có thể gắn nhiều
+     * mùa; all_year là lựa chọn rõ ràng của admin, không phải giá trị mặc
+     * định — sản phẩm chưa gán dòng nào nghĩa là "chưa có dữ liệu mùa".
+     */
+    const SEASONS = [
+        'spring' => 'Mùa xuân',
+        'summer' => 'Mùa hè',
+        'autumn' => 'Mùa thu',
+        'winter' => 'Mùa đông',
+        'all_year' => 'Quanh năm',
+    ];
+
     public function categories()
     {
         return $this->belongsToMany(Category::class);
+    }
+
+    public function seasons()
+    {
+        return $this->hasMany(ProductSeason::class);
+    }
+
+    /**
+     * Mảng mã mùa đã gán, vd ['spring', 'summer'].
+     *
+     * @return array<string>
+     */
+    public function seasonCodes(): array
+    {
+        $seasons = $this->relationLoaded('seasons') ? $this->seasons : $this->seasons()->get();
+
+        return $seasons->pluck('season')->values()->all();
+    }
+
+    /**
+     * Ghi đè toàn bộ mùa của sản phẩm bằng $codes (bỏ mã không nằm trong
+     * SEASONS). Dùng cho form admin (Agent 4).
+     *
+     * @param  array<string>  $codes
+     */
+    public function syncSeasons(array $codes): void
+    {
+        $codes = array_values(array_unique(array_intersect($codes, array_keys(self::SEASONS))));
+
+        $this->seasons()->whereNotIn('season', $codes)->delete();
+
+        $existing = $this->seasons()->pluck('season')->all();
+        foreach (array_diff($codes, $existing) as $code) {
+            $this->seasons()->create(['season' => $code]);
+        }
+
+        $this->unsetRelation('seasons');
+    }
+
+    /**
+     * Sản phẩm hợp mùa $season. Sản phẩm gắn all_year được coi là hợp mọi mùa
+     * cụ thể; lọc all_year chỉ lấy sản phẩm gắn all_year.
+     */
+    public function scopeInSeason(Builder $query, string $season): Builder
+    {
+        $codes = $season === 'all_year' ? ['all_year'] : [$season, 'all_year'];
+
+        return $query->whereHas('seasons', fn ($q) => $q->whereIn('season', $codes));
     }
 
     public function vouchers()

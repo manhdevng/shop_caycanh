@@ -5,6 +5,7 @@ use App\Http\Controllers\AdminAnalyticsController;
 use App\Http\Controllers\AdminChatController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminFaqController;
+use App\Http\Controllers\AdminInventoryController;
 use App\Http\Controllers\AdminOrderController;
 use App\Http\Controllers\AdminReviewController;
 use App\Http\Controllers\AdminPageController;
@@ -92,6 +93,7 @@ Route::post('/ghn/webhook', [GHNWebhookController::class, 'handle'])->name('ghn.
 Route::get('/', [ShopController::class, 'index'])->name('shop.index');
 Route::get('/san-pham/{product}', [ShopController::class, 'show'])->name('shop.show');
 Route::get('/ban-chay', [ShopController::class, 'bestSellers'])->name('shop.bestSellers');
+Route::get('/cua-hang', [ShopController::class, 'catalog'])->name('shop.catalog');
 Route::get('/trang/{slug}', [PageController::class, 'show'])->name('pages.show');
 Route::get('/cam-nang', [PostController::class, 'index'])->name('posts.index');
 Route::get('/cam-nang/{slug}', [PostController::class, 'show'])->name('posts.show');
@@ -231,6 +233,9 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'admin'])->group(functio
 
     // Thùng rác sản phẩm (soft delete + khôi phục; không hỗ trợ xóa vĩnh viễn)
     Route::get('/products-trashed', [ProductController::class, 'trashed'])->name('products.trashed');
+
+    // Theo dõi tồn kho: hết hàng / sắp hết / lâu chưa bán (T7)
+    Route::get('/inventory', [AdminInventoryController::class, 'index'])->name('admin.inventory.index');
     Route::patch('/products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
 
     // Thêm route cho các mục mới trên Sidebar

@@ -14,10 +14,10 @@
       $rowRanked     true -> đánh số #1..#N lên ảnh (khối bán chạy)
       $rowSoldCounts mảng product_id => số đã bán
 
-    Lưới: 2 cột ở mobile, 4 cột ở desktop — CỐ ĐỊNH, kể cả khi hàng chỉ có 2
-    sản phẩm. Cho số cột co theo số sản phẩm thì hàng 2 cây sẽ nở thành hai
-    thẻ rộng gần 700px, to gấp đôi thẻ ở các hàng khác và phá mất nhịp chung
-    của trang; thà để trống hai ô bên phải còn hơn.
+    Lưới: 2 cột ở mobile, 4 cột ở desktop. Bề rộng MỘT thẻ luôn bằng 1/4 hàng
+    (mobile 1/2) dù hàng có ít thẻ — không cho thẻ nở to gấp đôi các hàng
+    khác. Hàng có 1-3 thẻ (data-count) chỉ chiếm đúng số cột cần và được canh
+    giữa, thay vì dồn trái để lại ô trống bên phải trông như thiếu hàng (T3).
 --}}
 @php
     $rowKicker = $rowKicker ?? null;
@@ -47,7 +47,7 @@
             @endif
         </div>
 
-        <div data-grow class="sc-row__grid">
+        <div data-grow class="sc-row__grid" data-count="{{ min($rowProducts->count(), 4) }}">
             @foreach($rowProducts as $rowProduct)
                 @include('shop.partials.product-card', [
                     'product' => $rowProduct,
@@ -69,11 +69,22 @@
 .sc-home .sc-row__kicker { margin: 0 0 10px; font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #5C2323; }
 .sc-home .sc-row__title { margin: 0; font-family: 'Anton', sans-serif; font-size: clamp(22px, 3vw, 30px); letter-spacing: .01em; text-transform: uppercase; color: #1C1C1A; }
 .sc-home .sc-row__note { margin: 8px 0 0; font-size: 14px; color: #6B6B66; }
-.sc-home .sc-row__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px 24px; }
+.sc-home .sc-row__grid { --row-gap-x: 24px; --row-cols: 4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px var(--row-gap-x); }
+.sc-home .sc-row__grid[data-count="1"],
+.sc-home .sc-row__grid[data-count="2"],
+.sc-home .sc-row__grid[data-count="3"] {
+    grid-template-columns: repeat(var(--row-n), calc((100% - (var(--row-cols) - 1) * var(--row-gap-x)) / var(--row-cols)));
+    justify-content: center;
+}
+.sc-home .sc-row__grid[data-count="1"] { --row-n: 1; }
+.sc-home .sc-row__grid[data-count="2"] { --row-n: 2; }
+.sc-home .sc-row__grid[data-count="3"] { --row-n: 3; }
 .sc-home .sc-row__grid .sc-card { display: flex; flex-direction: column; min-width: 0; }
 .sc-home .sc-row__grid .sc-card > :last-child { margin-top: auto; }
 @media (max-width: 860px) {
-    .sc-home .sc-row__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 16px; }
+    .sc-home .sc-row__grid { --row-gap-x: 16px; --row-cols: 2; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px var(--row-gap-x); }
+    .sc-home .sc-row__grid[data-count="2"],
+    .sc-home .sc-row__grid[data-count="3"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>
 @endonce

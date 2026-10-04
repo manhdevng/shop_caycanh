@@ -102,6 +102,7 @@
                 ]],
                 ['label' => 'Sản phẩm', 'icon' => 'package', 'items' => [
                     ['products.index', ['products.*'], 'package', 'Sản phẩm'],
+                    ['admin.inventory.index', ['admin.inventory.*'], 'boxes', 'Tồn kho'],
                     ['categories.index', ['categories.*'], 'folder-tree', 'Danh mục'],
                 ]],
                 ['label' => 'Báo cáo & Tài chính', 'icon' => 'bar-chart-3', 'items' => [

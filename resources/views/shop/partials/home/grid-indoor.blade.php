@@ -13,7 +13,7 @@
     'rowKicker' => 'Cây trong nhà',
     'rowTitle' => 'Cây hợp với trong nhà',
     'rowNote' => 'Ưa bóng râm, ít cần chăm, sống tốt trong phòng máy lạnh.',
-    'rowHref' => $indoorCategory ? route('shop.index', ['categories' => [$indoorCategory->id]]) : route('shop.index', ['type' => 'plant']),
+    'rowHref' => \App\Http\Controllers\ShopController::catalogUrl($indoorCategory ? ['categories' => [$indoorCategory->id]] : ['type' => 'plant']),
     'rowLinkText' => 'Xem tất cả cây trong nhà',
     'rowBg' => '#FFFFFF',
 ])
