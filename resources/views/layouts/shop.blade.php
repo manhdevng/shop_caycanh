@@ -68,25 +68,39 @@
         #siteHeader.header-scrolled .site-search-input{color:#1C1C1A}
         #siteHeader.header-scrolled .site-search-input::placeholder{color:#8A8680}
         #siteHeader.header-scrolled .site-search-icon{color:#8A8680}
+        #siteHeader a:focus-visible,#siteHeader button:focus-visible,#siteHeader input:focus-visible{outline:3px solid #B88A62;outline-offset:3px}
+        #siteHeader .site-search:focus-within{outline:3px solid #B88A62;outline-offset:2px}
+        #siteHeader .header-inner{justify-content:space-between}
+        #accountPanel{position:absolute;right:0;top:28px}
+        #notificationPanel{position:absolute;right:0;top:28px}
+        @media (min-width:641px) and (max-width:1100px){
+            #siteHeader .header-inner{justify-content:flex-start}
+            #siteHeader .header-actions{flex:1 0 100%;min-width:0;gap:16px;justify-content:space-between}
+        }
+        @media (max-width:1100px){
+            #accountPanel,#notificationPanel{position:fixed;right:16px;top:calc(var(--header-h,76px) + 8px)}
+        }
         @media (max-width:900px){
-            .site-search{flex-basis:100%;max-width:none;order:10}
+            .site-search{order:0}
         }
         @media (max-width:640px){
             #siteHeader .header-inner{display:grid !important;grid-template-columns:minmax(0,1fr) auto;gap:9px 12px;padding:10px 16px !important}
             #siteHeader .header-logo{grid-column:1;grid-row:1;font-size:20px !important}
-            #siteHeader .header-nav{grid-column:1 / -1;grid-row:2;gap:18px !important;min-width:0}
+            #siteHeader .header-nav{grid-column:1 / -1;grid-row:2;gap:10px !important;justify-content:space-between;min-width:0}
+            #siteHeader .header-nav .nav-mega-trigger{white-space:nowrap}
             #siteHeader .header-actions{display:contents !important}
             #siteHeader .header-tools{grid-column:2;grid-row:1;gap:14px;justify-self:end}
             #siteHeader .site-search{grid-column:1 / -1;grid-row:3;width:100%;height:36px !important;min-width:0 !important;max-width:none !important;flex:none !important}
             #siteHeader .header-auth{display:none !important}
-            #notificationPanel{position:fixed !important;left:16px;right:16px;top:var(--header-h,76px) !important;width:auto !important;max-width:none !important;max-height:min(420px,calc(100dvh - var(--header-h,76px) - 16px)) !important}
+            #accountPanel,#notificationPanel{left:16px;right:16px;top:calc(var(--header-h,76px) + 8px)}
+            #notificationPanel{width:auto;max-width:none;max-height:min(420px,calc(100dvh - var(--header-h,76px) - 24px))}
         }
 
         /* ==== Mega-menu danh mục (Cây cảnh / Hoa) - dạng full-width chỉ chữ (kiểu Uniqlo) ==== */
         .nav-mega{position:relative}
         .nav-mega-trigger{background:none;border:none;padding:0;cursor:pointer;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase}
         /* Panel full-width, cố định ngay dưới header, đồng nhất kích thước dù mở scope nào */
-        .nav-mega-panel{display:none;position:fixed;left:0;right:0;top:var(--header-h,68px);background:#FFFFFF;border-top:1px solid #E5E2DC;border-bottom:1px solid #E5E2DC;box-shadow:0 12px 24px rgba(0,0,0,0.06);z-index:var(--z-mega,110)}
+        .nav-mega-panel{display:none;position:fixed;left:0;right:0;top:var(--header-h,68px);max-height:calc(100dvh - var(--header-h,68px) - 8px);overflow-y:auto;background:#FFFFFF;border-top:1px solid #E5E2DC;border-bottom:1px solid #E5E2DC;box-shadow:0 12px 24px rgba(0,0,0,0.06);z-index:var(--z-mega,110)}
         .nav-mega.is-open .nav-mega-panel{display:block}
         .nav-mega-panel-inner{max-width:1400px;margin:0 auto;padding:28px 24px}
         .nav-mega-all{display:block;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #EFEAE1;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#5C2323}
@@ -103,7 +117,7 @@
         @media (max-width:900px){
             /* Header có flex-wrap nên trên màn hẹp nó cao hơn 1 dòng -> neo panel theo
                chiều cao header thật (biến --header-h do JS đo), tránh panel che navbar. */
-            .nav-mega-panel{max-height:70vh;overflow-y:auto}
+            .nav-mega-panel{max-height:min(70dvh,calc(100dvh - var(--header-h,68px) - 8px))}
             .nav-mega-panel-inner{padding:22px 20px}
             .nav-mega-grid{grid-template-columns:1fr !important;gap:24px}
         }
@@ -123,7 +137,7 @@
     $isHomeHero = isset($showFeatured) && $showFeatured;
 @endphp
 <header id="siteHeader" class="{{ $isHomeHero ? '' : 'header-scrolled' }}" style="position:fixed;top:0;left:0;width:100%;z-index:var(--z-header,100)">
-    <div class="header-inner" style="max-width:1400px;margin:0 auto;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap">
+    <div class="header-inner" style="max-width:1400px;margin:0 auto;padding:18px 24px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
         <a href="{{ route('shop.index') }}" class="header-logo" style="flex:0 0 auto;font-family:'Anton',sans-serif;font-size:22px;letter-spacing:0.02em;text-transform:uppercase;white-space:nowrap">Cây Cảnh Shop</a>
 
         {{--
@@ -177,10 +191,11 @@
                     </div>
                 @endif
             @endforeach
+            <a href="{{ route('phong-thuy.index') }}" class="header-icon" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;{{ request()->routeIs('phong-thuy.*') ? 'color:#5C2323' : '' }}">Hợp mệnh</a>
             <a href="{{ route('shop.catalog') }}" class="header-icon" style="font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;{{ request()->routeIs('shop.catalog') ? 'color:#5C2323' : '' }}">Tất cả</a>
         </nav>
 
-        <div class="header-actions" style="display:flex;align-items:center;gap:22px;flex:1 1 auto;justify-content:flex-end;min-width:280px;flex-wrap:wrap">
+        <div class="header-actions" style="display:flex;align-items:center;gap:22px;flex:1 1 auto;justify-content:flex-end;min-width:280px">
             <form class="site-search" action="{{ route('shop.index') }}" method="GET" style="display:flex;align-items:center;gap:8px;border-radius:999px;padding:0 6px 0 16px;height:38px;flex:1 1 220px;max-width:320px;min-width:170px">
                 <i data-lucide="search" class="site-search-icon" style="width:16px;height:16px;flex:none"></i>
                 <input type="text" name="q" value="{{ request('q') }}" placeholder="Tìm cây, hoa..." aria-label="Tìm kiếm sản phẩm" class="site-search-input" style="flex:1 1 auto;min-width:0;border:none;background:transparent;outline:none;font-size:13px;font-family:inherit">
@@ -192,7 +207,7 @@
                 <button type="button" id="accountToggle" aria-label="Tài khoản" class="header-icon" style="display:inline-flex;background:none;border:none;padding:0;cursor:pointer">
                     <i data-lucide="user" style="width:19px;height:19px"></i>
                 </button>
-                <div id="accountPanel" style="display:none;position:absolute;right:0;top:28px;background:#FFFFFF;border:1px solid #E5E2DC;border-radius:12px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.08);min-width:200px;z-index:60">
+                <div id="accountPanel" style="display:none;background:#FFFFFF;border:1px solid #E5E2DC;border-radius:12px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.08);min-width:200px;z-index:60">
                     @guest
                         <a href="{{ route('login') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Đăng nhập</a>
                         <a href="{{ route('register') }}" style="display:block;padding:10px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#2B2B28;white-space:nowrap">Đăng ký</a>
@@ -221,7 +236,7 @@
                     <i data-lucide="bell" style="width:19px;height:19px"></i>
                     <span id="notificationBadge" style="display:{{ $unreadNotificationCount > 0 ? 'block' : 'none' }};position:absolute;top:-9px;right:-12px;min-width:20px;height:20px;padding:0 4px;border-radius:999px;background:#5C2323;color:#FFFFFF;font-family:'Space Mono',monospace;font-size:10px;line-height:20px;text-align:center;border:1px solid #FFFFFF">{{ $unreadNotificationCount > 9 ? '9+' : $unreadNotificationCount }}</span>
                 </button>
-                <div id="notificationPanel" style="display:none;position:absolute;right:0;top:28px;background:#FFFFFF;border:1px solid #E5E2DC;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,0.12);width:340px;max-width:calc(100vw - 32px);max-height:420px;overflow:hidden;z-index:60">
+                <div id="notificationPanel" style="display:none;background:#FFFFFF;border:1px solid #E5E2DC;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,0.12);width:340px;max-width:calc(100vw - 32px);max-height:420px;overflow:hidden;z-index:60">
                     <div style="padding:14px 16px;border-bottom:1px solid #E5E2DC;font-family:'Anton',sans-serif;font-size:16px">Thông báo</div>
                     <div role="tablist" aria-label="Loại thông báo" style="display:flex;border-bottom:1px solid #E5E2DC">
                         <button type="button" class="notification-tab" data-notification-tab="orders" aria-selected="{{ $unreadOrderCount > 0 ? 'true' : 'false' }}" style="flex:1;border:0;border-bottom:2px solid {{ $unreadOrderCount > 0 ? '#5C2323' : 'transparent' }};background:#FFFFFF;padding:11px;font-family:'Space Mono',monospace;font-size:11px;cursor:pointer">Đơn hàng</button>
@@ -330,6 +345,7 @@
                 <a href="{{ route('shop.catalog', ['type' => 'plant']) }}">Tất cả cây cảnh</a>
                 <a href="{{ route('shop.catalog', ['type' => 'flower']) }}">Hoa tươi &amp; hoa sự kiện</a>
                 <a href="{{ route('shop.bestSellers') }}">Sản phẩm bán chạy</a>
+                <a href="{{ route('phong-thuy.index') }}">Cây hợp mệnh</a>
             </nav>
 
             <nav class="shop-footer__column" aria-label="Cẩm nang và hỗ trợ">
@@ -479,8 +495,10 @@
     (function () {
         const megas = Array.from(document.querySelectorAll('.nav-mega'));
         let megaCloseTimer = null;
+        let hoverOpenedMega = null;
 
         function closeAllMegas() {
+            hoverOpenedMega = null;
             megas.forEach(function (mega) {
                 mega.classList.remove('is-open');
                 const trigger = mega.querySelector('.nav-mega-trigger');
@@ -499,10 +517,11 @@
         syncHeaderHeight();
         window.addEventListener('resize', syncHeaderHeight);
 
-        function openMega(mega) {
+        function openMega(mega, byHover = false) {
             closeAllMegas();
             syncHeaderHeight();
             mega.classList.add('is-open');
+            hoverOpenedMega = byHover ? mega : null;
             const trigger = mega.querySelector('.nav-mega-trigger');
             if (trigger) trigger.setAttribute('aria-expanded', 'true');
         }
@@ -514,7 +533,11 @@
             trigger.addEventListener('click', function (e) {
                 e.stopPropagation();
                 if (mega.classList.contains('is-open')) {
-                    closeAllMegas();
+                    if (hoverOpenedMega === mega) {
+                        hoverOpenedMega = null;
+                    } else {
+                        closeAllMegas();
+                    }
                 } else {
                     openMega(mega);
                 }
@@ -523,7 +546,7 @@
             mega.addEventListener('mouseenter', function () {
                 if (window.innerWidth <= 900) return; // mobile chỉ dùng click
                 clearTimeout(megaCloseTimer);
-                openMega(mega);
+                openMega(mega, true);
             });
             mega.addEventListener('mouseleave', function () {
                 if (window.innerWidth <= 900) return;
@@ -537,7 +560,11 @@
         });
 
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') closeAllMegas();
+            if (e.key === 'Escape') {
+                const openTrigger = document.querySelector('.nav-mega.is-open .nav-mega-trigger');
+                closeAllMegas();
+                if (openTrigger) openTrigger.focus();
+            }
         });
 
         // API cho trang khác gọi mở mega-menu theo scope ('plant' | 'flower')

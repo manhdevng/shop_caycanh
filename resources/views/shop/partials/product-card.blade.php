@@ -56,8 +56,9 @@
             @unless($product->in_stock)
                 <span style="position:absolute;bottom:10px;left:10px;background:#6B7280;color:#FFFFFF;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;padding:4px 9px;border-radius:3px;z-index:1">Hết hàng</span>
             @endunless
-            @if($product->main_image)
+            @if($product->main_image && \Illuminate\Support\Facades\Storage::disk('public')->exists($product->main_image))
                 <img src="{{ asset('storage/' . $product->main_image) }}" alt="{{ $product->name }}"
+                     onerror="this.onerror=null;this.src='{{ asset('images/product-fallback.svg') }}'"
                      loading="lazy" decoding="async"
                      style="width:100%;height:100%;object-fit:cover;display:block">
             @else

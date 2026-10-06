@@ -71,7 +71,8 @@
 @include('shop.partials.home.home-motion')
 
 {{-- Hành trình trang chủ: hero -> danh mục -> sản phẩm nổi bật
-     -> các khu cây, hoa -> quà tặng -> cam kết -> lời mời cuối.
+     -> các khu cây, hoa -> quà tặng -> "Cây nào hợp mệnh bạn?" (la bàn
+     phong thủy) -> cam kết -> lời mời cuối.
      Danh mục đứng thứ hai để khách chọn nhóm cây hoặc hoa ngay sau khi vào trang. --}}
 <div class="sc-home">
 @include('shop.partials.home.hero')
@@ -91,6 +92,8 @@
 @include('shop.partials.home.grid-flowers')
 
 @include('shop.partials.home.gift')
+
+@include('shop.partials.home.phong-thuy-teaser')
 
 @include('shop.partials.home.promises')
 
@@ -233,18 +236,24 @@
     </div>
 
     @if($products->hasPages())
-        <div style="background:#F7F4EF;border-radius:16px;padding:36px 44px;margin-top:56px;display:flex;justify-content:space-between;align-items:center;gap:40px;flex-wrap:wrap">
-            <div>
+        <div class="sc-results-pager">
+            <div class="sc-results-pager__progress">
                 <p style="font-family:'Anton',sans-serif;font-size:34px;letter-spacing:0.01em;color:#1C1C1A;margin:0 0 14px">{{ $products->firstItem() }}&ndash;{{ $products->lastItem() }} / {{ $products->total() }}</p>
-                <div style="display:flex;gap:4px">
+                <div class="sc-results-pager__dashes" style="display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:4px">
                     @php $filledDashes = (int) round(($products->currentPage() / max(1, $products->lastPage())) * 24); @endphp
                     @for($i = 0; $i < 24; $i++)
-                        <span style="width:9px;height:3px;background:{{ $i < $filledDashes ? '#5C2323' : '#E5E2DC' }};border-radius:2px"></span>
+                        <span style="height:3px;background:{{ $i < $filledDashes ? '#5C2323' : '#E5E2DC' }};border-radius:2px"></span>
                     @endfor
                 </div>
             </div>
             @include('shop.partials.pagination', ['paginator' => $products])
         </div>
+        <style>
+            .sc-results-pager { background:#F7F4EF; border-radius:16px; padding:36px 44px; margin-top:56px; display:flex; justify-content:space-between; align-items:center; gap:40px; flex-wrap:wrap; }
+            .sc-results-pager__progress { flex: 1 1 240px; min-width: 0; max-width: 308px; }
+            .sc-results-pager__dashes { max-width: 100%; }
+            @media (max-width: 640px) { .sc-results-pager { padding: 24px; gap: 24px; } }
+        </style>
     @endif
 </section>
 
