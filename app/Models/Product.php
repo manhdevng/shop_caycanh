@@ -122,6 +122,56 @@ class Product extends Model
         return $query->whereHas('seasons', fn ($q) => $q->whereIn('season', $codes));
     }
 
+    /**
+     * Mã hành phong thủy (bảng product_elements, Cây hợp mệnh). Một cây có
+     * thể thuộc nhiều hành. Cây chưa gán dòng nào nghĩa là "chưa gán hành",
+     * không phải trung tính.
+     */
+    const ELEMENTS = [
+        'kim' => 'Kim',
+        'moc' => 'Mộc',
+        'thuy' => 'Thủy',
+        'hoa' => 'Hỏa',
+        'tho' => 'Thổ',
+    ];
+
+    public function elements()
+    {
+        return $this->hasMany(ProductElement::class);
+    }
+
+    /**
+     * Mảng mã hành đã gán, vd ['kim', 'thuy'].
+     *
+     * @return array<string>
+     */
+    public function elementCodes(): array
+    {
+        $elements = $this->relationLoaded('elements') ? $this->elements : $this->elements()->get();
+
+        return $elements->pluck('element')->values()->all();
+    }
+
+    /**
+     * Ghi đè toàn bộ hành của sản phẩm bằng $codes (bỏ mã không nằm trong
+     * ELEMENTS). Dùng cho form admin.
+     *
+     * @param  array<string>  $codes
+     */
+    public function syncElements(array $codes): void
+    {
+        $codes = array_values(array_unique(array_intersect($codes, array_keys(self::ELEMENTS))));
+
+        $this->elements()->whereNotIn('element', $codes)->delete();
+
+        $existing = $this->elements()->pluck('element')->all();
+        foreach (array_diff($codes, $existing) as $code) {
+            $this->elements()->create(['element' => $code]);
+        }
+
+        $this->unsetRelation('elements');
+    }
+
     public function vouchers()
     {
         return $this->belongsToMany(Voucher::class);

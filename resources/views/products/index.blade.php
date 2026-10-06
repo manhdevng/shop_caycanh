@@ -39,11 +39,23 @@
                     {{ $typeLabel }}
                 </a>
             @endforeach
+
+            {{-- Cây hợp mệnh: lọc cây chưa gán hành phong thủy; giữ các bộ lọc khác. --}}
+            <a href="{{ route('products.index', array_filter(array_merge(request()->except('element', 'page'), ['element' => $elementFilter ? null : 'unassigned']))) }}"
+               title="Chỉ hiện cây cảnh chưa gán hành phong thủy"
+               class="px-5 py-2 rounded-pill text-sm font-medium text-decoration-none border transition-colors inline-flex items-center gap-2 {{ $elementFilter ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-white text-text-secondary border-green-border hover:bg-green-background' }}">
+                Chưa gán hành
+                <span class="px-2 py-0.5 rounded-pill text-xs mono {{ $unassignedElementCount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-green-background text-text-secondary' }}">{{ $unassignedElementCount }}</span>
+                @if($elementFilter)<span aria-hidden="true">✕</span>@endif
+            </a>
         </div>
 
         <form action="{{ route('products.index') }}" method="GET" class="flex items-center gap-2">
             @if($type)
                 <input type="hidden" name="type" value="{{ $type }}">
+            @endif
+            @if($elementFilter)
+                <input type="hidden" name="element" value="{{ $elementFilter }}">
             @endif
             <input type="text" name="q" value="{{ old('q', $search ?? request('q')) }}" placeholder="Tìm theo tên sản phẩm..." class="rounded-xl border-green-border/50 border px-4 py-2 bg-[#f8f9f5] focus:ring-2 focus:ring-green-primary focus:border-green-primary outline-none transition-all text-sm text-text-primary w-64">
             <button type="submit" class="px-4 py-2 bg-white border border-green-border rounded-pill text-text-secondary hover:text-text-primary hover:bg-green-background transition-colors">
@@ -100,6 +112,16 @@
         @endif
     </div>
 
+    @if($elementFilter && collect($elementSuggestions)->filter()->isNotEmpty())
+        {{-- Gán hành hàng loạt: ô chọn nằm ở cột "Loại" từng dòng (thuộc form này qua thuộc tính form=). --}}
+        <form id="bulkElementsForm" method="POST" action="{{ route('products.elements.suggest') }}"
+              class="mt-4 mb-2 flex flex-wrap items-center gap-3 px-5 py-4 rounded-2xl bg-amber-50 border border-amber-200">
+            @csrf
+            <p class="text-sm text-amber-900 m-0 flex-1 min-w-[240px]">Hành gợi ý được đoán theo tên cây. Bỏ chọn cây gợi ý chưa đúng, rồi bấm gán. Cây không có gợi ý cần gán tay trong trang sửa.</p>
+            <button type="submit" class="px-5 py-2 bg-text-primary text-white rounded-pill text-sm font-medium hover:opacity-90 transition-opacity">Gán hành gợi ý cho cây đã chọn</button>
+        </form>
+    @endif
+
     <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
             <thead>
@@ -143,6 +165,23 @@
                     </td>
                     <td class="py-5 pr-4">
                         <span class="inline-block whitespace-nowrap px-2 py-0.5 bg-[#f8f9f5] border border-green-border/50 text-text-secondary rounded-pill text-xs mono">{{ \App\Models\Product::TYPES[$product->product_type] ?? $product->product_type }}</span>
+                        @if($product->product_type === 'plant')
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                @forelse($product->elements as $productElement)
+                                    <span class="inline-block whitespace-nowrap px-2 py-0.5 bg-green-background border border-green-border/50 text-text-primary rounded-pill text-xs mono" title="Hành phong thủy">{{ \App\Models\Product::ELEMENTS[$productElement->element] ?? $productElement->element }}</span>
+                                @empty
+                                    <span class="inline-block whitespace-nowrap px-2 py-0.5 bg-amber-50 border border-amber-300 text-amber-800 rounded-pill text-xs mono">Chưa gán hành</span>
+                                @endforelse
+                            </div>
+                            @if(! empty($elementSuggestions[$product->id]))
+                                <label class="mt-2 inline-flex items-center gap-2 text-xs text-text-primary cursor-pointer whitespace-nowrap">
+                                    <input type="checkbox" form="bulkElementsForm" name="product_ids[]" value="{{ $product->id }}" checked class="w-4 h-4 rounded border-green-border/50">
+                                    Gợi ý: {{ collect($elementSuggestions[$product->id])->map(fn ($code) => \App\Models\Product::ELEMENTS[$code])->implode(', ') }}
+                                </label>
+                            @elseif($elementFilter)
+                                <p class="mt-2 text-xs text-text-secondary whitespace-nowrap">Không có gợi ý</p>
+                            @endif
+                        @endif
                     </td>
                     <td class="py-5 pr-4 text-text-primary font-medium">
                         @if($product->hasPriceRange())
@@ -182,7 +221,11 @@
                 @empty
                 <tr>
                     <td colspan="8" class="py-12 text-center text-text-secondary">
-                        Chưa có sản phẩm nào.
+                        @if($elementFilter)
+                            Không còn cây nào chưa gán hành.
+                        @else
+                            Chưa có sản phẩm nào.
+                        @endif
                     </td>
                 </tr>
                 @endforelse

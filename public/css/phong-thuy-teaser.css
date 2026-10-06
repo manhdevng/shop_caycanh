@@ -1,0 +1,74 @@
+/*
+ * Khối "Cây nào hợp mệnh bạn?" ở trang chủ — Khoi Trang Chu v2.
+ * Scope .ktc2; dùng chung SVG la bàn (bản mini) với trang /cay-phong-thuy.
+ */
+.ktc2 {
+    --c-giay: #f4e6cd;
+    --c-giay-ep: #edddc3;
+    --c-muc: #1e211e;
+    --c-muc-nhat: rgba(30, 33, 30, .38);
+    --c-chu-sa: #9C2F23;
+    background: #fff;
+    color: var(--c-muc);
+    font-family: 'Be Vietnam Pro', ui-sans-serif, system-ui, sans-serif;
+    /* Đứng ngay sau khối pin #giftSection (devices.md mục 8): padding-top nhỏ
+       hơn padding-bottom để khoảng trống cuối khối pin không cộng dồn. */
+    padding: 32px 16px 50px;
+    overflow-x: hidden;
+    position: relative;
+}
+/* Khối kế tiếp (lời hứa) cũng nền trắng như thiết kế v2 nên không đổi màu nền:
+   dùng một đường kẻ mực mảnh, thụt vào theo lề nội dung, làm ranh giới nhã
+   thay vì thêm tông nền mới. */
+.ktc2::after {
+    content: ''; position: absolute; left: 16px; right: 16px; bottom: 0;
+    max-width: 1200px; margin: 0 auto; height: 1px;
+    background: rgba(30, 33, 30, .14);
+}
+.ktc2 *, .ktc2 *::before, .ktc2 *::after { box-sizing: border-box; }
+.ktc2 :focus-visible { outline: 2px solid var(--c-chu-sa); outline-offset: 3px; }
+.ktc2 h2, .ktc2 p { margin: 0; }
+
+.ktc2__inner {
+    max-width: 1200px; margin: 0 auto;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 32px;
+}
+.ktc2__compass { width: 280px; max-width: 100%; flex: none; }
+.ktc2__body { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+@media (min-width: 720px) {
+    .ktc2 { padding: 48px 64px 80px; }
+    .ktc2::after { left: 64px; right: 64px; }
+    .ktc2__inner { flex-direction: row; align-items: center; gap: 80px; }
+}
+
+.ktc2 .cpt-compass { display: block; width: 100%; height: auto; overflow: visible; }
+.ktc2 .cpt-svg-han { font-family: 'Noto Serif TC', 'Songti TC', 'PMingLiU', serif; }
+.ktc2 .cpt-svg-vi { font-family: 'Be Vietnam Pro', ui-sans-serif, system-ui, sans-serif; }
+
+.ktc2__title { font-size: 40px; font-weight: 500; line-height: 1.05; letter-spacing: -.03em; color: var(--c-muc); }
+.ktc2__form { display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+.ktc2__sentence { font-size: 22px; line-height: 1.9; }
+.ktc2__sr {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+.ktc2__blank {
+    width: 3.8em; font: inherit; line-height: 1.3; color: var(--c-muc);
+    background-color: transparent; border: 0; border-radius: 0;
+    border-bottom: 1px dashed var(--c-muc-nhat);
+    padding: 0 2px; margin: 0; text-align: center; appearance: none;
+}
+.ktc2__blank::placeholder { color: var(--c-muc-nhat); opacity: 1; }
+.ktc2__blank:focus { border-bottom: 2px solid var(--c-muc); background-color: var(--c-giay-ep); outline: none; }
+.ktc2__blank:focus-visible { outline: 2px solid var(--c-chu-sa); outline-offset: 3px; }
+.ktc2__blank[aria-invalid="true"] { border-bottom-color: var(--c-muc); }
+
+.ktc2__btn {
+    padding: 14px 28px; border: 1px solid var(--c-muc); border-radius: 0;
+    background: transparent; color: var(--c-muc);
+    font: 500 16px/1.4 'Be Vietnam Pro', ui-sans-serif, system-ui, sans-serif;
+    cursor: pointer; text-align: left;
+}
+.ktc2__btn:hover, .ktc2__btn:focus-visible { background: var(--c-muc); color: #fff; }
+.ktc2__error { display: flex; gap: 10px; align-items: baseline; font-size: 16px; }
+.ktc2__error span:first-child { color: var(--c-chu-sa); font-weight: 500; }
