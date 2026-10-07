@@ -49,32 +49,43 @@ return [
 
     /*
      * Gợi ý hành theo tên cây (PhongThuyService::suggestElements, form admin,
-     * lệnh phong-thuy:goi-y-hanh). Mỗi từ khóa khớp nguyên cụm trong tên, không
-     * phân biệt hoa thường; một cây có thể khớp nhiều hành. Chỉ là gợi ý để
-     * admin duyệt — cây không khớp từ khóa nào vẫn để "Chưa gán hành".
+     * lệnh phong-thuy:goi-y-hanh, PhongThuyElementSeeder). Mỗi từ khóa khớp
+     * nguyên cụm trong tên, không phân biệt hoa thường. Chỉ là gợi ý để admin
+     * duyệt — cây không khớp từ khóa nào vẫn để "Chưa gán hành".
+     *
+     * Quy ước:
+     *  - Mỗi từ khóa chỉ thuộc MỘT hành (có test kiểm tra).
+     *  - Cụm dài thắng cụm ngắn lồng trong nó: "cau vàng" (Thổ) che "cau" (Mộc),
+     *    "phát tài núi" (Thủy) che "phát tài" (Mộc). Nhờ vậy được phép khai
+     *    báo cả cụm chung lẫn cụm riêng của cùng một họ cây.
+     *  - Hai cụm không chồng nhau trong cùng tên thì cây nhận cả hai hành.
      * Có loại cây mới thì thêm từ khóa vào đây, không cần sửa code.
      */
     'element_keywords' => [
         'kim' => [
-            'kim ngân', 'lan ý', 'bạch mã', 'ngọc ngân', 'cung điện vàng', 'bạch lan',
+            'kim ngân', 'lan ý', 'bạch mã', 'bạch mã hoàng tử', 'cung điện vàng', 'bạch lan',
             'lá trắng', 'viền trắng', 'viền bạc', 'cẩm nhung trắng', 'sứ trắng',
+            'sen đá trắng', 'lưỡi hổ viền vàng', 'ngọc vừng',
         ],
         'thuy' => [
-            'thủy canh', 'thủy sinh', 'thủy trúc', 'trúc thủy', 'phát tài núi', 'ngọc bích',
-            'cỏ lan chi', 'lan chi', 'cau tiểu trâm', 'trầu bà thủy',
+            'thủy canh', 'thủy sinh', 'thủy trúc', 'trúc thủy', 'thủy tùng', 'trúc phú quý',
+            'phát tài núi', 'ngọc bích', 'cỏ lan chi', 'lan chi', 'cau tiểu trâm', 'tiểu cảnh nước',
+            'bể thủy sinh',
         ],
         'moc' => [
             'trầu bà', 'trầu nam mỹ', 'kim tiền', 'vạn niên thanh', 'phát tài', 'phát lộc',
             'thường xuân', 'bàng singapore', 'bàng đài loan', 'hạnh phúc', 'tùng', 'bonsai',
-            'đa búp đỏ', 'monstera', 'dương xỉ', 'cau',
+            'đa búp đỏ', 'monstera', 'dương xỉ', 'cau', 'thiết mộc lan', 'đuôi công', 'sung',
+            'trúc', 'cọ', 'ngũ gia bì',
         ],
         'hoa' => [
             'vạn lộc', 'hồng môn', 'trạng nguyên', 'phú quý', 'đuôi công tím', 'tróc bạc đỏ',
-            'hoa giấy', 'lá đỏ', 'hoa đỏ', 'hoa hồng', 'hoa tím', 'trầu bà đỏ',
+            'hoa giấy', 'lá đỏ', 'hoa đỏ', 'hoa hồng', 'hoa tím', 'trầu bà đỏ', 'huyết dụ',
+            'môn đỏ', 'dâm bụt',
         ],
         'tho' => [
             'lưỡi hổ', 'sen đá', 'xương rồng', 'cẩm nhung', 'ngọc ngân', 'cau vàng',
-            'phát tài búp sen', 'kim phát tài', 'vàng đất',
+            'phát tài búp sen', 'kim phát tài', 'vàng đất', 'lô hội', 'nha đam',
         ],
     ],
 

@@ -20,6 +20,12 @@ use Illuminate\Support\Facades\DB;
 
 class ShopController extends Controller
 {
+    /**
+     * Số sản phẩm tối đa của MỖI hàng trên trang chủ. Hàng là carousel ngang
+     * (product-row.blade.php) hiện 4 thẻ một lúc, phần còn lại xem bằng mũi tên.
+     */
+    public const HOME_ROW_LIMIT = 12;
+
     public function index(Request $request)
     {
         $filters = $this->validatedFilters($request, false);
@@ -38,7 +44,10 @@ class ShopController extends Controller
         // dải "Danh mục nổi bật" và sidebar bộ lọc ở trang khách hàng.
         $categoryGroups = $this->categoryGroupsWithCounts();
 
-        $bestSellerIds = $this->bestSellerIds();
+        // Một query bán chạy duy nhất cho cả request: lấy đủ cho hàng bán chạy
+        // của trang chủ, còn nhãn "Bán chạy" trên thẻ vẫn chỉ dành cho top 8.
+        $homeBestSellerIds = $this->bestSellerIds(max(8, self::HOME_ROW_LIMIT));
+        $bestSellerIds = array_slice($homeBestSellerIds, 0, 8);
 
         // Chỉ hiện khối "nổi bật" (banner + cây mới nhập + hoa mới nhập) ở trang
         // mặc định, không hiện khi đang lọc theo danh mục, tìm kiếm, hoặc đang
@@ -81,31 +90,30 @@ class ShopController extends Controller
                 ->plants()
                 ->with(['categories', 'variants'])
                 ->latest()
-                ->take(4)
+                ->take(self::HOME_ROW_LIMIT)
                 ->get();
 
             // Ảnh/video khối giới thiệu (Cây được tuyển chọn / Dịch vụ tận tâm /
             // Chất liệu cao cấp) — quản trị viên tự đổi ở /admin/settings.
             $homeFeatures = HomeFeature::orderBy('id')->get()->keyBy('slug');
 
-            // Khối "Bán chạy" ở trang chủ: dùng lại $bestSellerIds đã tính sẵn
-            // ở trên (top 8, cùng điều kiện với nhãn "Bán chạy" trên mỗi thẻ
-            // sản phẩm) thay vì gọi lại bestSellerIds() — tránh chạy trùng
-            // một query tổng hợp order_items/orders lần thứ hai trong cùng
-            // một request.
-            if (!empty($bestSellerIds)) {
+            // Khối "Bán chạy" ở trang chủ: dùng lại $homeBestSellerIds đã tính
+            // sẵn ở trên (cùng điều kiện với nhãn "Bán chạy" trên mỗi thẻ sản
+            // phẩm) thay vì gọi lại bestSellerIds() — tránh chạy trùng một
+            // query tổng hợp order_items/orders lần thứ hai trong cùng request.
+            if (!empty($homeBestSellerIds)) {
                 $homeBestSellers = $this->orderByIdList(
                     Product::where('is_active', true)
-                        ->whereIn('id', $bestSellerIds)
+                        ->whereIn('id', $homeBestSellerIds)
                         ->with(['categories', 'variants']),
-                    $bestSellerIds
+                    $homeBestSellerIds
                 )
-                    ->take(4)
+                    ->take(self::HOME_ROW_LIMIT)
                     ->get();
             }
 
             // Chỉ tính số lượng đã bán cho ĐÚNG các sản phẩm thật sự hiển thị
-            // ở trang chủ (tối đa 4), không phải cả 8 id trong $bestSellerIds
+            // ở trang chủ (tối đa HOME_ROW_LIMIT), không phải mọi id bán chạy
             // — vì $bestSellerIds có thể chứa id sản phẩm đã bị tắt is_active
             // hoặc đã xoá (không nằm trong $homeBestSellers), tính thừa cho
             // các id đó là lãng phí và không dùng tới.
@@ -127,18 +135,31 @@ class ShopController extends Controller
 
             // $excludeIds: cửa hàng hiện chỉ có hơn chục sản phẩm, nếu mỗi hàng
             // đều lấy "mới nhất" thì cùng một cây xuất hiện 3-4 lần trên trang.
-            // Loại dần những cây đã khoe ở phía trên để mỗi hàng nói một điều mới.
+            // Ưu tiên những cây CHƯA khoe ở phía trên để mỗi hàng nói một điều
+            // mới; hàng nay dài tới HOME_ROW_LIMIT thẻ nên lưới đầu có thể ôm
+            // hết cây của danh mục — khi đó bù lại bằng chính các cây đã khoe
+            // (cùng quy tắc với hàng hoa, T4) thay vì để cả hàng biến mất.
             $productsInCategory = function (?Category $category, int $take, array $excludeIds = []) use ($inCategory) {
                 if (! $category) {
                     return collect();
                 }
 
-                return $inCategory($category)
-                    ->when($excludeIds, fn ($q) => $q->whereNotIn('id', $excludeIds))
+                $query = fn () => $inCategory($category)
                     ->with(['categories', 'variants'])
-                    ->latest()
+                    ->latest();
+
+                $products = $query()
+                    ->when($excludeIds, fn ($q) => $q->whereNotIn('id', $excludeIds))
                     ->take($take)
                     ->get();
+
+                if ($products->count() < $take && $excludeIds) {
+                    $products = $products->concat(
+                        $query()->whereIn('id', $excludeIds)->take($take - $products->count())->get()
+                    )->values();
+                }
+
+                return $products;
             };
 
             $indoorCategory = $findCategory('trong nhà');
@@ -154,14 +175,14 @@ class ShopController extends Controller
                     ->whereNotNull('main_image')
                     ->with(['categories', 'variants'])
                     ->latest()
-                    ->take(4)
+                    ->take(self::HOME_ROW_LIMIT)
                     ->get();
             $homeFeaturedIsBestSeller = $homeBestSellers->isNotEmpty();
 
             // Các hàng phía dưới bỏ cây đã xuất hiện ở lưới đầu tiên.
             $usedIds = $homeFeatured->pluck('id')->all();
-            $indoorProducts = $productsInCategory($indoorCategory, 3, $usedIds);
-            $outdoorProducts = $productsInCategory($outdoorCategory, 3, $usedIds);
+            $indoorProducts = $productsInCategory($indoorCategory, self::HOME_ROW_LIMIT, $usedIds);
+            $outdoorProducts = $productsInCategory($outdoorCategory, self::HOME_ROW_LIMIT, $usedIds);
 
             // T5: hàng "ngoài trời" phải gọi đúng tên thứ đang bán trong danh
             // mục đó (hiện toàn là hoa) — đọc product_type thật của cả danh
@@ -176,7 +197,7 @@ class ShopController extends Controller
             }
 
             // T4: "Hoa mới nhập" — ưu tiên hoa CHƯA đứng ở hàng ngoài trời,
-            // nhưng chọn đủ từ tập còn lại TRƯỚC khi giới hạn 4 (bản cũ cắt 4
+            // nhưng chọn đủ từ tập còn lại TRƯỚC khi giới hạn HOME_ROW_LIMIT (bản cũ cắt 4
             // rồi mới loại nên hàng hụt còn 1). Kho hoa ít thì cho phép hoa
             // ngoài trời xuất hiện lại ở đây — hai hàng khác mục đích; trong
             // cùng một hàng không bao giờ lặp.
@@ -187,13 +208,13 @@ class ShopController extends Controller
             $outdoorIds = $outdoorProducts->pluck('id')->all();
             $newestFlowers = $flowerQuery()
                 ->when($outdoorIds, fn ($q) => $q->whereNotIn('id', $outdoorIds))
-                ->take(4)
+                ->take(self::HOME_ROW_LIMIT)
                 ->get();
-            if ($newestFlowers->count() < 4 && $outdoorIds) {
+            if ($newestFlowers->count() < self::HOME_ROW_LIMIT && $outdoorIds) {
                 $newestFlowers = $newestFlowers->concat(
                     $flowerQuery()
                         ->whereIn('id', $outdoorIds)
-                        ->take(4 - $newestFlowers->count())
+                        ->take(self::HOME_ROW_LIMIT - $newestFlowers->count())
                         ->get()
                 )->values();
             }

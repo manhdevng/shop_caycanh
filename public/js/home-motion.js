@@ -476,9 +476,17 @@
     // hiệu ứng xong mới đọc được, và nút mua trong lúc autoAlpha:0 còn dính
     // visibility:hidden nên bấm không ăn. Thẻ vẫn nhô lên M.rise px cho có
     // nhịp, nhưng nội dung đọc được ngay từ khung hình đầu.
+    // Hàng carousel (product-row: track flex cuộn ngang, overflow ẩn) mà
+    // đẩy thẻ xuống M.rise px thì đáy thẻ bị track cắt — ở đó chỉ mở ảnh,
+    // không nhô thẻ. Các thẻ nằm ngoài khung ngang vẫn reveal cùng loạt vì
+    // ScrollTrigger chỉ đo theo chiều dọc.
+    function rise(card) {
+      return card.parentElement && card.parentElement.hasAttribute('data-row-track') ? 0 : M.rise;
+    }
+
     cards.forEach(function (card) {
       var p = parts(card);
-      gsap.set(card, { y: M.rise });
+      gsap.set(card, { y: rise(card) });
       if (p.pic) gsap.set(p.pic, { clipPath: 'inset(100% 0% 0% 0%)' });
       if (p.img) gsap.set(p.img, { scale: 1.08, transformOrigin: '50% 100%' });
     });
