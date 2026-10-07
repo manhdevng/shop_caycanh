@@ -274,6 +274,7 @@
             <div class="md:col-span-2" id="elementsBlock">
                 <span class="block text-sm font-semibold text-text-primary mb-2 mono">Hành phong thủy</span>
                 <input type="hidden" name="elements_submitted" value="1">
+                @include('products.partials.element-colors', ['selectedColors' => old('elements_submitted') ? (array) old('feng_shui_colors', []) : (array) $product->feng_shui_colors])
                 @php $selectedElements = old('elements_submitted') ? (array) old('elements', []) : $product->elementCodes(); @endphp
                 <div class="flex flex-wrap gap-3">
                     @foreach(\App\Models\Product::ELEMENTS as $elementCode => $elementLabel)
@@ -283,7 +284,7 @@
                         </label>
                     @endforeach
                 </div>
-                <p class="text-xs text-text-secondary mt-2">Dựa vào màu lá, hoa và chậu của chính cây này: Kim — trắng, vàng nhạt, viền bạc · Mộc — lá xanh, thân đứng · Thủy — trồng thủy canh, lá sẫm hoặc xanh lam · Hỏa — đỏ, hồng, tím, cam · Thổ — vàng đất, nâu, lá to tròn, mọng nước. Có thể chọn nhiều hành. Bỏ trống nếu chưa xác định — cây sẽ chưa được gợi ý ở trang Cây hợp mệnh. Chỉ áp dụng cho cây cảnh.</p>
+                <p class="text-xs text-text-secondary mt-2">Hành được tự chọn theo màu chủ đạo ở trên (chưa chọn màu thì đoán theo tên cây); có thể chỉnh tay. Kim — trắng, xám, ánh kim · Thủy — xanh dương, đen, lá sẫm · Mộc — xanh lá · Hỏa — đỏ, hồng, cam, tím · Thổ — vàng đất, vàng sậm, nâu. Có thể chọn nhiều hành. Bỏ trống nếu chưa xác định — cây sẽ chưa được gợi ý ở trang Cây hợp mệnh. Chỉ áp dụng cho cây cảnh.</p>
                 @include('products.partials.element-suggest')
                 @error('elements')<p class="text-red-500 text-sm mt-1">{{ $message }}</p>@enderror
                 @error('elements.*')<p class="text-red-500 text-sm mt-1">{{ $message }}</p>@enderror

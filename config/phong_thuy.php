@@ -65,17 +65,18 @@ return [
         'kim' => [
             'kim ngân', 'lan ý', 'bạch mã', 'bạch mã hoàng tử', 'cung điện vàng', 'bạch lan',
             'lá trắng', 'viền trắng', 'viền bạc', 'cẩm nhung trắng', 'sứ trắng',
-            'sen đá trắng', 'lưỡi hổ viền vàng', 'ngọc vừng',
+            'sen đá trắng', 'lưỡi hổ viền vàng', 'ngọc vừng', 'cỏ lan chi', 'lan chi',
+            'thiết mộc lan',
         ],
         'thuy' => [
             'thủy canh', 'thủy sinh', 'thủy trúc', 'trúc thủy', 'thủy tùng', 'trúc phú quý',
-            'phát tài núi', 'ngọc bích', 'cỏ lan chi', 'lan chi', 'cau tiểu trâm', 'tiểu cảnh nước',
-            'bể thủy sinh',
+            'phát tài núi', 'ngọc bích', 'cau tiểu trâm', 'tiểu cảnh nước', 'bể thủy sinh',
+            'thường xuân',
         ],
         'moc' => [
             'trầu bà', 'trầu nam mỹ', 'kim tiền', 'vạn niên thanh', 'phát tài', 'phát lộc',
-            'thường xuân', 'bàng singapore', 'bàng đài loan', 'hạnh phúc', 'tùng', 'bonsai',
-            'đa búp đỏ', 'monstera', 'dương xỉ', 'cau', 'thiết mộc lan', 'đuôi công', 'sung',
+            'bàng singapore', 'bàng đài loan', 'hạnh phúc', 'tùng', 'bonsai',
+            'đa búp đỏ', 'monstera', 'dương xỉ', 'cau', 'đuôi công', 'sung',
             'trúc', 'cọ', 'ngũ gia bì',
         ],
         'hoa' => [
@@ -85,8 +86,24 @@ return [
         ],
         'tho' => [
             'lưỡi hổ', 'sen đá', 'xương rồng', 'cẩm nhung', 'ngọc ngân', 'cau vàng',
-            'phát tài búp sen', 'kim phát tài', 'vàng đất', 'lô hội', 'nha đam',
+            'phát tài búp sen', 'kim phát tài', 'vàng đất', 'lô hội', 'nha đam', 'trầu bà vàng',
         ],
+    ],
+
+    /*
+     * Màu chủ đạo của cây -> hành (nguyên tắc chọn cây theo màu Ngũ hành).
+     * Admin chọn màu ở form sản phẩm; có màu thì hành được suy ra từ màu và
+     * THẮNG gợi ý theo tên (cùng loài nhưng khác màu thì khác hành, vd trầu bà
+     * xanh = Mộc, trầu bà vàng = Thổ). Chưa chọn màu mới rơi về element_keywords.
+     * Chỉ nên chọn 1–2 màu nổi bật nhất — gần như cây nào cũng có lá xanh.
+     */
+    'colors' => [
+        'trang_bac' => ['label' => 'Trắng / bạc / xám', 'element' => 'kim'],
+        'vang_nhat' => ['label' => 'Vàng nhạt / ánh kim', 'element' => 'kim'],
+        'xanh_duong_den' => ['label' => 'Xanh dương / đen / lá sẫm', 'element' => 'thuy'],
+        'xanh_la' => ['label' => 'Xanh lá', 'element' => 'moc'],
+        'do_hong' => ['label' => 'Đỏ / hồng / cam / tím', 'element' => 'hoa'],
+        'vang_dat_nau' => ['label' => 'Vàng đất / vàng sậm / nâu', 'element' => 'tho'],
     ],
 
     'can' => ['Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ', 'Canh', 'Tân', 'Nhâm', 'Quý'],

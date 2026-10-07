@@ -7,8 +7,9 @@ use App\Services\PhongThuyService;
 use Illuminate\Console\Command;
 
 /**
- * Gợi ý hành phong thủy cho các cây chưa gán hành, theo tên cây
- * (config/phong_thuy.php → element_keywords).
+ * Gợi ý hành phong thủy cho các cây chưa gán hành: theo màu chủ đạo nếu
+ * admin đã khai báo (config/phong_thuy.php → colors), không thì theo tên cây
+ * (→ element_keywords).
  *
  * Mặc định chỉ in bảng để duyệt; thêm --apply mới ghi vào product_elements.
  * Không bao giờ ghi đè cây đã có hành.
@@ -24,7 +25,7 @@ class PhongThuySuggestElements extends Command
         $products = Product::where('product_type', 'plant')
             ->doesntHave('elements')
             ->orderBy('id')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'feng_shui_colors']);
 
         if ($products->isEmpty()) {
             $this->info('Không còn cây nào chưa gán hành.');
@@ -35,18 +36,23 @@ class PhongThuySuggestElements extends Command
         $rows = [];
         $toApply = [];
         foreach ($products as $product) {
-            $codes = $phongThuy->suggestElements($product->name);
+            $codes = $phongThuy->suggestForProduct($product);
             $rows[] = [
                 $product->id,
                 $product->name,
                 $codes ? implode(', ', array_map(fn ($c) => Product::ELEMENTS[$c], $codes)) : '— (không khớp, gán tay)',
+                match ($phongThuy->suggestionSource($product)) {
+                    'color' => 'màu',
+                    'name' => 'tên',
+                    default => '',
+                },
             ];
             if ($codes) {
                 $toApply[] = [$product, $codes];
             }
         }
 
-        $this->table(['ID', 'Tên cây', 'Hành gợi ý'], $rows);
+        $this->table(['ID', 'Tên cây', 'Hành gợi ý', 'Theo'], $rows);
         $this->line(count($toApply).'/'.$products->count().' cây có gợi ý.');
 
         if (! $this->option('apply')) {

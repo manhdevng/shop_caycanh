@@ -7,9 +7,9 @@ use App\Services\PhongThuyService;
 use Illuminate\Database\Seeder;
 
 /**
- * Gán hành phong thủy theo tên cho các cây CHƯA có hành — cùng quy tắc với
- * lệnh `php artisan phong-thuy:goi-y-hanh --apply` (PhongThuyService::
- * suggestElements + config/phong_thuy.php → element_keywords).
+ * Gán hành phong thủy cho các cây CHƯA có hành — cùng quy tắc với lệnh
+ * `php artisan phong-thuy:goi-y-hanh --apply` (PhongThuyService::
+ * suggestForProduct: theo màu chủ đạo nếu có, không thì theo tên).
  *
  * Idempotent: không bao giờ ghi đè cây đã có hành (kể cả hành admin gán tay),
  * chạy lại nhiều lần không đổi gì. Được gọi từ DatabaseSeeder để môi trường
@@ -25,9 +25,9 @@ class PhongThuyElementSeeder extends Seeder
         Product::plants()
             ->doesntHave('elements')
             ->orderBy('id')
-            ->get(['id', 'name'])
+            ->get(['id', 'name', 'feng_shui_colors'])
             ->each(function (Product $product) use ($phongThuy, &$assigned, &$unmatched) {
-                $codes = $phongThuy->suggestElements($product->name);
+                $codes = $phongThuy->suggestForProduct($product);
                 if ($codes === []) {
                     $unmatched[] = "#{$product->id} {$product->name}";
 
