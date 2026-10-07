@@ -42,22 +42,14 @@
         #siteHeader.header-scrolled{background:#FFFFFF;border-bottom-color:#E5E2DC}
         #siteHeader .header-logo,#siteHeader .header-icon{color:#FFFFFF;transition:color .25s ease}
         #siteHeader.header-scrolled .header-logo,#siteHeader.header-scrolled .header-icon{color:#1C1C1A}
+        /* Trang chủ: updateHeaderTheme() bỏ .header-scrolled khi ngay dưới header là
+           section data-header-theme="dark" (hero, danh mục, cổng vườn, cổng mùa). */
         #siteHeader:not(.header-scrolled) .header-logo,
         #siteHeader:not(.header-scrolled) .header-icon,
         #siteHeader:not(.header-scrolled) .nav-mega-trigger{filter:drop-shadow(0 1px 4px rgba(0,0,0,.6))}
         /* var(--header-h) do JS đo thật (syncHeaderHeight) và cập nhật cả khi resize/header
            xuống 2 dòng ở mobile -> không còn lệch cứng như hằng số 76px trước đây (V7). */
         .page-with-header-offset{padding-top:var(--header-h,76px)}
-
-        /* Header trong suốt trên hero và các cảnh nền tối của trang chủ. */
-        #siteHeader.header-ghost,
-        #siteHeader.header-ghost.header-scrolled{background:transparent;border-bottom-color:transparent}
-        #siteHeader.header-ghost.header-scrolled .header-logo,
-        #siteHeader.header-ghost.header-scrolled .header-icon{color:#FFFFFF}
-        #siteHeader.header-ghost.header-scrolled .site-search{background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.45)}
-        #siteHeader.header-ghost.header-scrolled .site-search-input{color:#FFFFFF}
-        #siteHeader.header-ghost.header-scrolled .site-search-input::placeholder{color:rgba(255,255,255,0.72)}
-        #siteHeader.header-ghost.header-scrolled .site-search-icon{color:#FFFFFF}
 
         /* ==== Ô tìm kiếm luôn hiển thị trong header (đọc được ở cả nền trong suốt lẫn header-scrolled) ==== */
         #siteHeader .site-search{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.45);transition:background-color .25s ease, border-color .25s ease}
@@ -477,16 +469,38 @@
     // header xuống 2 dòng ở mobile rồi resize/xoay ngang mà không đo lại).
 
     if (siteHeader && heroSection) {
-        const categorySection = document.getElementById('catArcSection');
-        const toggleHeaderOnScroll = function () {
-            const threshold = categorySection
-                ? categorySection.getBoundingClientRect().bottom + window.scrollY - siteHeader.offsetHeight
-                : heroSection.offsetHeight * 0.9;
-            const pastDarkScenes = window.scrollY >= threshold;
-            siteHeader.classList.toggle('header-scrolled', pastDarkScenes);
+        // Đổi màu header theo section đang nằm ngay dưới mép header: nền tối
+        // (data-header-theme="dark") -> trong suốt chữ trắng, còn lại -> nền trắng chữ tối.
+        // Dò trực tiếp bằng elementsFromPoint nên không phụ thuộc pin spacer của GSAP.
+        const updateHeaderTheme = function () {
+            const x = window.innerWidth / 2;
+            const y = siteHeader.offsetHeight + 1;
+            const below = document.elementsFromPoint(x, y).find(function (el) {
+                return !siteHeader.contains(el);
+            });
+            const themed = below ? below.closest('[data-header-theme]') : null;
+            const isDark = themed !== null && themed.dataset.headerTheme === 'dark';
+            siteHeader.classList.toggle('header-scrolled', !isDark);
         };
-        window.addEventListener('scroll', toggleHeaderOnScroll, { passive: true });
-        toggleHeaderOnScroll();
+        let headerThemeTicking = false;
+        const requestHeaderTheme = function () {
+            if (headerThemeTicking) return;
+            headerThemeTicking = true;
+            requestAnimationFrame(function () {
+                headerThemeTicking = false;
+                updateHeaderTheme();
+            });
+        };
+        window.addEventListener('scroll', requestHeaderTheme, { passive: true });
+        window.addEventListener('resize', requestHeaderTheme, { passive: true });
+        window.addEventListener('load', requestHeaderTheme, { once: true });
+        // GSAP nạp bằng defer -> chỉ có window.ScrollTrigger từ DOMContentLoaded trở đi.
+        const bindScrollTriggerRefresh = function () {
+            if (window.ScrollTrigger) window.ScrollTrigger.addEventListener('refresh', requestHeaderTheme);
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindScrollTriggerRefresh, { once: true });
+        else bindScrollTriggerRefresh();
+        updateHeaderTheme();
     }
 
     // ==== Mega-menu danh mục (Cây cảnh / Hoa) ====
