@@ -47,7 +47,7 @@
     <form method="POST" action="{{ route('orders.store') }}" id="checkout-form" class="bg-white border border-[#8C9680]/30 rounded-2xl p-6 md:p-8 space-y-5">
         @csrf
         <input type="hidden" id="total_price_input" name="total_price" value="{{ (int) $totalPrice }}">
-        <input type="hidden" id="ghn_fee_input" name="ghn_fee" value="0">
+        <input type="hidden" id="ghn_fee_input" name="ghn_fee" value="">
         <input type="hidden" id="to_district_id_input" name="to_district_id" value="{{ old('to_district_id') }}">
         <input type="hidden" id="to_ward_code_input" name="to_ward_code" value="{{ old('to_ward_code') }}">
 
@@ -173,7 +173,8 @@
             </div>
         </div>
 
-        <button type="submit" class="w-full bg-[#6B8E23] hover:bg-[#4A6B1F] text-white font-semibold py-3 rounded-full transition-colors">
+        {{-- Khoá tới khi tính được phí GHN (JS mở lại khi phí > 0). --}}
+        <button type="submit" id="place_order_btn" disabled class="w-full bg-[#6B8E23] hover:bg-[#4A6B1F] text-white font-semibold py-3 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#6B8E23]">
             Đặt hàng
         </button>
     </form>
@@ -190,12 +191,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const ghnFeeInput = document.getElementById('ghn_fee_input');
     const toDistrictIdInput = document.getElementById('to_district_id_input');
     const toWardCodeInput = document.getElementById('to_ward_code_input');
+    const placeOrderBtn = document.getElementById('place_order_btn');
 
     const districtsUrl = "{{ route('locations.districts', ['provinceId' => '__PROVINCE__']) }}";
     const wardsUrl = "{{ route('locations.wards', ['districtId' => '__DISTRICT__']) }}";
 
     // Lấy tiền hàng an toàn từ input ẩn (chưa trừ giảm giá — total_price_input
-    // được JS ghi đè lại bằng tổng cuối cùng ở updateTotals(), nên phải đọc giá
+    // được JS ghi đè lại bằng tổng cuối cùng ở applyTotals(), nên phải đọc giá
     // trị gốc NGAY LÚC NÀY, trước khi bị ghi đè).
     const subtotal = parseInt(totalPriceInput ? totalPriceInput.value : 0) || 0;
     // Số tiền giảm giá từ voucher đang áp dụng (0 nếu chưa áp dụng mã nào) —
@@ -229,7 +231,7 @@ document.addEventListener("DOMContentLoaded", function () {
         wardSelect.disabled = true;
         toDistrictIdInput.value = '';
         toWardCodeInput.value = '';
-        updateTotals(0);
+        resetFee();
 
         if (!this.value) return;
 
@@ -259,7 +261,7 @@ document.addEventListener("DOMContentLoaded", function () {
         wardSelect.disabled = true;
         toDistrictIdInput.value = this.value;
         toWardCodeInput.value = '';
-        updateTotals(0);
+        resetFee();
 
         if (!this.value) return;
 
@@ -287,50 +289,130 @@ document.addEventListener("DOMContentLoaded", function () {
     wardSelect.addEventListener('change', function () {
         toWardCodeInput.value = this.value;
 
-        if (!this.value || !districtSelect.value) return;
+        if (!this.value || !districtSelect.value) {
+            resetFee();
+            return;
+        }
 
-        shippingFeeText.innerText = 'Đang tính cước...';
+        requestFee(districtSelect.value, this.value);
+    });
+
+    // Đánh số mỗi lần tính phí: khách đổi địa chỉ nhanh thì kết quả của lần
+    // gọi cũ về sau không được ghi đè kết quả của lần mới.
+    let feeRequestId = 0;
+
+    function requestFee(districtId, wardCode) {
+        const requestId = ++feeRequestId;
+        applyTotals(0);
+        setFeeText('Đang tính cước...', false);
+        setOrderEnabled(false);
 
         fetch("{{ route('locations.fee') }}", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
                 'X-CSRF-TOKEN': '{{ csrf_token() }}'
             },
             body: JSON.stringify({
-                to_district_id: districtSelect.value,
-                to_ward_code: this.value
+                to_district_id: districtId,
+                to_ward_code: wardCode
             })
         })
-            .then(res => res.json())
+            .then(async res => {
+                // Kiểm tra mã HTTP trước khi đọc JSON (419 = hết phiên/CSRF).
+                if (res.status === 419) {
+                    throw { message: 'Phiên đã hết hạn, vui lòng tải lại trang', plain: true };
+                }
+                if (!res.ok) {
+                    let message = 'Lỗi máy chủ (' + res.status + ')';
+                    try {
+                        const body = await res.json();
+                        if (body && body.message) message = body.message;
+                    } catch (e) { /* body không phải JSON */ }
+                    throw { message: message };
+                }
+                return res.json();
+            })
             .then(res => {
-                if (res.code === 200 && res.data) {
-                    const fee = parseInt(res.data.total) || 0;
-                    updateTotals(fee);
+                if (requestId !== feeRequestId) return;
+
+                const fee = Number(res && res.data ? res.data.total : NaN);
+                // Chỉ nhận là thành công khi GHN trả code 200 VÀ phí > 0.
+                if (res && res.code === 200 && fee > 0) {
+                    applyTotals(fee);
+                    setFeeText(formatVnd(fee) + ' VNĐ', false);
+                    setOrderEnabled(true);
                 } else {
-                    shippingFeeText.innerText = 'Chưa hỗ trợ';
-                    updateTotals(0);
+                    showFeeError((res && res.message) || 'GHN không trả về phí hợp lệ.');
                 }
             })
             .catch(err => {
+                if (requestId !== feeRequestId) return;
                 console.error("Lỗi tính phí:", err);
-                shippingFeeText.innerText = 'Lỗi tính phí';
-                updateTotals(0);
+                showFeeError((err && err.message) || 'Lỗi kết nối máy chủ.', err && err.plain);
             });
-    });
+    }
 
-    function updateTotals(fee) {
-        shippingFeeText.innerText = new Intl.NumberFormat('vi-VN').format(fee) + ' VNĐ';
+    function formatVnd(amount) {
+        return new Intl.NumberFormat('vi-VN').format(amount);
+    }
+
+    // Chỉ tính và ghi tổng tiền + phí vào input ẩn, KHÔNG đụng dòng chữ phí ship
+    // (dòng đó do setFeeText() lo) để thông báo lỗi không bị ghi đè thành "0 VNĐ".
+    function applyTotals(fee) {
         // Tiền hàng - Giảm giá + Phí ship = Tổng thanh toán (không âm).
         const finalAmount = Math.max(0, subtotal - discountAmount + fee);
-        finalTotalText.innerText = new Intl.NumberFormat('vi-VN').format(finalAmount) + ' VNĐ';
+        finalTotalText.innerText = formatVnd(finalAmount) + ' VNĐ';
         if (totalPriceInput) {
             totalPriceInput.value = finalAmount;
         }
         if (ghnFeeInput) {
-            ghnFeeInput.value = fee;
+            // Chưa có phí hợp lệ thì để rỗng, không gửi 0.
+            ghnFeeInput.value = fee > 0 ? fee : '';
         }
     }
+
+    function setFeeText(text, isError) {
+        shippingFeeText.innerText = text;
+        shippingFeeText.classList.toggle('text-red-600', !!isError);
+    }
+
+    function setOrderEnabled(enabled) {
+        placeOrderBtn.disabled = !enabled;
+    }
+
+    // Địa chỉ chưa đủ: huỷ kết quả đang chờ, xoá phí, khoá nút Đặt hàng.
+    function resetFee() {
+        feeRequestId++;
+        applyTotals(0);
+        setFeeText('-- Chọn địa chỉ để tính phí --', false);
+        setOrderEnabled(false);
+    }
+
+    function showFeeError(message, plain) {
+        applyTotals(0);
+        setFeeText(plain ? message : 'Không tính được phí: ' + message, true);
+        setOrderEnabled(false);
+    }
+
+    // Trang tải lại mà đã có sẵn địa chỉ (old() sau lỗi validate, hoặc trình
+    // duyệt tự điền lại form) thì tính lại phí luôn, không bắt khách chọn lại.
+    function recalcIfPrefilled() {
+        const districtId = districtSelect.value || toDistrictIdInput.value;
+        const wardCode = wardSelect.value || toWardCodeInput.value;
+        if (districtId && wardCode) {
+            toDistrictIdInput.value = districtId;
+            toWardCodeInput.value = wardCode;
+            requestFee(districtId, wardCode);
+        }
+    }
+
+    recalcIfPrefilled();
+    // Quay lại trang bằng nút Back (bfcache): kiểm tra lại cho chắc.
+    window.addEventListener('pageshow', function (e) {
+        if (e.persisted) recalcIfPrefilled();
+    });
 
     // Hiện/ẩn khối chọn loại thẻ MoMo / thông tin chuyển khoản theo lựa chọn hình thức thanh toán
     const momoOptions = document.getElementById('momo-options');
@@ -355,6 +437,12 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!toDistrictIdInput.value || !toWardCodeInput.value) {
             e.preventDefault();
             alert('Vui lòng chọn đầy đủ Tỉnh/Thành, Quận/Huyện và Phường/Xã.');
+            return;
+        }
+        // Chưa tính được phí GHN thì không cho gửi đơn (kể cả bấm Enter).
+        if (!ghnFeeInput.value) {
+            e.preventDefault();
+            alert('Chưa tính được phí vận chuyển cho địa chỉ này.');
         }
     });
 });

@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Validator;
 
 class OrderController extends Controller
 {
@@ -695,7 +696,25 @@ class OrderController extends Controller
             ? collect(session('cart', []))->only(session('checkout_selected_items'))->all()
             : session('cart', []);
 
+        $validator = Validator::make($request->all(), [
+            'to_district_id' => 'required|integer|min:1',
+            'to_ward_code' => 'required|string',
+        ], [
+            'to_district_id.*' => 'Quận/Huyện không hợp lệ.',
+            'to_ward_code.*' => 'Phường/Xã không hợp lệ.',
+        ]);
+
+        // Trả cùng dạng {code, message} như GHN để JS checkout xử lý một kiểu.
+        if ($validator->fails()) {
+            return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
+        }
+
         $res = $this->fetchGhnFee($cart, (int) $request->to_district_id, (string) $request->to_ward_code, $ghn);
+
+        // Lỗi thì luôn có message (ưu tiên message thật của GHN) để hiện cho khách.
+        if (($res['code'] ?? null) !== 200) {
+            $res['message'] = $res['message'] ?? 'Không tính được phí vận chuyển.';
+        }
 
         return response()->json($res);
     }
@@ -803,10 +822,11 @@ class OrderController extends Controller
         $totalWeight = 0;
 
         foreach ($cart as $item) {
-            $totalWeight += ((int) ($item['weight'] ?? 200)) * (int) $item['quantity'];
+            // Mỗi dòng tối thiểu 1g: weight 0/âm trong DB không được kéo tổng về 0.
+            $totalWeight += max(1, ((int) ($item['weight'] ?? 200)) * (int) $item['quantity']);
         }
 
-        return $ghn->calculateFee([
+        $payload = [
             'service_type_id' => 2, // Gói chuẩn E-commerce
             'from_district_id' => (int) config('services.ghn.from_district_id'),
             'to_district_id' => $toDistrictId,
@@ -815,6 +835,24 @@ class OrderController extends Controller
             'length' => 15,
             'width' => 15,
             'height' => 10,
-        ]);
+        ];
+
+        // Có phường gửi thì gửi kèm để GHN tính đúng tuyến.
+        $fromWardCode = (string) config('services.ghn.from_ward_code');
+        if ($fromWardCode !== '') {
+            $payload['from_ward_code'] = $fromWardCode;
+        }
+
+        $response = $ghn->calculateFee($payload);
+
+        // GHN báo thành công nhưng không có phí hợp lệ: ghi lại để tra cứu.
+        if (($response['code'] ?? null) === 200 && (int) ($response['data']['total'] ?? 0) <= 0) {
+            Log::warning('GHN trả code 200 nhưng phí vận chuyển thiếu hoặc <= 0', [
+                'payload' => $payload,
+                'response' => $response,
+            ]);
+        }
+
+        return $response;
     }
 }

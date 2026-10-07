@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -69,6 +70,18 @@ class GHNService
     // Tính phí giao hàng
     public function calculateFee(array $params): array
     {
+        // API tính phí bắt buộc ShopId + from_district_id hợp lệ (master-data chỉ
+        // cần Token). Thiếu cấu hình thì báo lỗi rõ ràng, không gọi GHN để rồi
+        // nhận về lỗi khó hiểu (hoặc phí 0).
+        if ($this->shopId <= 0 || (int) ($params['from_district_id'] ?? 0) <= 0) {
+            Log::error('Thiếu cấu hình GHN để tính phí', [
+                'shop_id' => $this->shopId,
+                'from_district_id' => $params['from_district_id'] ?? null,
+            ]);
+
+            return ['code' => 500, 'message' => 'Thiếu cấu hình GHN (GHN_SHOP_ID / GHN_FROM_DISTRICT_ID).'];
+        }
+
         return $this->post('/v2/shipping-order/fee', array_merge([
             'shop_id' => $this->shopId,
         ], $params));
@@ -115,7 +128,8 @@ class GHNService
                     'status' => $response->status(),
                     'body' => $response->json(),
                 ]);
-                return ['code' => $response->status(), 'message' => 'GHN API request failed.'];
+
+                return $this->errorFromResponse($response);
             }
 
             return $response->json() ?? ['code' => -1, 'message' => 'GHN returned an empty response.'];
@@ -136,7 +150,8 @@ class GHNService
                     'status' => $response->status(),
                     'body' => $response->json(),
                 ]);
-                return ['code' => $response->status(), 'message' => 'GHN API request failed.'];
+
+                return $this->errorFromResponse($response);
             }
 
             return $response->json() ?? ['code' => -1, 'message' => 'GHN returned an empty response.'];
@@ -144,5 +159,22 @@ class GHNService
             Log::error('Unable to connect to GHN', ['uri' => $uri, 'error' => $exception->getMessage()]);
             return ['code' => -1, 'message' => 'Unable to connect to GHN.'];
         }
+    }
+
+    /**
+     * Lỗi HTTP không 2xx: giữ lại code/message/code_message_value thật trong
+     * body GHN (vd. "ShopId không hợp lệ") thay vì một câu chung chung, để
+     * màn hình checkout và log cho biết đúng nguyên nhân.
+     */
+    protected function errorFromResponse(Response $response): array
+    {
+        $body = $response->json();
+        $body = is_array($body) ? $body : [];
+
+        return [
+            'code' => $body['code'] ?? $response->status(),
+            'message' => $body['message'] ?? 'GHN API request failed.',
+            'code_message_value' => $body['code_message_value'] ?? null,
+        ];
     }
 }
