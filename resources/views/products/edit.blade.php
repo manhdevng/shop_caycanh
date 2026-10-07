@@ -270,6 +270,24 @@
                 @error('seasons')<p class="text-red-500 text-sm mt-1">{{ $message }}</p>@enderror
                 @error('seasons.*')<p class="text-red-500 text-sm mt-1">{{ $message }}</p>@enderror
             </div>
+
+            <div class="md:col-span-2" id="elementsBlock">
+                <span class="block text-sm font-semibold text-text-primary mb-2 mono">Hành phong thủy</span>
+                <input type="hidden" name="elements_submitted" value="1">
+                @php $selectedElements = old('elements_submitted') ? (array) old('elements', []) : $product->elementCodes(); @endphp
+                <div class="flex flex-wrap gap-3">
+                    @foreach(\App\Models\Product::ELEMENTS as $elementCode => $elementLabel)
+                        <label class="inline-flex items-center gap-2 px-4 py-2 rounded-pill border border-green-border/50 bg-[#f8f9f5] cursor-pointer text-sm text-text-primary">
+                            <input type="checkbox" name="elements[]" value="{{ $elementCode }}" class="w-4 h-4 rounded border-green-border/50 focus:ring-green-primary" {{ in_array($elementCode, $selectedElements, true) ? 'checked' : '' }}>
+                            {{ $elementLabel }}
+                        </label>
+                    @endforeach
+                </div>
+                <p class="text-xs text-text-secondary mt-2">Dựa vào màu lá, hoa và chậu của chính cây này: Kim — trắng, vàng nhạt, viền bạc · Mộc — lá xanh, thân đứng · Thủy — trồng thủy canh, lá sẫm hoặc xanh lam · Hỏa — đỏ, hồng, tím, cam · Thổ — vàng đất, nâu, lá to tròn, mọng nước. Có thể chọn nhiều hành. Bỏ trống nếu chưa xác định — cây sẽ chưa được gợi ý ở trang Cây hợp mệnh. Chỉ áp dụng cho cây cảnh.</p>
+                @include('products.partials.element-suggest')
+                @error('elements')<p class="text-red-500 text-sm mt-1">{{ $message }}</p>@enderror
+                @error('elements.*')<p class="text-red-500 text-sm mt-1">{{ $message }}</p>@enderror
+            </div>
         </div>
     </div>
 
@@ -317,6 +335,16 @@
             });
         }
 
+        // ==== Hành phong thủy: chỉ hiện với cây cảnh. Ẩn chứ không bỏ chọn, để
+        // đổi qua lại loại sản phẩm không làm mất lựa chọn (server bỏ qua với hoa).
+        function updateElementsBlock() {
+            const checked = document.querySelector('input[name="product_type"]:checked');
+            const block = document.getElementById('elementsBlock');
+            if (block) {
+                block.classList.toggle('hidden', (checked ? checked.value : 'plant') !== 'plant');
+            }
+        }
+
         // ==== Gợi ý tên phân loại theo loại sản phẩm (D2) ====
         const variantNameSuggestions = {
             plant: ['Mini (10–20cm)', 'S (20–40cm)', 'M (40–70cm)', 'L (70–120cm)', 'XL (trên 120cm)', 'Chậu nhựa', 'Chậu gốm', 'Chậu sứ trắng', 'Chậu xi măng'],
@@ -338,12 +366,14 @@
         document.querySelectorAll('input[name="product_type"]').forEach(function(radio) {
             radio.addEventListener('change', function() {
                 updateCategoryGroups();
+                updateElementsBlock();
                 updateVariantNameOptions();
             });
         });
 
         // Chạy lần đầu khi tải trang — phải hiện đúng nhóm/loại theo dữ liệu hiện có
         updateCategoryGroups();
+        updateElementsBlock();
         updateVariantNameOptions();
 
         // ==== Cách bán: ẩn/hiện giá gốc / bảng phân loại (D3-P4) ====

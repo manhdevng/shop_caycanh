@@ -20,11 +20,11 @@
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
             @php $bestVoucherId = optional($bestVoucher['voucher'] ?? null)->id; @endphp
             @foreach($productVouchers as $voucher)
-                <div class="pv-voucher-chip" data-expires-soon="{{ $voucher->expires_soon ? '1' : '0' }}" data-expires-at="{{ optional($voucher->expires_at)->toIso8601String() }}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid {{ $voucher->id === $bestVoucherId ? '#5C2323' : '#E5E2DC' }};border-radius:999px;padding:6px 6px 6px 12px;background:#FFFFFF">
+                <div class="pv-voucher-chip" data-expires-soon="{{ $voucher->expires_soon ? '1' : '0' }}" data-expires-at="{{ optional($voucher->expires_at)->toIso8601String() }}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:100%;min-width:0;border:1px solid {{ $voucher->id === $bestVoucherId ? '#5C2323' : '#E5E2DC' }};border-radius:20px;padding:6px 6px 6px 12px;background:#FFFFFF">
                     @if($voucher->id === $bestVoucherId)
                         <span title="Mã tốt nhất cho sản phẩm này" aria-label="Mã tốt nhất" style="color:#5C2323;font-size:13px">★</span>
                     @endif
-                    <span style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.04em;color:#5C2323">{{ $voucher->code }}</span>
+                    <span style="min-width:0;overflow-wrap:anywhere;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.04em;color:#5C2323">{{ $voucher->code }}</span>
                     <span style="font-size:12px;color:#4A6B1F;white-space:nowrap">{{ $voucher->summary }}</span>
 
                     @if(!is_null($voucher->remaining_uses))

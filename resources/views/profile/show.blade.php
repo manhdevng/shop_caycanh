@@ -62,15 +62,15 @@
 
         <div>
             <label class="block text-sm font-semibold mb-2">Ảnh đại diện</label>
-            <div class="flex items-center gap-4">
-                @if($user->avatar)
+            <div class="flex flex-wrap items-center gap-4">
+                @if($user->avatar && \Illuminate\Support\Facades\Storage::disk('public')->exists($user->avatar))
                     <img src="{{ asset('storage/' . $user->avatar) }}" alt="Ảnh đại diện của {{ $user->name }}" class="w-16 h-16 rounded-full object-cover border border-[#8C9680]/30">
                 @else
                     <div class="w-16 h-16 rounded-full bg-[#CED1C3] border border-[#8C9680]/30 flex items-center justify-center text-xl font-semibold text-gray-700" role="img" aria-label="Chưa có ảnh đại diện">
                         {{ mb_strtoupper(mb_substr($user->name, 0, 1)) }}
                     </div>
                 @endif
-                <input type="file" name="avatar" id="avatar" accept="image/*" class="text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#CED1C3] file:text-gray-700 hover:file:bg-[#B6CC9D]">
+                <input type="file" name="avatar" id="avatar" accept="image/*" class="text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#CED1C3] file:text-gray-700 hover:file:bg-[#B6CC9D]" style="max-width:100%;min-width:0">
             </div>
             @error('avatar') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\PhongThuyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,7 +19,7 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Product::with('categories');
+        $query = Product::with(['categories', 'elements']);
 
         if ($request->has('categories')) {
             // Ép kiểu mảng: tránh TypeError khi query string dạng ?categories=1.
@@ -44,6 +45,12 @@ class ProductController extends Controller
             $query->where('name', 'like', '%'.$search.'%');
         }
 
+        // Cây hợp mệnh: chỉ cây chưa có dòng product_elements nào (hoa không cần gán hành).
+        $elementFilter = $request->input('element') === 'unassigned' ? 'unassigned' : null;
+        if ($elementFilter) {
+            $query->where('product_type', 'plant')->doesntHave('elements');
+        }
+
         $products = $query->paginate(20)->withQueryString();
 
         // Danh mục cho menu lọc: nhóm cha + loại cây con, kèm số lượng sản phẩm mỗi loại
@@ -60,7 +67,19 @@ class ProductController extends Controller
         // Số sản phẩm đang bán đã hết hàng — hiện lối tắt sang trang tồn kho.
         $outOfStockCount = Product::where('is_active', true)->where('stock', '<=', 0)->count();
 
-        return view('products.index', compact('products', 'categories', 'activeCategories', 'type', 'search', 'outOfStockCount'));
+        $unassignedElementCount = Product::where('product_type', 'plant')->doesntHave('elements')->count();
+
+        // Ở bộ lọc "Chưa gán hành": hành gợi ý theo tên cho từng cây, để admin
+        // duyệt rồi gán hàng loạt (applySuggestedElements).
+        $elementSuggestions = [];
+        if ($elementFilter) {
+            $phongThuy = app(PhongThuyService::class);
+            foreach ($products as $product) {
+                $elementSuggestions[$product->id] = $phongThuy->suggestElements($product->name);
+            }
+        }
+
+        return view('products.index', compact('products', 'categories', 'activeCategories', 'type', 'search', 'outOfStockCount', 'elementFilter', 'unassignedElementCount', 'elementSuggestions'));
     }
 
     public function create()
@@ -101,6 +120,7 @@ class ProductController extends Controller
             }
 
             $this->syncSeasonsFromRequest($request, $product);
+            $this->syncElementsFromRequest($request, $product);
 
             if ($request->input('pricing_mode') === 'variants') {
                 foreach ($request->input('variants', []) as $index => $variantData) {
@@ -146,7 +166,7 @@ class ProductController extends Controller
     {
         $categories = Category::whereNull('parent_id')->with('children')->get();
         $selectedCategories = $product->categories->pluck('id')->toArray();
-        $product->load(['variants', 'seasons']);
+        $product->load(['variants', 'seasons', 'elements']);
 
         return view('products.edit', compact('product', 'categories', 'selectedCategories'));
     }
@@ -186,6 +206,7 @@ class ProductController extends Controller
             $product->categories()->sync($request->categories);
 
             $this->syncSeasonsFromRequest($request, $product);
+            $this->syncElementsFromRequest($request, $product);
 
             if ($request->input('pricing_mode') === 'variants') {
                 $filesToDelete = array_merge(
@@ -236,6 +257,37 @@ class ProductController extends Controller
     }
 
     /**
+     * Gán hành gợi ý theo tên (PhongThuyService::suggestElements) cho các cây
+     * admin đã chọn. Chỉ xử lý cây cảnh CHƯA có hành — không ghi đè lựa chọn tay;
+     * cây không khớp từ khóa nào được bỏ qua.
+     */
+    public function applySuggestedElements(Request $request, PhongThuyService $phongThuy)
+    {
+        $ids = array_filter(array_map('intval', (array) $request->input('product_ids', [])));
+        if (! $ids) {
+            return back()->with('error', 'Chưa chọn cây nào để gán hành.');
+        }
+
+        $applied = 0;
+        DB::transaction(function () use ($ids, $phongThuy, &$applied) {
+            $products = Product::whereIn('id', $ids)
+                ->where('product_type', 'plant')
+                ->doesntHave('elements')
+                ->get(['id', 'name']);
+
+            foreach ($products as $product) {
+                $codes = $phongThuy->suggestElements($product->name);
+                if ($codes) {
+                    $product->syncElements($codes);
+                    $applied++;
+                }
+            }
+        });
+
+        return back()->with('success', 'Đã gán hành gợi ý cho '.$applied.' cây.');
+    }
+
+    /**
      * Danh sách sản phẩm đã xóa (thùng rác).
      */
     public function trashed()
@@ -276,6 +328,9 @@ class ProductController extends Controller
             // T8: mùa vụ (bảng product_seasons). Bỏ trống = chưa có dữ liệu mùa.
             'seasons' => 'nullable|array',
             'seasons.*' => ['string', Rule::in(array_keys(Product::SEASONS))],
+            // Cây hợp mệnh: hành phong thủy (bảng product_elements). Bỏ trống = chưa gán hành.
+            'elements' => 'nullable|array',
+            'elements.*' => ['string', Rule::in(array_keys(Product::ELEMENTS))],
         ];
 
         $messages = [
@@ -285,6 +340,9 @@ class ProductController extends Controller
             'stock.integer' => 'Số lượng tồn kho phải là số nguyên.',
             'stock.min' => 'Số lượng tồn kho không được nhỏ hơn 0.',
             'seasons.*.in' => 'Mùa vụ không hợp lệ.',
+            'elements.array' => 'Hành phong thủy không hợp lệ.',
+            'elements.*.in' => 'Hành phong thủy không hợp lệ.',
+            'elements.*.string' => 'Hành phong thủy không hợp lệ.',
         ];
 
         if ($request->input('pricing_mode') === 'variants') {
@@ -340,6 +398,21 @@ class ProductController extends Controller
         }
 
         $product->syncSeasons((array) $request->input('seasons', []));
+    }
+
+    /**
+     * Ghi hành phong thủy (Product::syncElements) trong cùng transaction với
+     * sản phẩm. Chỉ ghi khi form có gửi khối hành (elements_submitted) và sản
+     * phẩm là cây: request không có khối này, hoặc sản phẩm đang là hoa (khối
+     * bị ẩn), không xoá hành đã gán.
+     */
+    private function syncElementsFromRequest(Request $request, Product $product): void
+    {
+        if (! $request->boolean('elements_submitted') || $product->product_type !== 'plant') {
+            return;
+        }
+
+        $product->syncElements((array) $request->input('elements', []));
     }
 
     /**

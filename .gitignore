@@ -25,3 +25,21 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Công cụ AI / ghi chú cá nhân — chỉ dùng cục bộ, không đẩy lên GitHub
+/.claude/
+/.agents/
+/.codex/
+/.mcp.json
+/CLAUDE.md
+/AGENTS.md
+/skills-lock.json
+/ke-hoach-2-agent/
+/Claude outputs/
+
+# Bí mật / dữ liệu nhạy cảm
+.env.*
+*.pem
+*.key
+*.p12
+*.sql

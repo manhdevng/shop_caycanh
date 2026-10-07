@@ -22,6 +22,7 @@ use App\Http\Controllers\GHNWebhookController;
 use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PageController;
+use App\Http\Controllers\PhongThuyController;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
@@ -100,6 +101,22 @@ Route::get('/cam-nang/{slug}', [PostController::class, 'show'])->name('posts.sho
 Route::get('/thong-bao', [NotificationController::class, 'index'])->name('notifications.index');
 Route::get('/san-ma-giam-gia', [VoucherController::class, 'browse'])->name('vouchers.browse');
 Route::get('/hoi-dap', [FaqController::class, 'index'])->name('faq.index');
+
+// Cây hợp mệnh: tra mệnh theo ngày sinh và gợi ý cây hợp. Ngày sinh chỉ gửi
+// bằng POST (không nằm trong URL/log); GET tra-cuu (tải lại sau POST) quay về
+// trang nhập. Trang menh-{element} là link chia sẻ, chỉ mang hành.
+Route::prefix('cay-phong-thuy')->name('phong-thuy.')->group(function () {
+    Route::get('/', [PhongThuyController::class, 'index'])->name('index');
+    Route::post('/tra-cuu', [PhongThuyController::class, 'lookup'])
+        ->middleware('throttle:30,1')->name('lookup');
+    Route::get('/tra-cuu', [PhongThuyController::class, 'reload'])->name('lookup.reload');
+    Route::get('/menh-{element}', [PhongThuyController::class, 'element'])
+        ->whereIn('element', ['kim', 'moc', 'thuy', 'hoa', 'tho'])->name('element');
+    Route::post('/nhan-tin', [PhongThuyController::class, 'waitlist'])
+        ->middleware('throttle:5,1')->name('waitlist');
+});
+Route::post('/api/phong-thuy/menh', [PhongThuyController::class, 'api'])
+    ->middleware('throttle:30,1')->name('phong-thuy.api');
 
 // Danh sách đánh giá của 1 sản phẩm — trả về PARTIAL HTML, trang sản phẩm
 // nạp bằng AJAX để đổi bộ lọc / sang trang mà không tải lại cả trang. Công
@@ -233,6 +250,9 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'admin'])->group(functio
 
     // Thùng rác sản phẩm (soft delete + khôi phục; không hỗ trợ xóa vĩnh viễn)
     Route::get('/products-trashed', [ProductController::class, 'trashed'])->name('products.trashed');
+
+    // Cây hợp mệnh: gán hành gợi ý theo tên cho các cây chưa gán đã chọn ở danh sách.
+    Route::post('/products-elements/suggest', [ProductController::class, 'applySuggestedElements'])->name('products.elements.suggest');
 
     // Theo dõi tồn kho: hết hàng / sắp hết / lâu chưa bán (T7)
     Route::get('/inventory', [AdminInventoryController::class, 'index'])->name('admin.inventory.index');

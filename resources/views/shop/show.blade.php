@@ -5,6 +5,7 @@
     $gallery = collect([$product->main_image])
         ->merge($product->variants->pluck('image'))
         ->filter()
+        ->filter(fn ($image) => \Illuminate\Support\Facades\Storage::disk('public')->exists($image))
         ->unique()
         ->values();
     // Phân loại đầu tiên (đã sắp theo sort_order rồi price trong quan hệ
@@ -42,7 +43,7 @@
         <div class="sc-pd__thumbs">
             @foreach($gallery as $image)
                 <button type="button" onclick="switchMainImage('{{ asset('storage/' . $image) }}', this)" class="thumb-btn" style="width:76px;height:76px;padding:0;border-radius:8px;overflow:hidden;border:{{ $loop->first ? '2px solid #5C2323' : '1px solid #E5E2DC' }};cursor:pointer">
-                    <img src="{{ asset('storage/' . $image) }}" style="width:100%;height:100%;object-fit:cover;display:block">
+                    <img src="{{ asset('storage/' . $image) }}" alt="Ảnh thu nhỏ của {{ $product->name }}" onerror="this.onerror=null;this.src='{{ asset('images/product-fallback.svg') }}'" style="width:100%;height:100%;object-fit:cover;display:block">
                 </button>
             @endforeach
         </div>
@@ -52,7 +53,7 @@
             <div id="main-image-box" class="placeholder-pattern" style="position:relative;aspect-ratio:1/1;border-radius:10px;overflow:hidden">
                 @include('shop.partials.badge', ['product' => $product, 'bestSellerIds' => $bestSellerIds])
                 @if($gallery->isNotEmpty())
-                    <img id="main-image" src="{{ asset('storage/' . $gallery->first()) }}" alt="{{ $product->name }}" style="width:100%;height:100%;object-fit:cover;display:block">
+                    <img id="main-image" src="{{ asset('storage/' . $gallery->first()) }}" alt="{{ $product->name }}" onerror="this.onerror=null;this.src='{{ asset('images/product-fallback.svg') }}'" style="width:100%;height:100%;object-fit:cover;display:block">
                 @else
                     <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#A8A196">{{ $product->name }}</span>
                 @endif
@@ -214,8 +215,8 @@
             <div>
                 <a href="{{ route('shop.show', $related->id) }}" style="position:relative;display:block;aspect-ratio:1/1">
                     @include('shop.partials.badge', ['product' => $related, 'bestSellerIds' => $bestSellerIds])
-                    @if($related->main_image)
-                        <img src="{{ asset('storage/' . $related->main_image) }}" alt="{{ $related->name }}" style="width:100%;height:100%;object-fit:cover;display:block">
+                    @if($related->main_image && \Illuminate\Support\Facades\Storage::disk('public')->exists($related->main_image))
+                        <img src="{{ asset('storage/' . $related->main_image) }}" alt="{{ $related->name }}" onerror="this.onerror=null;this.src='{{ asset('images/product-fallback.svg') }}'" style="width:100%;height:100%;object-fit:cover;display:block">
                     @else
                         <div class="placeholder-pattern" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">
                             <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#A8A196;text-align:center;padding:0 12px">{{ $related->name }}</span>
@@ -344,7 +345,8 @@
    nên breakpoint không bao giờ có tác dụng: ở 390px trang vẫn chia hai cột,
    cột phải hẹp tới mức câu hỏi "Cây có kèm chậu không?" vỡ thành mỗi dòng
    một từ. Nay một cột là mặc định, hai cột chỉ bật từ 861px trở lên. */
-.sc-pd { display: grid; gap: 32px; align-items: start; }
+.sc-pd { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; align-items: start; }
+.sc-pd > * { min-width: 0; }
 @media (min-width: 861px) {
     .sc-pd { gap: 56px; }
     .sc-pd--main { grid-template-columns: minmax(0, 1.15fr) minmax(280px, 1fr); }
@@ -504,7 +506,12 @@
     }
 
     function switchMainImage(src, btn) {
-        document.getElementById('main-image').src = src;
+        const mainImage = document.getElementById('main-image');
+        mainImage.onerror = function () {
+            this.onerror = null;
+            this.src = '{{ asset('images/product-fallback.svg') }}';
+        };
+        mainImage.src = src;
         document.querySelectorAll('.thumb-btn').forEach(b => b.style.border = '1px solid #E5E2DC');
         btn.style.border = '2px solid #5C2323';
     }
