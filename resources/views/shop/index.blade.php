@@ -85,6 +85,8 @@
 
 @include('shop.partials.home.grid-indoor')
 
+@include('shop.partials.home.grid-office')
+
 @include('shop.partials.home.gate-season')
 
 @include('shop.partials.home.grid-outdoor')

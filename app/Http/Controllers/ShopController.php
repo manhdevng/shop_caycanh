@@ -78,6 +78,8 @@ class ShopController extends Controller
         $outdoorNoun = 'cây';
         $indoorProducts = collect();
         $outdoorProducts = collect();
+        $officeCategory = null;
+        $officeProducts = collect();
         $homeFeatured = collect();
         $homeFeaturedIsBestSeller = false;
         $giftProductCount = 0;
@@ -130,8 +132,14 @@ class ShopController extends Controller
                 ->orderBy('id')
                 ->first();
 
+            // Tính cả danh mục con: nhóm gốc như "Cây cảnh văn phòng" có cây gắn
+            // ở danh mục con (vd "Cây kích thước trung bình/lớn"). Danh mục lá
+            // (Trong nhà / Ngoài trời) không có con nên không đổi hành vi.
             $inCategory = fn (Category $category) => Product::where('is_active', true)
-                ->whereHas('categories', fn ($q) => $q->where('categories.id', $category->id));
+                ->whereHas('categories', fn ($q) => $q->whereIn(
+                    'categories.id',
+                    $category->children()->pluck('id')->push($category->id)
+                ));
 
             // $excludeIds: cửa hàng hiện chỉ có hơn chục sản phẩm, nếu mỗi hàng
             // đều lấy "mới nhất" thì cùng một cây xuất hiện 3-4 lần trên trang.
@@ -181,7 +189,18 @@ class ShopController extends Controller
 
             // Các hàng phía dưới bỏ cây đã xuất hiện ở lưới đầu tiên.
             $usedIds = $homeFeatured->pluck('id')->all();
-            $indoorProducts = $productsInCategory($indoorCategory, self::HOME_ROW_LIMIT, $usedIds);
+            // Hàng "Cây cảnh văn phòng": tìm đúng tên trước, không có thì tìm gần đúng.
+            $officeCategory = Category::where('name', 'Cây cảnh văn phòng')->first()
+                ?? $findCategory('văn phòng');
+            $officeProducts = $productsInCategory($officeCategory, self::HOME_ROW_LIMIT, $usedIds);
+
+            // Cây văn phòng cũng gắn "Trong nhà (Indoor)" — loại ra khỏi hàng
+            // trong nhà để hai hàng liền nhau không lặp cùng một cây.
+            $indoorProducts = $productsInCategory(
+                $indoorCategory,
+                self::HOME_ROW_LIMIT,
+                array_merge($usedIds, $officeProducts->pluck('id')->all())
+            );
             $outdoorProducts = $productsInCategory($outdoorCategory, self::HOME_ROW_LIMIT, $usedIds);
 
             // T5: hàng "ngoài trời" phải gọi đúng tên thứ đang bán trong danh
@@ -252,6 +271,8 @@ class ShopController extends Controller
             'outdoorNoun',
             'indoorProducts',
             'outdoorProducts',
+            'officeCategory',
+            'officeProducts',
             'giftProductCount',
             'faqs'
         ));
