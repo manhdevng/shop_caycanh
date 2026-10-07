@@ -12,7 +12,7 @@
 @php
     $heroPlantHref = route('shop.index', ['type' => 'plant']);
 @endphp
-<section id="heroSection" class="sc-hero">
+<section id="heroSection" class="sc-hero" data-header-theme="dark">
     {{-- Video chỉ là nguồn dự phòng: KHÔNG gắn src sẵn (autoplay sẽ bắt trình duyệt tải ~2MB
          tranh băng thông với ảnh cây pixel + GSAP). hero-pixel chỉ gắn src khi ảnh dither lỗi. --}}
     <video class="sc-hero__video" data-src="{{ asset('videos/hero.mp4') }}" muted loop playsinline preload="none" aria-hidden="true"></video>

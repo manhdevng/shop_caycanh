@@ -9,7 +9,7 @@
         : null;
 @endphp
 
-<section class="sc-gate sc-gate--season">
+<section class="sc-gate sc-gate--season" data-header-theme="dark">
     <div class="sc-gate-season__frame">
         <img src="{{ asset('images/back_flow-editorial.webp') }}" alt="Lối đi lát đá trong khu vườn xanh với hoa hồng nở" width="1535" height="1025" loading="lazy" decoding="async">
     </div>

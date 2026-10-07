@@ -12,7 +12,7 @@
         ]);
 @endphp
 
-<section id="catArcSection" class="cat-arc-section" aria-labelledby="catArcTitle">
+<section id="catArcSection" class="cat-arc-section" data-header-theme="dark" aria-labelledby="catArcTitle">
     <img class="cat-arc-bg" src="{{ asset('images/bg-la-monstera.webp') }}" alt="" loading="lazy" decoding="async">
     <div class="cat-arc-bg-veil" aria-hidden="true"></div>
 

@@ -104,7 +104,7 @@
 
       // Gắn trước khi tạo trigger: các khối ghim đổi sang cao một màn hình.
       root.classList.add('motion-on');
-      var env = { mobile: ctx.conditions.mobile, lay: createLay(root), ghost: createHeaderGhost() };
+      var env = { mobile: ctx.conditions.mobile, lay: createLay(root) };
 
       // Tạo cảnh theo đúng thứ tự trên trang (trên -> dưới) để mỗi trigger
       // được đo SAU pin spacer của các khối ghim phía trên nó.
@@ -129,7 +129,6 @@
 
       return function () {
         env.lay.kill();
-        env.ghost.kill();
         root.classList.remove('motion-on');
       };
     });
@@ -139,28 +138,6 @@
   /* ------------------------------------------------------------ tiện ích -- */
 
   function extend(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
-
-  /* ------------------------------------------- Header trên cảnh nền tối --
-     Header giữ nền trong suốt trên danh mục và các cảnh ghim nền tối.
-     Dùng bộ đếm chứ không phải cờ bật/tắt: hai cảnh liền nhau có thể cùng
-     active trong một nhịp cuộn, nếu dùng cờ thì cảnh ra sẽ tắt nhầm cảnh vào.
-     CHỈ gắn cho cảnh nền TỐI — cảnh quà tặng nền kem (#F7F4EF) mà để chữ
-     trắng thì không đọc được. */
-  function createHeaderGhost() {
-    var header = document.getElementById('siteHeader');
-    var depth = 0;
-    return {
-      toggle: function (self) {
-        if (!header) return;
-        depth += self.isActive ? 1 : -1;
-        if (depth < 0) depth = 0;
-        header.classList.toggle('header-ghost', depth > 0);
-      },
-      kill: function () {
-        if (header) header.classList.remove('header-ghost');
-      }
-    };
-  }
 
   function pinDistance(vhMultiple) {
     return function () { return '+=' + Math.round(window.innerHeight * vhMultiple); };
@@ -281,17 +258,6 @@
      đầu tiên của lối đi trước khi vào vườn. Lưới danh mục đứng yên để người
      xem chọn nhóm dễ dàng. */
   function categoriesScene(sec, env) {
-    // Giữ chữ trắng trên ảnh danh mục cho đến khi phần này rời khỏi header.
-    ScrollTrigger.create({
-      trigger: sec,
-      start: 'top top',
-      end: function () {
-        var header = document.getElementById('siteHeader');
-        return 'bottom ' + (header ? header.offsetHeight : 76) + 'px';
-      },
-      onToggle: env.ghost.toggle
-    });
-
     var bg = sec.querySelector('.cat-arc-bg');
     if (!bg) return;
     gsap.fromTo(bg, { yPercent: -6, scale: 1.14 }, {
@@ -329,8 +295,7 @@
         pin: true,
         scrub: M.scrub,
         anticipatePin: 1,
-        invalidateOnRefresh: true,
-        onToggle: env.ghost.toggle
+        invalidateOnRefresh: true
       }
     });
     tl.addLabel('part', 0).addLabel('read', 0.38).addLabel('leave', 0.72);
@@ -385,8 +350,7 @@
         pin: true,
         scrub: M.scrub,
         anticipatePin: 1,
-        invalidateOnRefresh: true,
-        onToggle: env.ghost.toggle
+        invalidateOnRefresh: true
       }
     })
       .addLabel('arrive', 0)

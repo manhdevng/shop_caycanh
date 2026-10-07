@@ -32,7 +32,7 @@
         ['src' => 'la-gan',   'ox' => 48.9, 'flip' => true,  'ax' => 99,  'ay' => 108, 'w' => 52, 'rot' => 16,  'from' => -10, 'depth' => 1],
     ];
 @endphp
-<section class="sc-gate sc-gate--garden">
+<section class="sc-gate sc-gate--garden" data-header-theme="dark">
     <div class="sc-gate__stage">
         <div class="sc-gate__frame">
             <img src="{{ asset('images/lifestyle-hero.webp') }}"
