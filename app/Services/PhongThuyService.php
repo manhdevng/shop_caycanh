@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 
 /**
@@ -120,24 +121,43 @@ class PhongThuyService
      * Từ khóa phải khớp nguyên cụm (không dính chữ cái trước/sau), không phân
      * biệt hoa thường; chuẩn hóa Unicode NFC để chữ có dấu gõ kiểu tổ hợp vẫn khớp.
      *
+     * Từ khóa dài/cụ thể thắng từ khóa ngắn nằm lồng trong nó: "cau vàng" (Thổ)
+     * che "cau" (Mộc), "trầu bà đỏ" (Hỏa) che "trầu bà" (Mộc). Hai cụm KHÔNG
+     * chồng lên nhau thì đều được tính, nên tên ghép vẫn có thể ra nhiều hành.
+     *
      * @return array<string> mã hành theo thứ tự Product::ELEMENTS, rỗng nếu không khớp
      */
     public function suggestElements(string $name): array
     {
         $text = self::normalizeText($name);
-        $found = [];
 
+        $matches = [];
         foreach (config('phong_thuy.element_keywords', []) as $element => $keywords) {
             foreach ($keywords as $keyword) {
                 $pattern = '/(?<!\p{L})'.preg_quote(self::normalizeText($keyword), '/').'(?!\p{L})/u';
-                if (preg_match($pattern, $text)) {
-                    $found[] = $element;
-                    break;
+                if (preg_match_all($pattern, $text, $found, PREG_OFFSET_CAPTURE)) {
+                    foreach ($found[0] as [$phrase, $offset]) {
+                        $matches[] = ['element' => $element, 'start' => $offset, 'end' => $offset + strlen($phrase)];
+                    }
                 }
             }
         }
 
-        return array_values(array_intersect(array_keys(Product::ELEMENTS), $found));
+        // Dài trước; cụm nào đè lên cụm đã nhận thì bỏ.
+        usort($matches, fn ($a, $b) => ($b['end'] - $b['start']) <=> ($a['end'] - $a['start']) ?: $a['start'] <=> $b['start']);
+        $taken = [];
+        $elements = [];
+        foreach ($matches as $m) {
+            foreach ($taken as [$start, $end]) {
+                if ($m['start'] < $end && $start < $m['end']) {
+                    continue 2;
+                }
+            }
+            $taken[] = [$m['start'], $m['end']];
+            $elements[] = $m['element'];
+        }
+
+        return array_values(array_intersect(array_keys(Product::ELEMENTS), $elements));
     }
 
     private static function normalizeText(string $text): string
@@ -155,21 +175,29 @@ class PhongThuyService
      *  - tuong_sinh: có hành sinh ra mệnh (và không thuộc bản mệnh);
      *  - trung_tinh: đã gán hành, không hợp và không có hành khắc. Chỉ bù khi
      *    hai nhóm hợp chưa đủ few_threshold cây.
-     * Cây có cả hành hợp lẫn hành khắc vẫn vào nhóm hợp. Cây chưa gán hành
-     * không xuất hiện ở nhóm nào. Tổng ba nhóm không vượt $limit.
+     * Cây có cả hành hợp lẫn hành khắc vẫn vào nhóm hợp. Tổng ba nhóm không vượt $limit.
+     *
+     * Cây chưa gán hành chỉ dùng làm lưới an toàn: bù trung tính xong mà vẫn
+     * dưới few_threshold thì lấy thêm cây chưa gán có suggestElements() ra hành
+     * hợp (tính tại chỗ, không ghi CSDL) xếp vào ban_menh/tuong_sinh, để trang
+     * không trống khi admin chưa kịp gán hành.
      *
      * @return array{ban_menh:Collection<int,Product>, tuong_sinh:Collection<int,Product>, trung_tinh:Collection<int,Product>}
      */
     public function recommend(string $element, int $limit = 12): array
     {
         $relations = $this->relations($element);
+        $threshold = (int) config('phong_thuy.few_threshold', 4);
 
         $groups = ['ban_menh' => collect(), 'tuong_sinh' => collect(), 'trung_tinh' => collect()];
+        $unassigned = collect();
 
         foreach ($this->candidates()->get() as $product) {
             $codes = $product->elementCodes();
 
-            if (in_array($relations['ban_menh'], $codes, true)) {
+            if ($codes === []) {
+                $unassigned->push($product);
+            } elseif (in_array($relations['ban_menh'], $codes, true)) {
                 $groups['ban_menh']->push($product);
             } elseif (in_array($relations['tuong_sinh'], $codes, true)) {
                 $groups['tuong_sinh']->push($product);
@@ -183,11 +211,24 @@ class PhongThuyService
         $tuongSinh = $groups['tuong_sinh']->take($limit - $banMenh->count())->values();
 
         $harmonious = $banMenh->count() + $tuongSinh->count();
-        $fill = min(
-            max(0, (int) config('phong_thuy.few_threshold', 4) - $harmonious),
-            $limit - $harmonious,
-        );
+        $fill = min(max(0, $threshold - $harmonious), $limit - $harmonious);
         $trungTinh = $groups['trung_tinh']->take(max(0, $fill))->values();
+
+        $missing = min($threshold, $limit) - ($harmonious + $trungTinh->count());
+        foreach ($unassigned as $product) {
+            if ($missing <= 0) {
+                break;
+            }
+            $codes = $this->suggestElements($product->name);
+            if (in_array($relations['ban_menh'], $codes, true)) {
+                $banMenh->push($product);
+            } elseif (in_array($relations['tuong_sinh'], $codes, true)) {
+                $tuongSinh->push($product);
+            } else {
+                continue;
+            }
+            $missing--;
+        }
 
         return ['ban_menh' => $banMenh, 'tuong_sinh' => $tuongSinh, 'trung_tinh' => $trungTinh];
     }
@@ -205,22 +246,37 @@ class PhongThuyService
 
     /**
      * Cây đang bán, còn hàng, mua được (giá gốc > 0 hoặc có phân loại giá > 0
-     * — base_price của sản phẩm có phân loại là MIN giá phân loại) và đã gán
-     * ít nhất một hành.
+     * — base_price của sản phẩm có phân loại là MIN giá phân loại). Gồm cả cây
+     * chưa gán hành — recommend() tự tách nhóm đó ra.
+     *
+     * "Còn hàng" = products.stock > 0, hoặc một phân loại còn tồn nếu bảng
+     * product_variants có cột stock (cột này đã bị bỏ ở migration
+     * 2026_08_20_014303; tồn kho hiện chỉ nằm ở cấp sản phẩm).
      */
     private function candidates(): Builder
     {
+        $variantStock = self::variantsHaveStock();
+
         return Product::query()
             ->plants()
             ->where('is_active', true)
-            ->where('stock', '>', 0)
+            ->where(function (Builder $q) use ($variantStock) {
+                $q->where('stock', '>', 0)
+                    ->when($variantStock, fn (Builder $q) => $q->orWhereHas('variants', fn (Builder $v) => $v->where('stock', '>', 0)));
+            })
             ->where(function (Builder $q) {
                 $q->where('base_price', '>', 0)
                     ->orWhereHas('variants', fn (Builder $v) => $v->where('price', '>', 0));
             })
-            ->whereHas('elements')
             ->with(['elements', 'variants'])
             ->latest('id');
+    }
+
+    private static function variantsHaveStock(): bool
+    {
+        static $has = null;
+
+        return $has ??= Schema::hasColumn('product_variants', 'stock');
     }
 
     private function elementInfo(string $element): array

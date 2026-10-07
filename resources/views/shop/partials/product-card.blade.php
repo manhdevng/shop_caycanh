@@ -14,6 +14,8 @@
       $wishlistedIds  (mảng, mặc định []) id sản phẩm user đã thích
       $rank           (int|null) số thứ hạng hiện ở góc trên-trái (khối bán chạy)
       $soldCount      (int|null) số đã bán, chỉ hiện khi > 0
+      $cardClass      (string|null) class thêm vào thẻ, vd 'sc-row__item' để thẻ
+                      giữ đúng bề rộng trong carousel trang chủ
 
     Bản đồ bốn góc của ảnh (đừng thêm nhãn chồng lên các vị trí đã có chủ):
       trên-trái  : thứ hạng #1..#N (nếu có $rank)
@@ -26,6 +28,7 @@
     $wishlistedIds = $wishlistedIds ?? [];
     $rank = $rank ?? null;
     $soldCount = $soldCount ?? null;
+    $cardClass = $cardClass ?? null;
 
     // Giá hiển thị: có >=2 phân loại khác giá -> "Từ X₫"; ngược lại base_price.
     // base_price = 0 -> null, nơi hiển thị đổi thành "Liên hệ giá".
@@ -46,7 +49,7 @@
 
     $cardBtn = 'display:block;text-align:center;width:100%;padding:11px 14px;border-radius:999px;font-family:\'Space Mono\',monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase';
 @endphp
-<div class="sc-card">
+<div class="sc-card{{ $cardClass ? ' ' . $cardClass : '' }}">
     <div style="position:relative">
         <a href="{{ route('shop.show', $product->id) }}" class="sc-leaf sc-card__media" style="position:relative;display:block;aspect-ratio:1/1;overflow:hidden;background:#F7F4EF">
             @if($rank)
