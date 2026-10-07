@@ -160,6 +160,51 @@ class PhongThuyService
         return array_values(array_intersect(array_keys(Product::ELEMENTS), $elements));
     }
 
+    /**
+     * Hành suy ra từ màu chủ đạo (config('phong_thuy.colors')). Mã màu lạ bị bỏ qua.
+     *
+     * @param  array<string>|null  $colors
+     * @return array<string> mã hành theo thứ tự Product::ELEMENTS
+     */
+    public function elementsFromColors(?array $colors): array
+    {
+        $map = config('phong_thuy.colors', []);
+        $elements = [];
+        foreach ((array) $colors as $color) {
+            if (isset($map[$color]['element'])) {
+                $elements[] = $map[$color]['element'];
+            }
+        }
+
+        return array_values(array_intersect(array_keys(Product::ELEMENTS), $elements));
+    }
+
+    /**
+     * Gợi ý hành cho MỘT cây: có khai báo màu thì theo màu, chưa có thì đoán
+     * theo tên. Dùng chung cho lệnh artisan, seeder, gán hàng loạt ở admin và
+     * lưới an toàn của recommend().
+     *
+     * @return array<string>
+     */
+    public function suggestForProduct(Product $product): array
+    {
+        $byColor = $this->elementsFromColors($product->feng_shui_colors);
+
+        return $byColor ?: $this->suggestElements($product->name);
+    }
+
+    /**
+     * 'color' khi gợi ý đến từ màu, 'name' khi từ tên, null khi không có gợi ý.
+     */
+    public function suggestionSource(Product $product): ?string
+    {
+        if ($this->elementsFromColors($product->feng_shui_colors)) {
+            return 'color';
+        }
+
+        return $this->suggestElements($product->name) ? 'name' : null;
+    }
+
     private static function normalizeText(string $text): string
     {
         if (class_exists(\Normalizer::class)) {
@@ -178,7 +223,7 @@ class PhongThuyService
      * Cây có cả hành hợp lẫn hành khắc vẫn vào nhóm hợp. Tổng ba nhóm không vượt $limit.
      *
      * Cây chưa gán hành chỉ dùng làm lưới an toàn: bù trung tính xong mà vẫn
-     * dưới few_threshold thì lấy thêm cây chưa gán có suggestElements() ra hành
+     * dưới few_threshold thì lấy thêm cây chưa gán có suggestForProduct() ra hành
      * hợp (tính tại chỗ, không ghi CSDL) xếp vào ban_menh/tuong_sinh, để trang
      * không trống khi admin chưa kịp gán hành.
      *
@@ -219,7 +264,7 @@ class PhongThuyService
             if ($missing <= 0) {
                 break;
             }
-            $codes = $this->suggestElements($product->name);
+            $codes = $this->suggestForProduct($product);
             if (in_array($relations['ban_menh'], $codes, true)) {
                 $banMenh->push($product);
             } elseif (in_array($relations['tuong_sinh'], $codes, true)) {

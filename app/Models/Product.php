@@ -22,6 +22,11 @@ class Product extends Model
         'is_active',
         'badge',
         'variant_label',
+        'feng_shui_colors',
+    ];
+
+    protected $casts = [
+        'feng_shui_colors' => 'array',
     ];
 
     /**

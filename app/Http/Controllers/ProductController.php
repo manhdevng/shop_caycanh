@@ -69,13 +69,13 @@ class ProductController extends Controller
 
         $unassignedElementCount = Product::where('product_type', 'plant')->doesntHave('elements')->count();
 
-        // Ở bộ lọc "Chưa gán hành": hành gợi ý theo tên cho từng cây, để admin
+        // Ở bộ lọc "Chưa gán hành": hành gợi ý (theo màu, không thì theo tên) cho từng cây, để admin
         // duyệt rồi gán hàng loạt (applySuggestedElements).
         $elementSuggestions = [];
         if ($elementFilter) {
             $phongThuy = app(PhongThuyService::class);
             foreach ($products as $product) {
-                $elementSuggestions[$product->id] = $phongThuy->suggestElements($product->name);
+                $elementSuggestions[$product->id] = $phongThuy->suggestForProduct($product);
             }
         }
 
@@ -257,7 +257,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Gán hành gợi ý theo tên (PhongThuyService::suggestElements) cho các cây
+     * Gán hành gợi ý (PhongThuyService::suggestForProduct — theo màu, không thì theo tên) cho các cây
      * admin đã chọn. Chỉ xử lý cây cảnh CHƯA có hành — không ghi đè lựa chọn tay;
      * cây không khớp từ khóa nào được bỏ qua.
      */
@@ -273,10 +273,10 @@ class ProductController extends Controller
             $products = Product::whereIn('id', $ids)
                 ->where('product_type', 'plant')
                 ->doesntHave('elements')
-                ->get(['id', 'name']);
+                ->get(['id', 'name', 'feng_shui_colors']);
 
             foreach ($products as $product) {
-                $codes = $phongThuy->suggestElements($product->name);
+                $codes = $phongThuy->suggestForProduct($product);
                 if ($codes) {
                     $product->syncElements($codes);
                     $applied++;
@@ -331,6 +331,9 @@ class ProductController extends Controller
             // Cây hợp mệnh: hành phong thủy (bảng product_elements). Bỏ trống = chưa gán hành.
             'elements' => 'nullable|array',
             'elements.*' => ['string', Rule::in(array_keys(Product::ELEMENTS))],
+            // Màu chủ đạo (config phong_thuy.colors) — để suy ra hành theo màu.
+            'feng_shui_colors' => 'nullable|array',
+            'feng_shui_colors.*' => ['string', Rule::in(array_keys(config('phong_thuy.colors', [])))],
         ];
 
         $messages = [
@@ -343,6 +346,9 @@ class ProductController extends Controller
             'elements.array' => 'Hành phong thủy không hợp lệ.',
             'elements.*.in' => 'Hành phong thủy không hợp lệ.',
             'elements.*.string' => 'Hành phong thủy không hợp lệ.',
+            'feng_shui_colors.array' => 'Màu chủ đạo không hợp lệ.',
+            'feng_shui_colors.*.in' => 'Màu chủ đạo không hợp lệ.',
+            'feng_shui_colors.*.string' => 'Màu chủ đạo không hợp lệ.',
         ];
 
         if ($request->input('pricing_mode') === 'variants') {
@@ -401,7 +407,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Ghi hành phong thủy (Product::syncElements) trong cùng transaction với
+     * Ghi hành phong thủy (Product::syncElements) và màu chủ đạo trong cùng transaction với
      * sản phẩm. Chỉ ghi khi form có gửi khối hành (elements_submitted) và sản
      * phẩm là cây: request không có khối này, hoặc sản phẩm đang là hoa (khối
      * bị ẩn), không xoá hành đã gán.
@@ -413,6 +419,12 @@ class ProductController extends Controller
         }
 
         $product->syncElements((array) $request->input('elements', []));
+
+        $colors = array_values(array_unique(array_intersect(
+            (array) $request->input('feng_shui_colors', []),
+            array_keys(config('phong_thuy.colors', []))
+        )));
+        $product->forceFill(['feng_shui_colors' => $colors ?: null])->save();
     }
 
     /**

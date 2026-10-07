@@ -117,7 +117,7 @@
         <form id="bulkElementsForm" method="POST" action="{{ route('products.elements.suggest') }}"
               class="mt-4 mb-2 flex flex-wrap items-center gap-3 px-5 py-4 rounded-2xl bg-amber-50 border border-amber-200">
             @csrf
-            <p class="text-sm text-amber-900 m-0 flex-1 min-w-[240px]">Hành gợi ý được đoán theo tên cây. Bỏ chọn cây gợi ý chưa đúng, rồi bấm gán. Cây không có gợi ý cần gán tay trong trang sửa.</p>
+            <p class="text-sm text-amber-900 m-0 flex-1 min-w-[240px]">Hành gợi ý lấy theo màu chủ đạo (nếu đã khai báo), không thì đoán theo tên cây. Bỏ chọn cây gợi ý chưa đúng, rồi bấm gán. Cây không có gợi ý cần gán tay trong trang sửa.</p>
             <button type="submit" class="px-5 py-2 bg-text-primary text-white rounded-pill text-sm font-medium hover:opacity-90 transition-opacity">Gán hành gợi ý cho cây đã chọn</button>
         </form>
     @endif
