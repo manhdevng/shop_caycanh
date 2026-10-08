@@ -184,25 +184,27 @@
 .cpt-group { border-top: 1px solid var(--c-muc); outline: none; }
 .cpt-group__inner { padding: 50px 16px 80px; }
 @media (min-width: 1024px) { .cpt-group__inner { padding: 80px 64px 120px; } }
-.cpt-group__head { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; margin-bottom: 32px; }
-.cpt-group__head h2 { font-size: 26px; font-weight: 500; line-height: 1.3; letter-spacing: -.01em; }
-.cpt-group__han { font-weight: 500; font-size: 30px; line-height: 1; }
+/* Tiêu đề và chữ hành nằm cạnh nhau, cách lưới 24px. */
+.cpt-group__head { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.cpt-group__head h2 { min-width: 0; font-size: 26px; font-weight: 500; line-height: 1.3; letter-spacing: -.01em; }
+.cpt-group__han { flex-shrink: 0; font-weight: 500; font-size: 30px; line-height: 1; }
 
-.cpt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 14px; align-items: start; }
-@media (min-width: 640px) { .cpt-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 20px; } }
-@media (min-width: 1024px) { .cpt-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 50px 20px; } }
+/* Cột cố định tối đa 280px, căn trái: nhóm chỉ có 1-2 cây vẫn giữ cỡ card,
+   không giãn ra chiếm nửa màn hình. */
+.cpt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 280px)); justify-content: start; gap: 32px 14px; align-items: start; }
+@media (min-width: 640px) { .cpt-grid { grid-template-columns: repeat(3, minmax(0, 280px)); gap: 40px 20px; } }
+@media (min-width: 1024px) { .cpt-grid { grid-template-columns: repeat(4, minmax(0, 280px)); gap: 48px 24px; } }
 
 .cpt-plant { display: flex; flex-direction: column; min-width: 0; }
-.cpt-plant--lead { grid-column: span 2; }
 .cpt-plant__media {
     position: relative; display: block; aspect-ratio: 4 / 5;
     border-radius: 4px; overflow: hidden; background: var(--c-giay-ep);
 }
 .cpt-plant__media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; max-width: none; }
-.cpt-plant__name { font-size: 20px; font-weight: 500; line-height: 1.3; margin: 14px 0 2px; overflow-wrap: anywhere; }
+.cpt-plant__name { font-size: 18px; font-weight: 500; line-height: 1.3; margin: 12px 0 2px; overflow-wrap: anywhere; }
 .cpt-plant__name a { text-decoration: none; }
 .cpt-plant__name a:hover { text-decoration: underline; text-underline-offset: 3px; }
-.cpt-plant__price { font-size: 16px; }
+.cpt-plant__price { font-size: 16px; margin-bottom: 6px; }
 .cpt-plant__note { font-size: 16px; padding: 8px 0; color: var(--c-muc-nhat); }
 .cpt-plant__form { margin: 0; }
 

@@ -3,7 +3,7 @@
     hành động. Không thẻ, không badge (phong-thuy-la-ban-style.md mục 6.6).
 
     Tham số: $product (Product, nên eager-load variants), $lead (bool) cây đầu
-    nhóm, chiếm hai cột.
+    nhóm.
 
     Nút mua theo quyền và loại cây (00-doc-truoc-khi-giao.md, quyết định 3):
     hết hàng -> chữ; có biến thể -> trang chi tiết; không có giá -> trang chi
