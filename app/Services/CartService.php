@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use DomainException;
@@ -94,6 +95,78 @@ class CartService
             'item' => $cart[$key],
             'cart_count' => count($cart),
         ];
+    }
+
+    /**
+     * Trả các sản phẩm của một đơn (chưa thanh toán, vừa bị khách huỷ) về giỏ
+     * hàng trong session. store() đã xoá chúng khỏi giỏ lúc tạo đơn, nên nếu
+     * không trả lại thì khách huỷ đơn MoMo xong quay về thấy giỏ trống.
+     *
+     * Mỗi dòng đi qua putItem() để lấy giá/ảnh/weight theo DB hiện tại (không
+     * dùng giá đã chốt trong đơn). Bỏ qua sản phẩm đã xoá, ngừng bán, phân
+     * loại đã xoá, hết giá; vượt tồn kho thì chỉ thêm phần còn lại. Giỏ đã có
+     * sẵn sản phẩm đó thì cộng dồn số lượng.
+     *
+     * Mỗi đơn chỉ trả về giỏ MỘT lần (orders.cart_restored_at).
+     *
+     * @return array{restored: int, skipped: string[]}
+     */
+    public function restoreFromOrder(Order $order): array
+    {
+        // "Giành" quyền trả về giỏ bằng một câu UPDATE có điều kiện: hai request
+        // huỷ chạy song song (bấm đúp) thì chỉ một bên cập nhật được 1 dòng.
+        $claimed = Order::whereKey($order->id)
+            ->whereNull('cart_restored_at')
+            ->update(['cart_restored_at' => now()]);
+
+        if ($claimed === 0) {
+            return ['restored' => 0, 'skipped' => []];
+        }
+
+        $restored = 0;
+        $skipped = [];
+
+        foreach ($order->items()->get() as $item) {
+            $label = $item->product_name
+                ? $item->product_name.($item->variant_name ? ' - '.$item->variant_name : '')
+                : 'Sản phẩm #'.$item->product_id;
+
+            // find() không lấy sản phẩm đã xoá mềm.
+            $product = $item->product_id ? Product::find($item->product_id) : null;
+
+            if (! $product || ! $product->is_active) {
+                $skipped[] = $label;
+
+                continue;
+            }
+
+            if ($item->variant_id && ! $product->variants()->whereKey($item->variant_id)->exists()) {
+                $skipped[] = $label;
+
+                continue;
+            }
+
+            // Chỉ thêm phần tồn kho còn chứa được (trừ số đang có sẵn trong giỏ).
+            $key = $item->variant_id ? $product->id.'-'.$item->variant_id : (string) $product->id;
+            $inCart = (int) (session('cart', [])[$key]['quantity'] ?? 0);
+            $qty = min((int) $item->quantity, (int) $product->stock - $inCart);
+
+            if ($qty <= 0) {
+                $skipped[] = $label;
+
+                continue;
+            }
+
+            try {
+                $this->putItem($product, $item->variant_id, $qty, self::MODE_ADD);
+                $restored++;
+            } catch (DomainException|ValidationException) {
+                // Liên hệ giá, hoặc sản phẩm nay bắt buộc chọn phân loại mà dòng đơn không có.
+                $skipped[] = $label;
+            }
+        }
+
+        return ['restored' => $restored, 'skipped' => $skipped];
     }
 
     /**

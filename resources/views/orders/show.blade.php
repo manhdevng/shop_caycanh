@@ -87,10 +87,17 @@
                         </a>
                     </div>
                 </div>
-                <form method="POST" action="{{ route('momo.checkStatus', $order) }}">
-                    @csrf
-                    <button type="submit" class="hover:underline" style="background:none;border:none;padding:0;color:#D82D8B;font-size:12.5px;text-decoration:underline;cursor:pointer;font-family:inherit">Kiểm tra lại trạng thái thanh toán</button>
-                </form>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+                    <form method="POST" action="{{ route('momo.checkStatus', $order) }}">
+                        @csrf
+                        <button type="submit" class="hover:underline" style="background:none;border:none;padding:0;color:#D82D8B;font-size:12.5px;text-decoration:underline;cursor:pointer;font-family:inherit">Kiểm tra lại trạng thái thanh toán</button>
+                    </form>
+                    {{-- Không muốn thanh toán nữa: huỷ đơn, sản phẩm quay lại giỏ để chọn lại
+                         (callback MoMo thất bại KHÔNG tự trả về giỏ để tránh mua trùng). --}}
+                    @if($order->canCustomerCancel())
+                        <button type="button" class="js-cancel-order-open" style="background:#FFFFFF;border:1px solid #DC2626;color:#DC2626;font-size:13px;font-weight:600;padding:8px 16px;border-radius:999px;cursor:pointer;font-family:inherit">Huỷ đơn &amp; trả về giỏ hàng</button>
+                    @endif
+                </div>
             </div>
         @endif
 
@@ -123,9 +130,10 @@
             </div>
         @endif
 
-        @if($order->canCustomerCancel())
+        {{-- Đơn MoMo chờ thanh toán đã có nút huỷ trong khung MoMo ở trên. --}}
+        @if($order->canCustomerCancel() && ! $order->canRetryMomo())
             <div id="cancel-order" style="margin-bottom:20px">
-                <button type="button" id="cancelOrderBtn" style="background:none;border:1px solid #DC2626;color:#DC2626;font-size:13px;font-weight:600;padding:8px 18px;border-radius:999px;cursor:pointer;font-family:inherit">Huỷ đơn hàng</button>
+                <button type="button" id="cancelOrderBtn" class="js-cancel-order-open" style="background:none;border:1px solid #DC2626;color:#DC2626;font-size:13px;font-weight:600;padding:8px 18px;border-radius:999px;cursor:pointer;font-family:inherit">Huỷ đơn hàng</button>
             </div>
         @endif
 
@@ -220,7 +228,7 @@
     <div id="cancelOrderModal" style="display:none;position:fixed;inset:0;background:rgba(28,28,26,0.5);z-index:var(--z-modal,400);align-items:center;justify-content:center;padding:20px">
         <div style="background:#FFFFFF;border-radius:16px;max-width:380px;width:100%;padding:24px">
             <h3 style="font-family:'Anton',sans-serif;font-size:18px;text-transform:uppercase;color:#1C1C1A;margin:0 0 10px">Huỷ đơn hàng #{{ $order->id }}?</h3>
-            <p style="font-size:14px;color:#6B6B66;margin:0 0 20px">Đơn hàng sẽ được huỷ và không thể khôi phục. Bạn có chắc chắn muốn huỷ?</p>
+            <p style="font-size:14px;color:#6B6B66;margin:0 0 20px">Đơn hàng sẽ được huỷ và không thể khôi phục. Sản phẩm trong đơn sẽ được trả về giỏ hàng (nếu còn bán). Bạn có chắc chắn muốn huỷ?</p>
             <div style="display:flex;gap:10px;justify-content:flex-end">
                 <button type="button" id="cancelOrderDismiss" style="background:none;border:1px solid #E5E2DC;color:#6B6B66;font-size:13px;font-weight:600;padding:8px 18px;border-radius:999px;cursor:pointer;font-family:inherit">Đóng</button>
                 <button type="button" id="cancelOrderConfirm" style="background:#DC2626;border:none;color:#FFFFFF;font-size:13px;font-weight:600;padding:8px 18px;border-radius:999px;cursor:pointer;font-family:inherit">Huỷ đơn</button>
@@ -230,17 +238,17 @@
 
     <script>
         (function () {
-            const openBtn = document.getElementById('cancelOrderBtn');
+            const openBtns = document.querySelectorAll('.js-cancel-order-open');
             const modal = document.getElementById('cancelOrderModal');
             const dismissBtn = document.getElementById('cancelOrderDismiss');
             const confirmBtn = document.getElementById('cancelOrderConfirm');
             const form = document.getElementById('cancelOrderForm');
-            if (!openBtn || !modal) return;
+            if (!openBtns.length || !modal) return;
 
             function openModal() { modal.style.display = 'flex'; }
             function closeModal() { modal.style.display = 'none'; }
 
-            openBtn.addEventListener('click', openModal);
+            openBtns.forEach(function (btn) { btn.addEventListener('click', openModal); });
             dismissBtn.addEventListener('click', closeModal);
             modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });

@@ -12,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\UserAddress;
 use App\Models\Voucher;
 use App\Models\OrderStatusHistory;
+use App\Services\CartService;
 use App\Services\GHNOrderService;
 use App\Services\GHNService;
 use App\Services\GHNShipmentSyncService;
@@ -635,6 +636,7 @@ class OrderController extends Controller
         GHNOrderService $ghnOrderService,
         MomoService $momo,
         MomoController $momoController,
+        CartService $cartService,
     ) {
         if ($order->user_id !== Auth::id()) {
             abort(403);
@@ -662,6 +664,10 @@ class OrderController extends Controller
                 }
             }
         }
+
+        // Xét TRƯỚC khi huỷ: huỷ xong thì giao dịch 'paid' bị chuyển sang
+        // refund_pending, không còn nhận ra đơn đã thu tiền.
+        $wasPaid = $order->isPaid();
 
         // Bọc ngữ cảnh để OrderObserver ghi đúng "ai huỷ" vào lịch sử đơn.
         $result = OrderChangeContext::run([
@@ -692,7 +698,23 @@ class OrderController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Đã hủy đơn hàng.');
+        // Đơn CHƯA thanh toán: trả sản phẩm về giỏ (store() đã xoá khỏi giỏ lúc
+        // tạo đơn). Đơn đã thu tiền thì không — khách cần hoàn tiền, không mua lại.
+        $message = 'Đã hủy đơn hàng.';
+
+        if (! $wasPaid) {
+            $restore = $cartService->restoreFromOrder($order);
+
+            if ($restore['restored'] > 0) {
+                $message = 'Đã huỷ đơn và trả '.$restore['restored'].' sản phẩm về giỏ hàng.';
+            }
+
+            if ($restore['skipped'] !== []) {
+                $message .= ' Không thể trả về giỏ (ngừng bán hoặc hết hàng): '.implode(', ', $restore['skipped']).'.';
+            }
+        }
+
+        return back()->with('success', $message);
     }
 
     // ==========================================

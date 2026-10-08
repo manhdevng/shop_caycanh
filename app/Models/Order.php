@@ -42,6 +42,8 @@ class Order extends Model
         'completed_at',
         'ghn_expected_delivery_at',
         'ghn_last_synced_at',
+        // Đã trả sản phẩm về giỏ khi khách huỷ đơn (CartService::restoreFromOrder()).
+        'cart_restored_at',
     ];
 
     /**
@@ -58,6 +60,7 @@ class Order extends Model
             'completed_at' => 'datetime',
             'ghn_expected_delivery_at' => 'datetime',
             'ghn_last_synced_at' => 'datetime',
+            'cart_restored_at' => 'datetime',
         ];
     }
 
@@ -303,6 +306,14 @@ class Order extends Model
         }
 
         return $this->paymentTransactions()->where('status', 'paid')->exists();
+    }
+
+    // Đơn đã thu tiền (trạng thái đã thanh toán, hoặc có giao dịch 'paid').
+    // COD chưa giao (cod_ordered) vẫn tính là CHƯA thanh toán.
+    public function isPaid(): bool
+    {
+        return in_array($this->status, ['paid', 'paid_momo', 'cod_paid'], true)
+            || $this->hasPaidPaymentTransaction();
     }
 
     // Giao dịch MoMo mới nhất của đơn (theo id), dùng relation đã eager-load nếu có.

@@ -134,7 +134,7 @@ class MomoController extends Controller
                 : null;
 
             return $failedOrderId
-                ? redirect()->route('orders.show', $failedOrderId)->with('error', 'Giao dịch MoMo thất bại hoặc đã bị huỷ. Bạn có thể bấm "Thanh toán lại" ngay tại đây.')
+                ? redirect()->route('orders.show', $failedOrderId)->with('error', 'Giao dịch MoMo thất bại hoặc đã bị huỷ. Bạn có thể thanh toán lại ngay tại đây, hoặc bấm "Huỷ đơn & trả về giỏ hàng".')
                 : redirect()->route('orders.history')->with('error', 'Giao dịch MoMo thất bại hoặc đã bị huỷ.');
         }
 
