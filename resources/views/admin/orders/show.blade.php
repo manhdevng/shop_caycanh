@@ -10,6 +10,7 @@
         'awaiting_transfer' => 'Chờ chuyển khoản',
     ];
     $shippingStatusLabels = [
+        'awaiting_confirmation' => 'Chờ shop xác nhận',
         'not_shipped' => 'Chưa giao vận',
         'ready_to_pick' => 'Chờ lấy hàng',
         'delivering' => 'Đang giao',
@@ -58,6 +59,17 @@
                 <div class="text-sm font-semibold text-text-secondary mono mb-1">Mã vận đơn GHN</div>
                 <div class="text-text-primary mono" style="overflow-wrap:anywhere">{{ $order->ghn_order_code }}</div>
                 <form method="POST" action="{{ route('admin.orders.syncGhn', $order) }}" class="mt-3">@csrf<button type="submit" style="border:1px solid #E5E2DC;border-radius:999px;padding:8px 14px;background:#FFFFFF;color:#4A6B1F;font-size:12px;cursor:pointer">Đồng bộ GHN</button></form>
+            </div>
+            @elseif($order->canConfirmOrder())
+            <div class="sm:col-span-2 rounded-2xl border border-amber-300 bg-amber-50 p-5">
+                <div class="text-sm font-semibold text-amber-800 mb-1">Đơn hàng đang chờ shop xác nhận</div>
+                <p class="text-sm text-amber-700 mb-3">Kiểm tra sản phẩm, địa chỉ và thanh toán rồi bấm xác nhận — hệ thống sẽ tạo vận đơn và giao cho GHN.</p>
+                <form method="POST" action="{{ route('admin.orders.confirm', $order) }}">
+                    @csrf
+                    <button type="submit" class="px-5 py-2 bg-green-primary text-white rounded-pill font-medium hover:bg-green-accent transition-colors text-sm border border-green-border">
+                        Xác nhận đơn &amp; giao cho GHN
+                    </button>
+                </form>
             </div>
             @elseif($order->canRetryGhn())
             <div class="sm:col-span-2">

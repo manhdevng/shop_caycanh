@@ -76,6 +76,7 @@
                     </p>
                     <p id="sa_full" class="text-sm text-gray-600 break-words"></p>
                     <span id="sa_default" class="hidden inline-block text-xs text-[#6B8E23] border border-[#6B8E23] rounded px-1.5 py-0.5">Mặc định</span>
+                    <span id="sa_past" class="hidden inline-block text-xs text-gray-500 border border-gray-300 rounded px-1.5 py-0.5"></span>
                 </div>
                 <button type="button" id="change_address_btn" class="shrink-0 text-sm font-semibold text-[#4A6B1F] hover:underline">Thay đổi</button>
             </div>
@@ -126,7 +127,7 @@
 
             <div class="space-y-2 text-sm">
                 <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" name="save_address" value="1" {{ (session()->hasOldInput() ? old('save_address') : true) ? 'checked' : '' }} class="w-4 h-4 accent-[#6B8E23]">
+                    <input type="checkbox" name="save_address" id="save_address_input" value="1" {{ (session()->hasOldInput() ? old('save_address') : true) ? 'checked' : '' }} class="w-4 h-4 accent-[#6B8E23]">
                     Lưu địa chỉ này vào sổ địa chỉ
                 </label>
                 @if($addresses->isNotEmpty())
@@ -484,6 +485,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // ===== Sổ địa chỉ (kiểu Shopee) =====
     let addresses = @json($addresses);
+    // Địa chỉ ở các đơn đã đặt nhưng chưa có trong sổ — tick chọn là dùng được.
+    const pastAddresses = @json($pastAddresses);
+    let currentChoice = null; // 's<id>' = địa chỉ đã lưu, 'o<orderId>' = địa chỉ từ đơn cũ
     const oldAddressId = @json(old('address_id'));
     const hasOldInput = @json(session()->hasOldInput());
     const csrfToken = '{{ csrf_token() }}';
@@ -512,9 +516,53 @@ document.addEventListener("DOMContentLoaded", function () {
         return addresses.find(a => a.is_default) || addresses[0] || null;
     }
 
+    function useChoice(key) {
+        if (!key) return false;
+        const saved = key[0] === 's' && findAddress(key.slice(1));
+        if (saved) { useSavedAddress(saved); return true; }
+        const past = key[0] === 'o' && pastAddresses.find(p => String(p.order_id) === key.slice(1));
+        if (past) { usePastAddress(past); return true; }
+        return false;
+    }
+
+    function fillSummary(a, defaultBadge, pastLabel) {
+        document.getElementById('sa_name').textContent = a.name;
+        document.getElementById('sa_phone').textContent = a.phone;
+        document.getElementById('sa_full').textContent = a.full_address;
+        document.getElementById('sa_default').classList.toggle('hidden', !defaultBadge);
+        const pastBadge = document.getElementById('sa_past');
+        pastBadge.textContent = pastLabel || '';
+        pastBadge.classList.toggle('hidden', !pastLabel);
+
+        savedView.classList.remove('hidden');
+        newForm.classList.add('hidden');
+        backToSavedBtn.classList.add('hidden');
+    }
+
+    // Dùng địa chỉ của 1 đơn đã đặt: gửi như địa chỉ mới (kèm tên Tỉnh/Quận/
+    // Phường) và tự lưu vào sổ địa chỉ để lần sau có sẵn.
+    function usePastAddress(p) {
+        currentChoice = 'o' + p.order_id;
+        addressIdInput.value = '';
+        nameInput.value = p.name;
+        phoneInput.value = p.phone;
+        addressInput.value = p.address;
+        toDistrictIdInput.value = p.district_id;
+        toWardCodeInput.value = p.ward_code;
+        provinceIdInput.value = p.province_id || '';
+        provinceNameInput.value = p.province_name || '';
+        districtNameInput.value = p.district_name || '';
+        wardNameInput.value = p.ward_name || '';
+        document.getElementById('save_address_input').checked = true;
+
+        fillSummary(p, false, 'Đã dùng ở đơn #' + p.order_id);
+        requestFee(p.district_id, p.ward_code);
+    }
+
     // Dùng 1 địa chỉ đã lưu: điền sẵn các ô (để form hợp lệ — server vẫn lấy
     // lại dữ liệu từ DB theo address_id) rồi tính phí ship ngay.
     function useSavedAddress(address) {
+        currentChoice = 's' + address.id;
         addressIdInput.value = address.id;
         nameInput.value = address.name;
         phoneInput.value = address.phone;
@@ -522,20 +570,13 @@ document.addEventListener("DOMContentLoaded", function () {
         toDistrictIdInput.value = address.district_id;
         toWardCodeInput.value = address.ward_code;
 
-        document.getElementById('sa_name').textContent = address.name;
-        document.getElementById('sa_phone').textContent = address.phone;
-        document.getElementById('sa_full').textContent = address.full_address;
-        document.getElementById('sa_default').classList.toggle('hidden', !address.is_default);
-
-        savedView.classList.remove('hidden');
-        newForm.classList.add('hidden');
-        backToSavedBtn.classList.add('hidden');
-
+        fillSummary(address, address.is_default, null);
         requestFee(address.district_id, address.ward_code);
     }
 
     // Nhập địa chỉ mới: xoá dữ liệu của địa chỉ đã chọn trước đó.
     function useNewAddressForm(clear) {
+        currentChoice = null;
         addressIdInput.value = '';
         if (clear) {
             [nameInput, phoneInput, addressInput, toDistrictIdInput, toWardCodeInput,
@@ -550,13 +591,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
         savedView.classList.add('hidden');
         newForm.classList.remove('hidden');
-        backToSavedBtn.classList.toggle('hidden', addresses.length === 0);
+        backToSavedBtn.classList.toggle('hidden', addresses.length === 0 && pastAddresses.length === 0);
     }
 
     function renderAddressList() {
-        addressList.innerHTML = addresses.map(a => `
+        const savedHtml = addresses.map(a => `
             <div class="flex items-start gap-3 px-5 py-4">
-                <input type="radio" name="address_choice" value="${a.id}" id="address_choice_${a.id}" ${String(a.id) === String(modalChoiceId) ? 'checked' : ''} class="mt-1 w-4 h-4 accent-[#6B8E23]">
+                <input type="radio" name="address_choice" value="s${a.id}" id="address_choice_${a.id}" ${'s' + a.id === modalChoiceId ? 'checked' : ''} class="mt-1 w-4 h-4 accent-[#6B8E23]">
                 <label for="address_choice_${a.id}" class="flex-1 min-w-0 cursor-pointer space-y-1">
                     <p class="text-gray-800"><span class="font-semibold">${escapeHtml(a.name)}</span><span class="text-gray-300 mx-1">|</span><span class="text-gray-600">${escapeHtml(a.phone)}</span></p>
                     <p class="text-sm text-gray-600 break-words">${escapeHtml(a.full_address)}</p>
@@ -567,11 +608,26 @@ document.addEventListener("DOMContentLoaded", function () {
                     <button type="button" data-delete="${a.id}" class="text-red-600 hover:underline">Xoá</button>
                 </div>
             </div>
-        `).join('') || '<p class="px-5 py-6 text-sm text-gray-500">Bạn chưa lưu địa chỉ nào.</p>';
+        `).join('');
+
+        const pastHtml = pastAddresses.length ? `
+            <p class="px-5 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Địa chỉ từ đơn hàng trước</p>
+            ${pastAddresses.map(p => `
+                <div class="flex items-start gap-3 px-5 py-4">
+                    <input type="radio" name="address_choice" value="o${p.order_id}" id="past_choice_${p.order_id}" ${'o' + p.order_id === modalChoiceId ? 'checked' : ''} class="mt-1 w-4 h-4 accent-[#6B8E23]">
+                    <label for="past_choice_${p.order_id}" class="flex-1 min-w-0 cursor-pointer space-y-1">
+                        <p class="text-gray-800"><span class="font-semibold">${escapeHtml(p.name)}</span><span class="text-gray-300 mx-1">|</span><span class="text-gray-600">${escapeHtml(p.phone)}</span></p>
+                        <p class="text-sm text-gray-600 break-words">${escapeHtml(p.full_address)}</p>
+                        <span class="inline-block text-xs text-gray-500 border border-gray-300 rounded px-1.5 py-0.5">Đã dùng ở đơn #${p.order_id}</span>
+                    </label>
+                </div>
+            `).join('')}` : '';
+
+        addressList.innerHTML = (savedHtml + pastHtml) || '<p class="px-5 py-6 text-sm text-gray-500">Bạn chưa lưu địa chỉ nào.</p>';
     }
 
     function openModal() {
-        modalChoiceId = addressIdInput.value || (defaultAddress() || {}).id;
+        modalChoiceId = currentChoice || (defaultAddress() ? 's' + defaultAddress().id : null);
         renderAddressList();
         modal.classList.remove('hidden');
         modal.classList.add('flex');
@@ -607,7 +663,7 @@ document.addEventListener("DOMContentLoaded", function () {
             } else {
                 if (!confirm('Xoá địa chỉ này khỏi sổ địa chỉ?')) return;
                 await sendAddressRequest(addressDestroyUrl.replace('__ID__', deleteId), 'DELETE');
-                if (String(modalChoiceId) === String(deleteId)) modalChoiceId = (defaultAddress() || {}).id;
+                if (modalChoiceId === 's' + deleteId) modalChoiceId = defaultAddress() ? 's' + defaultAddress().id : null;
             }
         } catch (err) {
             alert(err.message || 'Không cập nhật được địa chỉ.');
@@ -636,8 +692,7 @@ document.addEventListener("DOMContentLoaded", function () {
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
     document.getElementById('address_modal_confirm').addEventListener('click', function () {
-        const chosen = findAddress(modalChoiceId);
-        if (chosen) useSavedAddress(chosen);
+        useChoice(modalChoiceId);
         closeModal();
     });
 
@@ -650,6 +705,7 @@ document.addEventListener("DOMContentLoaded", function () {
     backToSavedBtn.addEventListener('click', function () {
         const chosen = defaultAddress();
         if (chosen) useSavedAddress(chosen);
+        else if (pastAddresses[0]) usePastAddress(pastAddresses[0]);
     });
 
     // Khởi tạo: có sổ địa chỉ thì chọn sẵn địa chỉ mặc định (hoặc địa chỉ đã
@@ -659,6 +715,9 @@ document.addEventListener("DOMContentLoaded", function () {
         const initial = oldAddressId ? findAddress(oldAddressId) : (hasOldInput ? null : defaultAddress());
         if (initial) {
             useSavedAddress(initial);
+        } else if (!hasOldInput && pastAddresses[0]) {
+            // Chưa có sổ địa chỉ: chọn sẵn địa chỉ của đơn gần nhất.
+            usePastAddress(pastAddresses[0]);
         } else {
             useNewAddressForm(false);
             recalcIfPrefilled();
@@ -669,8 +728,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // Quay lại trang bằng nút Back (bfcache): kiểm tra lại cho chắc.
     window.addEventListener('pageshow', function (e) {
         if (!e.persisted) return;
-        const current = addressIdInput.value && findAddress(addressIdInput.value);
-        current ? useSavedAddress(current) : recalcIfPrefilled();
+        if (!useChoice(currentChoice)) recalcIfPrefilled();
     });
 
     // Hiện/ẩn khối chọn loại thẻ MoMo / thông tin chuyển khoản theo lựa chọn hình thức thanh toán

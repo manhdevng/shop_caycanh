@@ -21,6 +21,7 @@ class AdminOrderController extends Controller
 {
     private const TABS = [
         'all' => ['label' => 'Tất cả', 'color' => 'blue', 'statuses' => []],
+        'confirm' => ['label' => 'Chờ xác nhận', 'color' => 'violet', 'statuses' => ['awaiting_confirmation']],
         'pending' => ['label' => 'Chờ xử lý', 'color' => 'slate', 'statuses' => ['pending', 'not_shipped', 'processing']],
         'ready' => ['label' => 'Chờ lấy hàng', 'color' => 'cyan', 'statuses' => ['ready_to_pick']],
         'picking' => ['label' => 'Đang lấy hàng', 'color' => 'cyan', 'statuses' => ['picking']],
@@ -222,26 +223,58 @@ class AdminOrderController extends Controller
         return back()->with('success', 'Đã hủy đơn hàng.');
     }
 
+    // Shop xác nhận đơn COD / MoMo đã thanh toán (shipping_status =
+    // awaiting_confirmation) -> lúc này mới tạo vận đơn và giao cho GHN.
+    public function confirmOrder(Order $order, GHNOrderService $ghnOrderService)
+    {
+        return $this->dispatchToGhn(
+            $order,
+            $ghnOrderService,
+            fn (Order $o) => $o->canConfirmOrder(),
+            'Admin xác nhận đơn hàng, giao cho GHN',
+            'Đã xác nhận đơn hàng #%d và tạo vận đơn GHN.',
+            'Đã xác nhận đơn nhưng tạo vận đơn GHN thất bại. Bấm "Tạo lại vận đơn GHN" để thử lại.',
+            'Đơn hàng không ở trạng thái chờ xác nhận.'
+        );
+    }
+
     // G8/C5: tạo lại vận đơn GHN cho đơn đã thanh toán/COD nhưng lần tạo
     // trước đó thất bại (shipping_status = not_shipped, chưa có ghn_order_code).
     public function retryGhn(Order $order, GHNOrderService $ghnOrderService)
     {
-        if (! $order->canRetryGhn()) {
-            return back()->with('error', 'Đơn hàng không đủ điều kiện để tạo lại vận đơn GHN.');
+        return $this->dispatchToGhn(
+            $order,
+            $ghnOrderService,
+            fn (Order $o) => $o->canRetryGhn(),
+            'Admin tạo lại vận đơn GHN',
+            'Đã tạo lại vận đơn GHN cho đơn hàng #%d.',
+            'Tạo lại vận đơn GHN thất bại. Vui lòng thử lại sau.',
+            'Đơn hàng không đủ điều kiện để tạo lại vận đơn GHN.'
+        );
+    }
+
+    /**
+     * Tạo vận đơn GHN cho 1 đơn (dùng chung cho "Xác nhận đơn" và "Tạo lại
+     * vận đơn"). Khoá đơn + kiểm tra lại điều kiện trên dòng đã khoá trước khi
+     * đặt "processing" (tránh 2 admin cùng bấm 1 lúc); gọi GHN ngoài
+     * transaction; thất bại thì về 'not_shipped' để còn nút tạo lại.
+     */
+    private function dispatchToGhn(Order $order, GHNOrderService $ghnOrderService, callable $eligible, string $note, string $successMessage, string $failureMessage, string $ineligibleMessage)
+    {
+        if (! $eligible($order)) {
+            return back()->with('error', $ineligibleMessage);
         }
 
-        // Khoá đơn + kiểm tra lại điều kiện trên dòng đã khoá trước khi đặt
-        // "processing" (tránh 2 admin cùng bấm tạo lại vận đơn 1 lúc).
         $adminContext = [
             'source' => 'admin',
             'actor_id' => auth()->id(),
-            'note' => 'Admin tạo lại vận đơn GHN',
+            'note' => $note,
         ];
 
-        $locked = OrderChangeContext::run($adminContext, fn () => DB::transaction(function () use ($order) {
+        $locked = OrderChangeContext::run($adminContext, fn () => DB::transaction(function () use ($order, $eligible) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
 
-            if (! $locked || ! $locked->canRetryGhn()) {
+            if (! $locked || ! $eligible($locked)) {
                 return null;
             }
 
@@ -251,13 +284,17 @@ class AdminOrderController extends Controller
         }));
 
         if (! $locked) {
-            return back()->with('error', 'Đơn hàng không đủ điều kiện để tạo lại vận đơn GHN.');
+            return back()->with('error', $ineligibleMessage);
         }
 
-        // Gọi GHN ngoài transaction (gọi mạng ngoài, không giữ khoá DB trong lúc chờ).
         $order = Order::with(['items.product', 'items.variant'])->find($locked->id);
         $isPaid = in_array($order->status, ['paid', 'paid_momo'], true);
-        $ghnResponse = $ghnOrderService->create($order, isPaid: $isPaid);
+
+        try {
+            $ghnResponse = $ghnOrderService->create($order, isPaid: $isPaid);
+        } catch (\Throwable $e) {
+            $ghnResponse = ['code' => -1, 'message' => $e->getMessage()];
+        }
 
         $applied = OrderChangeContext::run(
             $adminContext,
@@ -265,10 +302,10 @@ class AdminOrderController extends Controller
         );
 
         if ($applied) {
-            return back()->with('success', 'Đã tạo lại vận đơn GHN cho đơn hàng #'.$order->id.'.');
+            return back()->with('success', sprintf($successMessage, $order->id));
         }
 
-        Log::error('Tạo lại vận đơn GHN thất bại', [
+        Log::error('Tạo vận đơn GHN thất bại', [
             'order_id' => $order->id,
             'response' => $ghnResponse,
         ]);
@@ -276,11 +313,11 @@ class AdminOrderController extends Controller
         // Trả về 'not_shipped' để đơn còn hiện nút "Tạo lại vận đơn GHN"
         // (canRetryGhn()) thay vì kẹt mãi ở 'processing'.
         OrderChangeContext::run(
-            array_merge($adminContext, ['note' => 'Tạo lại vận đơn GHN thất bại']),
+            array_merge($adminContext, ['note' => 'Tạo vận đơn GHN thất bại']),
             fn () => $order->update(['shipping_status' => 'not_shipped'])
         );
 
-        return back()->with('error', 'Tạo lại vận đơn GHN thất bại. Vui lòng thử lại sau.');
+        return back()->with('error', $failureMessage);
     }
 
     // Admin xác nhận ĐÃ NHẬN được tiền chuyển khoản của đơn "bank_transfer":

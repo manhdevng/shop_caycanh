@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
  * Hồ sơ cá nhân của khách hàng (mã yêu cầu C2.3).
  *
  * Cho phép người dùng đang đăng nhập xem/sửa thông tin cá nhân (tên, số điện
- * thoại, địa chỉ, ảnh đại diện) và đổi mật khẩu. Toàn bộ thao tác chỉ áp dụng
+ * thoại, ảnh đại diện), quản lý sổ địa chỉ nhận hàng và đổi mật khẩu. Toàn bộ thao tác chỉ áp dụng
  * cho auth()->user() — không cho phép sửa hồ sơ của người dùng khác thông qua
  * bất kỳ tham số nào trên request/URL.
  */
@@ -24,6 +24,7 @@ class ProfileController extends Controller
         return view('profile.show', [
             'user' => $request->user(),
             'orderStageCounts' => $this->orderStageCounts($request->user()->id),
+            'addresses' => $request->user()->addresses()->get(),
         ]);
     }
 
@@ -58,7 +59,7 @@ class ProfileController extends Controller
         ];
     }
 
-    /** Cập nhật thông tin cá nhân (tên, điện thoại, địa chỉ, ảnh đại diện). */
+    /** Cập nhật thông tin cá nhân (tên, điện thoại, ảnh đại diện). Địa chỉ nhận hàng nằm ở sổ địa chỉ (UserAddressController). */
     public function update(Request $request)
     {
         // Luôn thao tác trên user đang đăng nhập, không tin bất kỳ id nào từ client.
@@ -67,7 +68,6 @@ class ProfileController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:20', 'regex:/^0[0-9]{9,10}$/'],
-            'address' => ['nullable', 'string', 'max:255'],
             'avatar' => ['nullable', 'image', 'max:2048'],
         ], [
             'name.required' => 'Vui lòng nhập họ tên.',
@@ -76,15 +76,12 @@ class ProfileController extends Controller
             'phone.string' => 'Số điện thoại không hợp lệ.',
             'phone.max' => 'Số điện thoại không được vượt quá 20 ký tự.',
             'phone.regex' => 'Số điện thoại không đúng định dạng (phải bắt đầu bằng số 0 và có 10-11 chữ số).',
-            'address.string' => 'Địa chỉ không hợp lệ.',
-            'address.max' => 'Địa chỉ không được vượt quá 255 ký tự.',
             'avatar.image' => 'Ảnh đại diện phải là tệp hình ảnh.',
             'avatar.max' => 'Ảnh đại diện không được vượt quá 2MB.',
         ]);
 
         $user->name = $validated['name'];
         $user->phone = $validated['phone'] ?? null;
-        $user->address = $validated['address'] ?? null;
 
         if ($request->hasFile('avatar')) {
             $duongDanCu = $user->avatar;

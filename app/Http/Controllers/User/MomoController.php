@@ -150,9 +150,7 @@ class MomoController extends Controller
                 : redirect()->route('orders.history')->with('error', 'Dữ liệu thanh toán MoMo không hợp lệ hoặc số tiền không khớp.');
         }
 
-        $message = in_array($result, ['created', 'already_created'], true)
-            ? 'Thanh toán MoMo thành công! Vận đơn GHN đã được khởi tạo.'
-            : 'Thanh toán thành công! Đơn hàng đang chờ tạo vận đơn GHN.';
+        $message = 'Thanh toán MoMo thành công! Shop sẽ xác nhận đơn và giao cho đơn vị vận chuyển.';
 
         // Thanh toán đã thành công (mọi nhánh còn lại của completePayment() —
         // created/already_created/processing/failed đều là "đã thu tiền",
@@ -210,9 +208,7 @@ class MomoController extends Controller
                 return back()->with('error', 'Dữ liệu thanh toán MoMo không hợp lệ hoặc số tiền không khớp.');
             }
 
-            $message = in_array($outcome, ['created', 'already_created'], true)
-                ? 'MoMo xác nhận đã thanh toán thành công! Vận đơn GHN đã được khởi tạo.'
-                : 'MoMo xác nhận đã thanh toán thành công! Đơn hàng đang chờ tạo vận đơn GHN.';
+            $message = 'MoMo xác nhận đã thanh toán thành công! Shop sẽ xác nhận đơn và giao cho đơn vị vận chuyển.';
 
             return back()->with('success', $message);
         }
@@ -275,7 +271,8 @@ class MomoController extends Controller
             : redirect()->route('orders.show', $order)->with('error', 'Không thể kết nối tới MoMo. Vui lòng thử lại.');
     }
 
-    // Xác nhận thanh toán (đối chiếu giao dịch + số tiền) và tạo vận đơn GHN.
+    // Xác nhận thanh toán (đối chiếu giao dịch + số tiền). KHÔNG tạo vận đơn
+    // GHN ở đây: đơn chuyển sang "awaiting_confirmation" chờ shop xác nhận.
     // Public: OrderController::cancel() (User) cũng gọi lại hàm này khi khách
     // bấm huỷ đơn nhưng MoMo báo giao dịch đã thanh toán thành công (G5) — để
     // hoàn tất thanh toán thay vì huỷ, dùng đúng 1 luồng xử lý duy nhất.
@@ -287,8 +284,8 @@ class MomoController extends Controller
         // "source" vào order_status_histories, không cần lặp lại ở từng
         // update() bên dưới. run() tự reset về mặc định khi hàm kết thúc
         // (kể cả khi có exception) nên không rò rỉ sang request khác.
-        return OrderChangeContext::run(['source' => 'momo'], function () use ($payload, $ghnOrders, $momo) {
-            $result = DB::transaction(function () use ($payload, $momo) {
+        return OrderChangeContext::run(['source' => 'momo'], function () use ($payload, $momo) {
+            return DB::transaction(function () use ($payload, $momo) {
                 $transaction = PaymentTransaction::where('gateway', 'momo')
                     ->where('gateway_order_id', $payload['orderId'] ?? '')
                     ->lockForUpdate()
@@ -312,56 +309,24 @@ class MomoController extends Controller
                     return 'processing';
                 }
 
+                // Đã ghi nhận thanh toán từ trước (IPN + callback cùng về) -> không làm lại.
+                if ($transaction->status === 'paid') {
+                    return 'confirmed';
+                }
+
                 if ((int) $transaction->amount !== (int) ($payload['amount'] ?? 0)) {
                     $momo->markFailed($transaction, $payload);
 
                     return 'invalid';
                 }
 
-                $order->update(['status' => 'paid', 'shipping_status' => 'processing']);
+                // Đã thu tiền nhưng CHƯA giao GHN: chờ shop xác nhận đơn ở trang
+                // admin (AdminOrderController::confirmOrder()) rồi mới tạo vận đơn.
+                $order->update(['status' => 'paid', 'shipping_status' => 'awaiting_confirmation']);
                 $momo->markPaid($transaction, $payload);
 
-                return ['create', $order->id];
+                return 'confirmed';
             });
-
-            if (! is_array($result)) {
-                return (string) $result;
-            }
-
-            $order = Order::with('items.product', 'items.variant')->find($result[1]);
-
-            // G9: GHNService/Http có thể ném exception (timeout, lỗi kết nối...)
-            // — không để văng ra ngoài completePayment() (đơn đã 'paid' phải luôn
-            // được trả lời cho khách/IPN), và không được để shipping_status kẹt ở
-            // 'processing' mãi mãi (khi đó completePayment() lần sau sẽ luôn trả
-            // về 'processing' ở nhánh phía trên, không bao giờ thử tạo lại vận
-            // đơn) — đưa về 'not_shipped' để nút "Tạo lại vận đơn GHN" (C5) dùng được.
-            try {
-                $response = $ghnOrders->create($order, isPaid: true);
-            } catch (\Throwable $e) {
-                Log::error('GHN order threw exception after MoMo payment', [
-                    'order_id' => $order->id,
-                    'exception_class' => get_class($e),
-                    'exception_message' => $e->getMessage(),
-                ]);
-                $order->update(['shipping_status' => 'not_shipped']);
-
-                return 'failed';
-            }
-
-            // Phí ship đã ước tính lúc checkout (orders.ghn_total_fee) dùng
-            // làm phương án dự phòng khi phản hồi GHN không kèm total_fee.
-            if ($ghnOrders->applyCreateResponse($order, $response, (int) ($order->ghn_total_fee ?? 0))) {
-                return 'created';
-            }
-
-            Log::error('GHN order failed after MoMo payment', [
-                'order_id' => $order->id,
-                'response' => $response,
-            ]);
-            $order->update(['shipping_status' => 'not_shipped']);
-
-            return 'failed';
         });
     }
 

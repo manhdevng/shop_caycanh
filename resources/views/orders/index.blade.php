@@ -28,7 +28,7 @@
     ];
 
     // Nhóm trạng thái vận chuyển: các đơn còn ở nhóm này mới cho phép đổi trạng thái nhanh + hủy đơn.
-    $pendingShippingStatuses = ['pending', 'not_shipped', 'processing', 'ready_to_pick', 'picking'];
+    $pendingShippingStatuses = ['awaiting_confirmation', 'pending', 'not_shipped', 'processing', 'ready_to_pick', 'picking'];
 @endphp
 
 @section('content')
@@ -186,6 +186,13 @@
                             <a href="{{ route('admin.orders.show', $order->id) }}" class="p-2 text-text-secondary hover:text-text-primary hover:bg-green-background rounded-full transition-colors inline-flex" title="Xem chi tiết">
                                 <i data-lucide="eye" class="w-5 h-5"></i>
                             </a>
+
+                            @if($order->canConfirmOrder())
+                                <form action="{{ route('admin.orders.confirm', $order->id) }}" method="POST" class="inline-block">
+                                    @csrf
+                                    <button type="submit" class="px-3 py-2 rounded-pill bg-green-primary text-white text-xs font-semibold hover:bg-green-accent transition-colors" title="Xác nhận đơn và tạo vận đơn GHN">Xác nhận đơn</button>
+                                </form>
+                            @endif
 
                             @if(in_array($order->shipping_status, $pendingShippingStatuses, true))
                                 <a href="{{ route('admin.orders.show', $order->id) }}" class="px-3 py-2 rounded-pill border border-green-border text-xs text-text-primary" title="Đổi trạng thái và ghi chú">Đổi trạng thái</a>

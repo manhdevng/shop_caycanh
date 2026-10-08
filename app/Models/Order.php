@@ -98,6 +98,7 @@ class Order extends Model
      * $shippingLabels trong AdminOrderController::index() để dùng chung.
      */
     const SHIPPING_LABELS = [
+        'awaiting_confirmation' => 'Chờ shop xác nhận',
         'pending' => 'Chờ tạo vận đơn', 'not_shipped' => 'Chưa giao hàng', 'processing' => 'Đang tạo vận đơn',
         'ready_to_pick' => 'Chờ lấy hàng', 'picking' => 'Đang lấy hàng', 'picked' => 'Đã lấy hàng',
         'storing' => 'Đang lưu kho', 'transporting' => 'Đang trung chuyển', 'sorting' => 'Đang phân loại',
@@ -116,7 +117,7 @@ class Order extends Model
      * bởi thứ tự này vì có thể xảy ra bất kỳ lúc nào.
      */
     const SHIPPING_STAGE_GROUPS = [
-        'pending' => 1, 'not_shipped' => 1, 'processing' => 1,
+        'awaiting_confirmation' => 1, 'pending' => 1, 'not_shipped' => 1, 'processing' => 1,
         'ready_to_pick' => 2, 'picking' => 2, 'picked' => 2,
         'storing' => 3, 'transporting' => 3, 'sorting' => 3, 'delivering' => 3, 'delivery_fail' => 3,
         'delivered' => 4,
@@ -154,7 +155,7 @@ class Order extends Model
      * shipping_status thuộc giai đoạn "chờ lấy hàng" dưới mắt khách hàng
      * (đã trả tiền/COD nhưng GHN chưa lấy hàng đi).
      */
-    const STAGE_TO_SHIP_SHIPPING_STATUSES = ['pending', 'not_shipped', 'processing', 'ready_to_pick', 'picking'];
+    const STAGE_TO_SHIP_SHIPPING_STATUSES = ['awaiting_confirmation', 'pending', 'not_shipped', 'processing', 'ready_to_pick', 'picking'];
 
     /**
      * shipping_status thuộc giai đoạn "đang giao" dưới mắt khách hàng
@@ -280,7 +281,7 @@ class Order extends Model
      * trở lên trong SHIPPING_STAGE_GROUPS, ngoại trừ 'processing' vì đó là lúc
      * hệ thống đang tạo vận đơn, không nên huỷ giữa chừng).
      */
-    public const CUSTOMER_CANCELLABLE_SHIPPING_STATUSES = ['pending', 'not_shipped', 'ready_to_pick'];
+    public const CUSTOMER_CANCELLABLE_SHIPPING_STATUSES = ['awaiting_confirmation', 'pending', 'not_shipped', 'ready_to_pick'];
 
     /**
      * shipping_status cho phép admin/khách TẠO LẠI vận đơn GHN (đã thanh toán
@@ -356,6 +357,17 @@ class Order extends Model
 
     // C5: được phép tạo lại vận đơn GHN — đã thanh toán/COD, chưa có mã vận
     // đơn, và chưa rời khỏi giai đoạn "chờ tạo vận đơn".
+    /**
+     * Đơn COD / MoMo đã thanh toán đang chờ shop xác nhận: admin bấm "Xác nhận
+     * đơn hàng" thì mới tạo vận đơn và giao cho GHN.
+     */
+    public function canConfirmOrder(): bool
+    {
+        return in_array($this->status, self::PAID_OR_COD_STATUSES, true)
+            && $this->shipping_status === 'awaiting_confirmation'
+            && blank($this->ghn_order_code);
+    }
+
     public function canRetryGhn(): bool
     {
         return in_array($this->status, self::PAID_OR_COD_STATUSES, true)
@@ -434,6 +446,10 @@ class Order extends Model
     public function getCustomerStageLabelAttribute(): string
     {
         $stage = $this->customerStage();
+
+        if ($stage === 'to_ship' && $this->shipping_status === 'awaiting_confirmation') {
+            return 'Chờ shop xác nhận';
+        }
 
         return self::CUSTOMER_STAGE_LABELS[$stage] ?? $stage;
     }

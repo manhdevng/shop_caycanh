@@ -68,6 +68,96 @@ class GHNService
         ]);
     }
 
+    /**
+     * Tên Tỉnh/Quận/Phường của 1 cặp mã GHN (đơn cũ chỉ lưu mã) — dùng để hiển
+     * thị lại địa chỉ các đơn đã đặt ở trang thanh toán. Danh mục GHN gần như
+     * không đổi nên cache 1 ngày. Danh sách toàn bộ quận/huyện khá nặng (GHN
+     * dev có lúc trả rất chậm) nên KHÔNG tải trong request của khách: chưa có
+     * cache thì hẹn tải sau khi trả response và tạm trả null (view hiển thị
+     * địa chỉ không kèm tên), lần sau mở trang sẽ có đủ tên.
+     *
+     * @return array{province_id:int,province_name:string,district_name:string,ward_name:string}|null
+     */
+    public function locationNames(int $districtId, string $wardCode): ?array
+    {
+        $districts = Cache::get('ghn:master:district-map');
+
+        if (! is_array($districts)) {
+            app()->terminating(fn () => $this->warmDistrictMap());
+
+            return null;
+        }
+
+        $district = $districts[$districtId] ?? null;
+
+        if (! $district) {
+            return null;
+        }
+
+        $provinces = $this->cachedMasterData('ghn:master:provinces', '/master-data/province', [], 5);
+        $wards = $this->cachedMasterData("ghn:master:wards:{$districtId}", '/master-data/ward', ['district_id' => $districtId], 5);
+        $province = collect($provinces)->firstWhere('ProvinceID', $district['province_id']);
+        $ward = collect($wards)->firstWhere('WardCode', $wardCode);
+
+        return [
+            'province_id' => (int) $district['province_id'],
+            'province_name' => (string) ($province['ProvinceName'] ?? ''),
+            'district_name' => (string) $district['name'],
+            'ward_name' => (string) ($ward['WardName'] ?? ''),
+        ];
+    }
+
+    // Tải toàn bộ quận/huyện 1 lần, chỉ giữ DistrictID => [tên, ProvinceID] cho gọn cache.
+    public function warmDistrictMap(): void
+    {
+        if (Cache::has('ghn:master:district-map')) {
+            return;
+        }
+
+        $map = collect($this->fetchMasterData('/master-data/district', [], 30) ?? [])
+            ->mapWithKeys(fn ($d) => [(int) ($d['DistrictID'] ?? 0) => [
+                'name' => (string) ($d['DistrictName'] ?? ''),
+                'province_id' => (int) ($d['ProvinceID'] ?? 0),
+            ]])
+            ->all();
+
+        if ($map !== []) {
+            Cache::put('ghn:master:district-map', $map, now()->addDay());
+        }
+    }
+
+    private function cachedMasterData(string $cacheKey, string $uri, array $query, int $timeout): array
+    {
+        if (is_array($cached = Cache::get($cacheKey))) {
+            return $cached;
+        }
+
+        $data = $this->fetchMasterData($uri, $query, $timeout);
+
+        if ($data === null) {
+            return [];
+        }
+
+        Cache::put($cacheKey, $data, now()->addDay());
+
+        return $data;
+    }
+
+    private function fetchMasterData(string $uri, array $query, int $timeout): ?array
+    {
+        try {
+            $response = $this->client()->timeout($timeout)->get($uri, $query);
+        } catch (ConnectionException $exception) {
+            Log::warning('Unable to connect to GHN', ['uri' => $uri, 'error' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        $data = $response->successful() ? $response->json('data') : null;
+
+        return is_array($data) && $data !== [] ? $data : null;
+    }
+
     // Tính phí giao hàng
     public function calculateFee(array $params): array
     {

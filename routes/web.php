@@ -217,7 +217,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/orders/{order}/pay-momo-again', [MomoController::class, 'payAgain'])->name('momo.pay');
     Route::post('/orders/{order}/momo/check-status', [MomoController::class, 'checkStatus'])->name('momo.checkStatus');
 
-    // Sổ địa chỉ nhận hàng (chọn/đổi mặc định/xoá ở trang thanh toán)
+    // Sổ địa chỉ nhận hàng (quản lý ở trang Hồ sơ; chọn/đổi mặc định/xoá ở trang thanh toán)
+    Route::post('/addresses', [UserAddressController::class, 'store'])->name('addresses.store');
+    Route::put('/addresses/{address}', [UserAddressController::class, 'update'])->name('addresses.update');
     Route::patch('/addresses/{address}/default', [UserAddressController::class, 'setDefault'])->name('addresses.default');
     Route::delete('/addresses/{address}', [UserAddressController::class, 'destroy'])->name('addresses.destroy');
 
@@ -268,6 +270,7 @@ Route::prefix('admin')->middleware(['auth', 'verified', 'admin'])->group(functio
     Route::get('/orders/{order}', [AdminOrderController::class, 'show'])->name('admin.orders.show');
     Route::patch('/orders/{order}/status', [AdminOrderController::class, 'updateStatus'])->name('admin.orders.updateStatus');
     Route::post('/orders/{order}/cancel', [AdminOrderController::class, 'cancel'])->name('admin.orders.cancel');
+    Route::post('/orders/{order}/confirm', [AdminOrderController::class, 'confirmOrder'])->name('admin.orders.confirm');
     Route::post('/orders/{order}/retry-ghn', [AdminOrderController::class, 'retryGhn'])->name('admin.orders.retryGhn');
 
     // Đồng bộ bù trạng thái vận chuyển từ GHN (dùng khi webhook bị lỡ — máy

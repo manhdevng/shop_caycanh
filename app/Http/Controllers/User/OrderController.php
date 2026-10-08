@@ -33,7 +33,7 @@ class OrderController extends Controller
     // 1. CÁC VIEW HIỂN THỊ ĐƠN HÀNG & THANH TOÁN
     // ==========================================
 
-    public function index(Request $request)
+    public function index(Request $request, GHNService $ghn)
     {
         $cart = session('cart', []);
 
@@ -111,11 +111,13 @@ class OrderController extends Controller
             ? $user->addresses()->get()->map(fn (UserAddress $a) => UserAddressController::toArray($a))->values()
             : collect();
 
-        return view('checkout.payment', compact('cart', 'totalPrice', 'voucher', 'discountAmount', 'availableVouchers', 'savableVouchers', 'addresses'));
+        $pastAddresses = $user ? $this->pastOrderAddresses($user->id, $addresses, $ghn) : collect();
+
+        return view('checkout.payment', compact('cart', 'totalPrice', 'voucher', 'discountAmount', 'availableVouchers', 'savableVouchers', 'addresses', 'pastAddresses'));
     }
 
     // Đặt hàng: tạo Order + OrderItem từ giỏ hàng trong session, sau đó tạo vận đơn bên GHN.
-    public function store(Request $request, GHNOrderService $ghnOrderService, GHNService $ghn)
+    public function store(Request $request, GHNService $ghn)
     {
         // G10: chặn double-submit — bấm "Đặt hàng" 2 lần liên tiếp (double
         // click, double-tap trên mobile...) có thể khiến 2 request cùng đọc
@@ -129,13 +131,13 @@ class OrderController extends Controller
         }
 
         try {
-            return $this->storeLocked($request, $ghnOrderService, $ghn);
+            return $this->storeLocked($request, $ghn);
         } finally {
             $lock->release();
         }
     }
 
-    private function storeLocked(Request $request, GHNOrderService $ghnOrderService, GHNService $ghn)
+    private function storeLocked(Request $request, GHNService $ghn)
     {
         // Giỏ hàng thật đầy đủ trong session, dùng để merge lại khi ghi đè
         // session('cart') bên dưới — không được làm mất các sản phẩm không
@@ -292,7 +294,12 @@ class OrderController extends Controller
                     'bank_transfer' => 'awaiting_transfer',
                     default => 'cod_ordered',
                 };
-                $shippingStatus = $request->payment_method === 'bank_transfer' ? 'pending' : 'not_shipped';
+                // COD: chờ shop xác nhận rồi mới giao GHN (AdminOrderController::confirmOrder()).
+                $shippingStatus = match ($request->payment_method) {
+                    'bank_transfer' => 'pending',
+                    'cod' => 'awaiting_confirmation',
+                    default => 'not_shipped',
+                };
 
                 $order = Order::create([
                     'user_id' => Auth::id(),
@@ -380,7 +387,7 @@ class OrderController extends Controller
         }
 
         if (! $savedAddress && $request->boolean('save_address')) {
-            $this->saveAddressFromOrder($request);
+            $this->saveAddressFromOrder($request, $ghn);
         }
 
         // Chỉ xoá đúng các sản phẩm vừa đặt (khoá của $cart — tập đã lọc và
@@ -425,7 +432,9 @@ class OrderController extends Controller
                 ->with('success', 'Đặt hàng thành công! Vui lòng chuyển khoản theo thông tin ngân hàng và chờ xác nhận. Mã đơn hàng #'.$order->id.'.');
         }
 
-        // ==== Thanh toán khi nhận hàng (COD): tạo vận đơn GHN ngay lập tức ====
+        // ==== Thanh toán khi nhận hàng (COD): đơn ở "awaiting_confirmation",
+        // CHƯA tạo vận đơn GHN — shop xác nhận đơn ở trang admin
+        // (AdminOrderController::confirmOrder()) rồi mới giao cho GHN. ====
         PaymentTransaction::create([
             'order_id' => $order->id,
             'gateway' => 'cod',
@@ -434,24 +443,12 @@ class OrderController extends Controller
             'message' => 'Thanh toán khi nhận hàng',
         ]);
 
-        // 'items.variant' thêm vào để GHNOrderService (Phase 3) lấy được
-        // khối lượng/tên riêng của phân loại đã mua khi tạo vận đơn. Xem D3-P8.
-        $order->load(['items.product', 'items.variant']);
-        $ghnResponse = $ghnOrderService->create($order, isPaid: false);
-
-        // Lưu kết quả tạo vận đơn qua helper dùng chung (GHNOrderService) để
-        // 3 luồng tạo vận đơn (COD ở đây, MoMo, admin xác nhận chuyển khoản)
-        // cùng ghi một bộ cột và cùng sinh history/thông báo 'ready_to_pick'.
-        OrderChangeContext::run(['source' => 'system'], function () use ($ghnOrderService, $order, $ghnResponse, $shippingFee) {
-            $ghnOrderService->applyCreateResponse($order, $ghnResponse, $shippingFee);
-        });
-
         // Gửi email xác nhận đơn hàng — xem chú thích ở nhánh MoMo phía trên.
         $this->sendOrderConfirmationEmail($order);
 
         return redirect()->route('orders.show', $order)
             ->with('order_just_placed', true)
-            ->with('success', 'Đặt hàng thành công! Mã đơn hàng #'.$order->id.'.');
+            ->with('success', 'Đặt hàng thành công! Mã đơn hàng #'.$order->id.'. Shop sẽ xác nhận đơn và giao cho đơn vị vận chuyển.');
     }
 
     /**
@@ -846,13 +843,57 @@ class OrderController extends Controller
     // getShippingFee() (AJAX xem trước phí) đảm bảo khối lượng dùng để ước
     // tính luôn khớp với dữ liệu hiện tại của sản phẩm/phân loại.
     /**
+     * Địa chỉ nhận hàng ở các đơn khách từng đặt mà CHƯA có trong sổ địa chỉ —
+     * hiện ở hộp "Địa chỉ của tôi" để lần sau chỉ cần tick chọn. Đơn cũ chỉ
+     * lưu mã GHN nên tra lại tên Tỉnh/Quận/Phường qua GHN (có cache).
+     */
+    private function pastOrderAddresses(int $userId, Collection $savedAddresses, GHNService $ghn): Collection
+    {
+        $key = fn ($name, $phone, $districtId, $wardCode, $address) => mb_strtolower(implode('|', [trim($name), trim($phone), (int) $districtId, trim($wardCode), trim($address)]));
+
+        $savedKeys = $savedAddresses->map(fn ($a) => $key($a['name'], $a['phone'], $a['district_id'], $a['ward_code'], $a['address']))->all();
+
+        return Order::where('user_id', $userId)
+            ->whereNotNull('to_district_id')
+            ->whereNotNull('to_ward_code')
+            ->latest('id')
+            ->limit(30)
+            ->get(['id', 'name', 'phone', 'address', 'to_district_id', 'to_ward_code'])
+            ->unique(fn (Order $o) => $key($o->name, $o->phone, $o->to_district_id, $o->to_ward_code, $o->address))
+            ->reject(fn (Order $o) => in_array($key($o->name, $o->phone, $o->to_district_id, $o->to_ward_code, $o->address), $savedKeys, true))
+            ->take(5)
+            ->map(function (Order $o) use ($ghn) {
+                $names = $ghn->locationNames((int) $o->to_district_id, (string) $o->to_ward_code) ?? [];
+
+                return [
+                    'order_id' => $o->id,
+                    'name' => $o->name,
+                    'phone' => $o->phone,
+                    'address' => $o->address,
+                    'district_id' => (int) $o->to_district_id,
+                    'ward_code' => (string) $o->to_ward_code,
+                    'province_id' => $names['province_id'] ?? null,
+                    'province_name' => $names['province_name'] ?? '',
+                    'district_name' => $names['district_name'] ?? '',
+                    'ward_name' => $names['ward_name'] ?? '',
+                    'full_address' => collect([$o->address, $names['ward_name'] ?? null, $names['district_name'] ?? null, $names['province_name'] ?? null])->filter()->implode(', '),
+                ];
+            })
+            ->values();
+    }
+
+    /**
      * Lưu địa chỉ vừa nhập ở trang thanh toán vào sổ địa chỉ của khách. Trùng
      * hệt 1 địa chỉ đã có thì dùng lại bản cũ. Địa chỉ đầu tiên, hoặc khi khách
      * tick "Đặt làm mặc định", trở thành địa chỉ mặc định.
      */
-    private function saveAddressFromOrder(Request $request): void
+    private function saveAddressFromOrder(Request $request, GHNService $ghn): void
     {
         $user = Auth::user();
+
+        // Thiếu tên Tỉnh/Quận/Phường (vd. chọn lại địa chỉ đơn cũ khi chưa tra
+        // được tên) thì thử tra lại từ cache danh mục GHN.
+        $names = $request->filled('ward_name') ? null : $ghn->locationNames((int) $request->to_district_id, (string) $request->to_ward_code);
 
         $address = UserAddress::firstOrCreate([
             'user_id' => $user->id,
@@ -862,10 +903,10 @@ class OrderController extends Controller
             'ward_code' => (string) $request->to_ward_code,
             'address' => $request->address,
         ], [
-            'province_id' => $request->input('province_id'),
-            'province_name' => $request->input('province_name'),
-            'district_name' => $request->input('district_name'),
-            'ward_name' => $request->input('ward_name'),
+            'province_id' => $request->input('province_id') ?: ($names['province_id'] ?? null),
+            'province_name' => $request->input('province_name') ?: ($names['province_name'] ?? null),
+            'district_name' => $request->input('district_name') ?: ($names['district_name'] ?? null),
+            'ward_name' => $request->input('ward_name') ?: ($names['ward_name'] ?? null),
         ]);
 
         $hasOtherDefault = UserAddress::where('user_id', $user->id)->whereKeyNot($address->id)->where('is_default', true)->exists();
