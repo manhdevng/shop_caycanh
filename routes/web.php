@@ -33,6 +33,7 @@ use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\User\ChatController as UserChatController;
 use App\Http\Controllers\User\MomoController;
+use App\Http\Controllers\User\UserAddressController;
 use App\Http\Controllers\User\OrderController;
 use App\Http\Controllers\VoucherController;
 use App\Http\Controllers\WishlistController;
@@ -215,6 +216,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/orders/{order}/start-momo', [MomoController::class, 'start'])->name('momo.start');
     Route::get('/orders/{order}/pay-momo-again', [MomoController::class, 'payAgain'])->name('momo.pay');
     Route::post('/orders/{order}/momo/check-status', [MomoController::class, 'checkStatus'])->name('momo.checkStatus');
+
+    // Sổ địa chỉ nhận hàng (chọn/đổi mặc định/xoá ở trang thanh toán)
+    Route::patch('/addresses/{address}/default', [UserAddressController::class, 'setDefault'])->name('addresses.default');
+    Route::delete('/addresses/{address}', [UserAddressController::class, 'destroy'])->name('addresses.destroy');
 
     // Tra cứu địa chỉ + tính phí ship GHN (dùng bởi trang checkout qua AJAX)
     Route::prefix('locations')->name('locations.')->group(function () {

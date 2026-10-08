@@ -54,6 +54,12 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(ProductView::class);
     }
 
+    /** Sổ địa chỉ nhận hàng, địa chỉ mặc định đứng đầu. */
+    public function addresses()
+    {
+        return $this->hasMany(UserAddress::class)->orderByDesc('is_default')->latest('id');
+    }
+
     public function tickets()
     {
         return $this->hasMany(Ticket::class);

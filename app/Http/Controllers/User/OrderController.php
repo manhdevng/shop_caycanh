@@ -9,6 +9,7 @@ use App\Models\OrderItem;
 use App\Models\PaymentTransaction;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\UserAddress;
 use App\Models\Voucher;
 use App\Models\OrderStatusHistory;
 use App\Services\GHNOrderService;
@@ -105,7 +106,12 @@ class OrderController extends Controller
             $savableVouchers = Voucher::available()->get();
         }
 
-        return view('checkout.payment', compact('cart', 'totalPrice', 'voucher', 'discountAmount', 'availableVouchers', 'savableVouchers'));
+        // Sổ địa chỉ (kiểu Shopee): địa chỉ mặc định được chọn sẵn ở trang thanh toán.
+        $addresses = $user
+            ? $user->addresses()->get()->map(fn (UserAddress $a) => UserAddressController::toArray($a))->values()
+            : collect();
+
+        return view('checkout.payment', compact('cart', 'totalPrice', 'voucher', 'discountAmount', 'availableVouchers', 'savableVouchers', 'addresses'));
     }
 
     // Đặt hàng: tạo Order + OrderItem từ giỏ hàng trong session, sau đó tạo vận đơn bên GHN.
@@ -172,6 +178,22 @@ class OrderController extends Controller
 
         $cart = $revalidation['cart'];
 
+        // Chọn địa chỉ có sẵn trong sổ: lấy dữ liệu từ DB (của chính khách
+        // này), không tin các ô name/phone/address client gửi kèm.
+        $savedAddress = $request->filled('address_id')
+            ? UserAddress::where('user_id', Auth::id())->find($request->input('address_id'))
+            : null;
+
+        if ($savedAddress) {
+            $request->merge([
+                'name' => $savedAddress->name,
+                'phone' => $savedAddress->phone,
+                'address' => $savedAddress->address,
+                'to_district_id' => $savedAddress->district_id,
+                'to_ward_code' => $savedAddress->ward_code,
+            ]);
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
@@ -181,6 +203,10 @@ class OrderController extends Controller
             'payment_method' => 'required|in:cod,momo,bank_transfer',
             'momo_card_type' => 'nullable|in:atm,cc,wallet',
             'transfer_ref' => 'nullable|string|max:100',
+            'province_id' => 'nullable|integer',
+            'province_name' => 'nullable|string|max:255',
+            'district_name' => 'nullable|string|max:255',
+            'ward_name' => 'nullable|string|max:255',
         ], [
             'name.required' => 'Vui lòng nhập họ tên người nhận.',
             'phone.required' => 'Vui lòng nhập số điện thoại.',
@@ -351,6 +377,10 @@ class OrderController extends Controller
             });
         } catch (\RuntimeException $e) {
             return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        if (! $savedAddress && $request->boolean('save_address')) {
+            $this->saveAddressFromOrder($request);
         }
 
         // Chỉ xoá đúng các sản phẩm vừa đặt (khoá của $cart — tập đã lọc và
@@ -815,6 +845,36 @@ class OrderController extends Controller
     // được revalidate trước đó nên vô hại khi revalidate lại; khi gọi từ
     // getShippingFee() (AJAX xem trước phí) đảm bảo khối lượng dùng để ước
     // tính luôn khớp với dữ liệu hiện tại của sản phẩm/phân loại.
+    /**
+     * Lưu địa chỉ vừa nhập ở trang thanh toán vào sổ địa chỉ của khách. Trùng
+     * hệt 1 địa chỉ đã có thì dùng lại bản cũ. Địa chỉ đầu tiên, hoặc khi khách
+     * tick "Đặt làm mặc định", trở thành địa chỉ mặc định.
+     */
+    private function saveAddressFromOrder(Request $request): void
+    {
+        $user = Auth::user();
+
+        $address = UserAddress::firstOrCreate([
+            'user_id' => $user->id,
+            'name' => $request->name,
+            'phone' => $request->phone,
+            'district_id' => (int) $request->to_district_id,
+            'ward_code' => (string) $request->to_ward_code,
+            'address' => $request->address,
+        ], [
+            'province_id' => $request->input('province_id'),
+            'province_name' => $request->input('province_name'),
+            'district_name' => $request->input('district_name'),
+            'ward_name' => $request->input('ward_name'),
+        ]);
+
+        $hasOtherDefault = UserAddress::where('user_id', $user->id)->whereKeyNot($address->id)->where('is_default', true)->exists();
+
+        if ($request->boolean('set_default') || ! $hasOtherDefault) {
+            $address->makeDefault();
+        }
+    }
+
     private function fetchGhnFee(array $cart, int $toDistrictId, string $toWardCode, GHNService $ghn): array
     {
         $cart = $this->revalidateCart($cart)['cart'];

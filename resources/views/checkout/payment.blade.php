@@ -51,46 +51,91 @@
         <input type="hidden" id="to_district_id_input" name="to_district_id" value="{{ old('to_district_id') }}">
         <input type="hidden" id="to_ward_code_input" name="to_ward_code" value="{{ old('to_ward_code') }}">
 
-        <div>
-            <label for="name" class="block text-sm font-semibold mb-1">Họ và tên người nhận</label>
-            <input type="text" name="name" id="name" value="{{ old('name') }}" class="w-full border border-[#8C9680] rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40" placeholder="Nguyễn Văn A" required>
-            @error('name') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+        <input type="hidden" id="address_id_input" name="address_id" value="{{ old('address_id') }}">
+        <input type="hidden" id="province_id_input" name="province_id" value="{{ old('province_id') }}">
+        <input type="hidden" id="province_name_input" name="province_name" value="{{ old('province_name') }}">
+        <input type="hidden" id="district_name_input" name="district_name" value="{{ old('district_name') }}">
+        <input type="hidden" id="ward_name_input" name="ward_name" value="{{ old('ward_name') }}">
+
+        <!-- Địa chỉ nhận hàng (kiểu Shopee): hiện sẵn địa chỉ mặc định, bấm "Thay đổi" để chọn địa chỉ khác -->
+        <div class="flex items-center justify-between gap-3">
+            <h3 class="flex items-center gap-2 font-semibold text-[#4A6B1F]">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
+                Địa chỉ nhận hàng
+            </h3>
+            <button type="button" id="back_to_saved_btn" class="hidden text-sm font-semibold text-[#4A6B1F] hover:underline">← Chọn địa chỉ đã lưu</button>
         </div>
 
-        <div>
-            <label for="phone" class="block text-sm font-semibold mb-1">Số điện thoại</label>
-            <input type="tel" name="phone" id="phone" value="{{ old('phone') }}" class="w-full border border-[#8C9680] rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40" placeholder="09xx xxx xxx" required>
-            @error('phone') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
-        </div>
-
-        <!-- Tỉnh/Thành - Quận/Huyện - Phường/Xã (nạp trực tiếp từ GHN) -->
-        <div class="grid sm:grid-cols-3 gap-3">
-            <div>
-                <label for="province_select" class="block text-sm font-semibold mb-1">Tỉnh/Thành</label>
-                <select id="province_select" class="w-full border border-[#8C9680] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40 text-sm">
-                    <option value="">-- Đang tải... --</option>
-                </select>
-            </div>
-            <div>
-                <label for="district_select" class="block text-sm font-semibold mb-1">Quận/Huyện</label>
-                <select id="district_select" disabled class="w-full border border-[#8C9680] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40 text-sm disabled:bg-[#F8F9F5] disabled:text-gray-400">
-                    <option value="">-- Chọn Tỉnh/Thành trước --</option>
-                </select>
-            </div>
-            <div>
-                <label for="ward_select" class="block text-sm font-semibold mb-1">Phường/Xã</label>
-                <select id="ward_select" disabled class="w-full border border-[#8C9680] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40 text-sm disabled:bg-[#F8F9F5] disabled:text-gray-400">
-                    <option value="">-- Chọn Quận/Huyện trước --</option>
-                </select>
+        <div id="saved_address_view" class="hidden -mt-2 border border-[#8C9680]/30 rounded-xl p-4 bg-[#F8F9F5]">
+            <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0 space-y-1">
+                    <p class="text-gray-800">
+                        <span id="sa_name" class="font-semibold"></span>
+                        <span class="text-gray-300 mx-1">|</span>
+                        <span id="sa_phone" class="text-gray-600"></span>
+                    </p>
+                    <p id="sa_full" class="text-sm text-gray-600 break-words"></p>
+                    <span id="sa_default" class="hidden inline-block text-xs text-[#6B8E23] border border-[#6B8E23] rounded px-1.5 py-0.5">Mặc định</span>
+                </div>
+                <button type="button" id="change_address_btn" class="shrink-0 text-sm font-semibold text-[#4A6B1F] hover:underline">Thay đổi</button>
             </div>
         </div>
-        @error('to_district_id') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
-        @error('to_ward_code') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
 
-        <div>
-            <label for="address" class="block text-sm font-semibold mb-1">Địa chỉ cụ thể</label>
-            <input type="text" name="address" id="address" value="{{ old('address') }}" class="w-full border border-[#8C9680] rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40" placeholder="Số nhà, tên đường..." required>
-            @error('address') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+        <div id="new_address_form" class="space-y-5">
+            <div>
+                <label for="name" class="block text-sm font-semibold mb-1">Họ và tên người nhận</label>
+                <input type="text" name="name" id="name" value="{{ old('name', $addresses->isEmpty() ? (auth()->user()->name ?? '') : '') }}" class="w-full border border-[#8C9680] rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40" placeholder="Nguyễn Văn A" required>
+                @error('name') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
+                <label for="phone" class="block text-sm font-semibold mb-1">Số điện thoại</label>
+                <input type="tel" name="phone" id="phone" value="{{ old('phone', $addresses->isEmpty() ? (auth()->user()->phone ?? '') : '') }}" class="w-full border border-[#8C9680] rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40" placeholder="09xx xxx xxx" required>
+                @error('phone') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+
+            <!-- Tỉnh/Thành - Quận/Huyện - Phường/Xã (nạp trực tiếp từ GHN) -->
+            <div class="grid sm:grid-cols-3 gap-3">
+                <div>
+                    <label for="province_select" class="block text-sm font-semibold mb-1">Tỉnh/Thành</label>
+                    <select id="province_select" class="w-full border border-[#8C9680] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40 text-sm">
+                        <option value="">-- Đang tải... --</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="district_select" class="block text-sm font-semibold mb-1">Quận/Huyện</label>
+                    <select id="district_select" disabled class="w-full border border-[#8C9680] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40 text-sm disabled:bg-[#F8F9F5] disabled:text-gray-400">
+                        <option value="">-- Chọn Tỉnh/Thành trước --</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="ward_select" class="block text-sm font-semibold mb-1">Phường/Xã</label>
+                    <select id="ward_select" disabled class="w-full border border-[#8C9680] rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40 text-sm disabled:bg-[#F8F9F5] disabled:text-gray-400">
+                        <option value="">-- Chọn Quận/Huyện trước --</option>
+                    </select>
+                </div>
+            </div>
+            @error('to_district_id') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
+            @error('to_ward_code') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
+
+            <div>
+                <label for="address" class="block text-sm font-semibold mb-1">Địa chỉ cụ thể</label>
+                <input type="text" name="address" id="address" value="{{ old('address') }}" class="w-full border border-[#8C9680] rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#6B8E23]/40" placeholder="Số nhà, tên đường..." required>
+                @error('address') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+
+            <div class="space-y-2 text-sm">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="save_address" value="1" {{ (session()->hasOldInput() ? old('save_address') : true) ? 'checked' : '' }} class="w-4 h-4 accent-[#6B8E23]">
+                    Lưu địa chỉ này vào sổ địa chỉ
+                </label>
+                @if($addresses->isNotEmpty())
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="set_default" value="1" {{ old('set_default') ? 'checked' : '' }} class="w-4 h-4 accent-[#6B8E23]">
+                        Đặt làm địa chỉ mặc định
+                    </label>
+                @endif
+            </div>
         </div>
 
         <div>
@@ -180,6 +225,23 @@
     </form>
 </div>
 
+<!-- Hộp chọn địa chỉ (sổ địa chỉ) -->
+<div id="address_modal" class="hidden fixed inset-0 z-50 bg-black/40 items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="address_modal_title">
+    <div class="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-xl">
+        <div class="px-5 py-4 border-b border-[#8C9680]/20">
+            <h3 id="address_modal_title" class="font-semibold text-gray-800">Địa chỉ của tôi</h3>
+        </div>
+        <div id="address_list" class="overflow-y-auto divide-y divide-[#8C9680]/20"></div>
+        <div class="px-5 py-4 border-t border-[#8C9680]/20 flex flex-wrap items-center justify-between gap-3">
+            <button type="button" id="add_address_btn" class="text-sm font-semibold text-[#4A6B1F] border border-[#6B8E23] rounded-full px-4 py-2 hover:bg-[#F8F9F5]">+ Thêm địa chỉ mới</button>
+            <div class="flex gap-2">
+                <button type="button" id="address_modal_cancel" class="text-sm px-4 py-2 rounded-full border border-[#8C9680]/40 hover:bg-[#F8F9F5]">Huỷ</button>
+                <button type="button" id="address_modal_confirm" class="text-sm font-semibold text-white bg-[#6B8E23] hover:bg-[#4A6B1F] px-5 py-2 rounded-full">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const provinceSelect = document.getElementById('province_select');
@@ -192,6 +254,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const toDistrictIdInput = document.getElementById('to_district_id_input');
     const toWardCodeInput = document.getElementById('to_ward_code_input');
     const placeOrderBtn = document.getElementById('place_order_btn');
+    const addressIdInput = document.getElementById('address_id_input');
+    const provinceIdInput = document.getElementById('province_id_input');
+    const provinceNameInput = document.getElementById('province_name_input');
+    const districtNameInput = document.getElementById('district_name_input');
+    const wardNameInput = document.getElementById('ward_name_input');
 
     const districtsUrl = "{{ route('locations.districts', ['provinceId' => '__PROVINCE__']) }}";
     const wardsUrl = "{{ route('locations.wards', ['districtId' => '__DISTRICT__']) }}";
@@ -231,6 +298,10 @@ document.addEventListener("DOMContentLoaded", function () {
         wardSelect.disabled = true;
         toDistrictIdInput.value = '';
         toWardCodeInput.value = '';
+        provinceIdInput.value = this.value;
+        provinceNameInput.value = this.value ? this.options[this.selectedIndex].text : '';
+        districtNameInput.value = '';
+        wardNameInput.value = '';
         resetFee();
 
         if (!this.value) return;
@@ -261,6 +332,8 @@ document.addEventListener("DOMContentLoaded", function () {
         wardSelect.disabled = true;
         toDistrictIdInput.value = this.value;
         toWardCodeInput.value = '';
+        districtNameInput.value = this.value ? this.options[this.selectedIndex].text : '';
+        wardNameInput.value = '';
         resetFee();
 
         if (!this.value) return;
@@ -288,6 +361,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // 4. Khi chọn Phường/Xã -> Tính cước vận chuyển GHN
     wardSelect.addEventListener('change', function () {
         toWardCodeInput.value = this.value;
+        wardNameInput.value = this.value ? this.options[this.selectedIndex].text : '';
 
         if (!this.value || !districtSelect.value) {
             resetFee();
@@ -408,10 +482,195 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    recalcIfPrefilled();
+    // ===== Sổ địa chỉ (kiểu Shopee) =====
+    let addresses = @json($addresses);
+    const oldAddressId = @json(old('address_id'));
+    const hasOldInput = @json(session()->hasOldInput());
+    const csrfToken = '{{ csrf_token() }}';
+    const addressDefaultUrl = "{{ route('addresses.default', ['address' => '__ID__']) }}";
+    const addressDestroyUrl = "{{ route('addresses.destroy', ['address' => '__ID__']) }}";
+
+    const savedView = document.getElementById('saved_address_view');
+    const newForm = document.getElementById('new_address_form');
+    const backToSavedBtn = document.getElementById('back_to_saved_btn');
+    const modal = document.getElementById('address_modal');
+    const addressList = document.getElementById('address_list');
+    const nameInput = document.getElementById('name');
+    const phoneInput = document.getElementById('phone');
+    const addressInput = document.getElementById('address');
+    let modalChoiceId = null;
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function findAddress(id) {
+        return addresses.find(a => String(a.id) === String(id));
+    }
+
+    function defaultAddress() {
+        return addresses.find(a => a.is_default) || addresses[0] || null;
+    }
+
+    // Dùng 1 địa chỉ đã lưu: điền sẵn các ô (để form hợp lệ — server vẫn lấy
+    // lại dữ liệu từ DB theo address_id) rồi tính phí ship ngay.
+    function useSavedAddress(address) {
+        addressIdInput.value = address.id;
+        nameInput.value = address.name;
+        phoneInput.value = address.phone;
+        addressInput.value = address.address;
+        toDistrictIdInput.value = address.district_id;
+        toWardCodeInput.value = address.ward_code;
+
+        document.getElementById('sa_name').textContent = address.name;
+        document.getElementById('sa_phone').textContent = address.phone;
+        document.getElementById('sa_full').textContent = address.full_address;
+        document.getElementById('sa_default').classList.toggle('hidden', !address.is_default);
+
+        savedView.classList.remove('hidden');
+        newForm.classList.add('hidden');
+        backToSavedBtn.classList.add('hidden');
+
+        requestFee(address.district_id, address.ward_code);
+    }
+
+    // Nhập địa chỉ mới: xoá dữ liệu của địa chỉ đã chọn trước đó.
+    function useNewAddressForm(clear) {
+        addressIdInput.value = '';
+        if (clear) {
+            [nameInput, phoneInput, addressInput, toDistrictIdInput, toWardCodeInput,
+                provinceIdInput, provinceNameInput, districtNameInput, wardNameInput].forEach(el => el.value = '');
+            provinceSelect.value = '';
+            districtSelect.innerHTML = '<option value="">-- Chọn Tỉnh/Thành trước --</option>';
+            districtSelect.disabled = true;
+            wardSelect.innerHTML = '<option value="">-- Chọn Quận/Huyện trước --</option>';
+            wardSelect.disabled = true;
+            resetFee();
+        }
+
+        savedView.classList.add('hidden');
+        newForm.classList.remove('hidden');
+        backToSavedBtn.classList.toggle('hidden', addresses.length === 0);
+    }
+
+    function renderAddressList() {
+        addressList.innerHTML = addresses.map(a => `
+            <div class="flex items-start gap-3 px-5 py-4">
+                <input type="radio" name="address_choice" value="${a.id}" id="address_choice_${a.id}" ${String(a.id) === String(modalChoiceId) ? 'checked' : ''} class="mt-1 w-4 h-4 accent-[#6B8E23]">
+                <label for="address_choice_${a.id}" class="flex-1 min-w-0 cursor-pointer space-y-1">
+                    <p class="text-gray-800"><span class="font-semibold">${escapeHtml(a.name)}</span><span class="text-gray-300 mx-1">|</span><span class="text-gray-600">${escapeHtml(a.phone)}</span></p>
+                    <p class="text-sm text-gray-600 break-words">${escapeHtml(a.full_address)}</p>
+                    ${a.is_default ? '<span class="inline-block text-xs text-[#6B8E23] border border-[#6B8E23] rounded px-1.5 py-0.5">Mặc định</span>' : ''}
+                </label>
+                <div class="shrink-0 flex flex-col items-end gap-1.5 text-xs">
+                    ${a.is_default ? '' : `<button type="button" data-default="${a.id}" class="text-gray-600 border border-[#8C9680]/40 rounded px-2 py-1 hover:bg-[#F8F9F5]">Thiết lập mặc định</button>`}
+                    <button type="button" data-delete="${a.id}" class="text-red-600 hover:underline">Xoá</button>
+                </div>
+            </div>
+        `).join('') || '<p class="px-5 py-6 text-sm text-gray-500">Bạn chưa lưu địa chỉ nào.</p>';
+    }
+
+    function openModal() {
+        modalChoiceId = addressIdInput.value || (defaultAddress() || {}).id;
+        renderAddressList();
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeModal() {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    async function sendAddressRequest(url, method) {
+        const res = await fetch(url, {
+            method: method,
+            headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken }
+        });
+        if (!res.ok) throw new Error('Lỗi máy chủ (' + res.status + ')');
+        const body = await res.json();
+        addresses = body.addresses || [];
+    }
+
+    addressList.addEventListener('change', e => {
+        if (e.target.name === 'address_choice') modalChoiceId = e.target.value;
+    });
+
+    addressList.addEventListener('click', async e => {
+        const defaultId = e.target.dataset.default;
+        const deleteId = e.target.dataset.delete;
+        if (!defaultId && !deleteId) return;
+
+        try {
+            if (defaultId) {
+                await sendAddressRequest(addressDefaultUrl.replace('__ID__', defaultId), 'PATCH');
+            } else {
+                if (!confirm('Xoá địa chỉ này khỏi sổ địa chỉ?')) return;
+                await sendAddressRequest(addressDestroyUrl.replace('__ID__', deleteId), 'DELETE');
+                if (String(modalChoiceId) === String(deleteId)) modalChoiceId = (defaultAddress() || {}).id;
+            }
+        } catch (err) {
+            alert(err.message || 'Không cập nhật được địa chỉ.');
+            return;
+        }
+
+        renderAddressList();
+
+        // Địa chỉ đang dùng bị xoá/đổi: cập nhật lại khung địa chỉ phía ngoài.
+        if (addressIdInput.value) {
+            const current = findAddress(addressIdInput.value);
+            if (current) {
+                useSavedAddress(current);
+            } else if (defaultAddress()) {
+                useSavedAddress(defaultAddress());
+            } else {
+                closeModal();
+                useNewAddressForm(true);
+            }
+        }
+    });
+
+    document.getElementById('change_address_btn').addEventListener('click', openModal);
+    document.getElementById('address_modal_cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    document.getElementById('address_modal_confirm').addEventListener('click', function () {
+        const chosen = findAddress(modalChoiceId);
+        if (chosen) useSavedAddress(chosen);
+        closeModal();
+    });
+
+    document.getElementById('add_address_btn').addEventListener('click', function () {
+        closeModal();
+        useNewAddressForm(true);
+        nameInput.focus();
+    });
+
+    backToSavedBtn.addEventListener('click', function () {
+        const chosen = defaultAddress();
+        if (chosen) useSavedAddress(chosen);
+    });
+
+    // Khởi tạo: có sổ địa chỉ thì chọn sẵn địa chỉ mặc định (hoặc địa chỉ đã
+    // chọn trước khi bị lỗi validate); khách đang nhập địa chỉ mới dở dang
+    // (old input không có address_id) thì giữ nguyên form nhập.
+    function initAddress() {
+        const initial = oldAddressId ? findAddress(oldAddressId) : (hasOldInput ? null : defaultAddress());
+        if (initial) {
+            useSavedAddress(initial);
+        } else {
+            useNewAddressForm(false);
+            recalcIfPrefilled();
+        }
+    }
+
+    initAddress();
     // Quay lại trang bằng nút Back (bfcache): kiểm tra lại cho chắc.
     window.addEventListener('pageshow', function (e) {
-        if (e.persisted) recalcIfPrefilled();
+        if (!e.persisted) return;
+        const current = addressIdInput.value && findAddress(addressIdInput.value);
+        current ? useSavedAddress(current) : recalcIfPrefilled();
     });
 
     // Hiện/ẩn khối chọn loại thẻ MoMo / thông tin chuyển khoản theo lựa chọn hình thức thanh toán
