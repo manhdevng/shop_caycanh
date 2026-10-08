@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -82,17 +83,80 @@ class GHNService
             return ['code' => 500, 'message' => 'Thiếu cấu hình GHN (GHN_SHOP_ID / GHN_FROM_DISTRICT_ID).'];
         }
 
-        return $this->post('/v2/shipping-order/fee', array_merge([
+        return $this->post('/v2/shipping-order/fee', $this->withServiceId(array_merge([
             'shop_id' => $this->shopId,
-        ], $params));
+        ], $params)));
     }
 
     // Tạo đơn giao hàng
     public function createOrder(array $orderData): array
     {
-        return $this->post('/v2/shipping-order/create', array_merge([
+        return $this->post('/v2/shipping-order/create', $this->withServiceId(array_merge([
             'shop_id' => $this->shopId,
-        ], $orderData));
+        ], $orderData)));
+    }
+
+    /**
+     * GHN không phải lúc nào cũng tự suy ra được dịch vụ từ service_type_id
+     * (tuỳ shop/tuyến) và khi đó báo "ServiceID failed on the 'required' tag".
+     * Vì vậy hỏi /available-services cho đúng tuyến rồi gửi kèm service_id cụ
+     * thể. Không tra được thì giữ nguyên payload (chỉ có service_type_id).
+     */
+    protected function withServiceId(array $payload): array
+    {
+        if (! empty($payload['service_id'])) {
+            return $payload;
+        }
+
+        $fromDistrictId = (int) ($payload['from_district_id'] ?? config('services.ghn.from_district_id'));
+        $toDistrictId = (int) ($payload['to_district_id'] ?? 0);
+
+        $serviceId = $this->resolveServiceId($fromDistrictId, $toDistrictId, (int) ($payload['service_type_id'] ?? 2));
+
+        if ($serviceId) {
+            $payload['service_id'] = $serviceId;
+        }
+
+        return $payload;
+    }
+
+    // Dịch vụ GHN khả dụng cho 1 tuyến, ưu tiên đúng service_type_id; cache 1 ngày.
+    protected function resolveServiceId(int $fromDistrictId, int $toDistrictId, int $serviceTypeId): ?int
+    {
+        if ($this->shopId <= 0 || $fromDistrictId <= 0 || $toDistrictId <= 0) {
+            return null;
+        }
+
+        $cacheKey = "ghn:service:{$this->shopId}:{$fromDistrictId}:{$toDistrictId}:{$serviceTypeId}";
+
+        if ($cached = Cache::get($cacheKey)) {
+            return (int) $cached;
+        }
+
+        $response = $this->post('/v2/shipping-order/available-services', [
+            'shop_id' => $this->shopId,
+            'from_district' => $fromDistrictId,
+            'to_district' => $toDistrictId,
+        ]);
+
+        $services = collect(is_array($response['data'] ?? null) ? $response['data'] : [])
+            ->filter(fn ($service) => is_array($service) && (int) ($service['service_id'] ?? 0) > 0);
+
+        $service = $services->firstWhere('service_type_id', $serviceTypeId) ?? $services->first();
+
+        if (! $service) {
+            Log::warning('GHN không trả dịch vụ khả dụng cho tuyến', [
+                'from_district_id' => $fromDistrictId,
+                'to_district_id' => $toDistrictId,
+                'response' => $response,
+            ]);
+
+            return null;
+        }
+
+        Cache::put($cacheKey, (int) $service['service_id'], now()->addDay());
+
+        return (int) $service['service_id'];
     }
 
     // Huỷ đơn hàng
