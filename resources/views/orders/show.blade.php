@@ -87,6 +87,12 @@
                         </a>
                     </div>
                 </div>
+                @if(str_starts_with((string) config('services.momo.endpoint'), 'https://test-payment.momo.vn/'))
+                    <p style="font-size:12.5px;color:#9D174D;margin:0 0 10px">
+                        Cổng MoMo đang ở môi trường thử nghiệm. Khi trả lại bằng thẻ ATM, hãy dùng thẻ test đuôi 0018 theo
+                        <a href="https://developers.momo.vn/v3/vi/docs/payment/onboarding/test-instructions/" target="_blank" rel="noopener noreferrer" style="text-decoration:underline">hướng dẫn của MoMo</a>.
+                    </p>
+                @endif
                 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
                     <form method="POST" action="{{ route('momo.checkStatus', $order) }}">
                         @csrf

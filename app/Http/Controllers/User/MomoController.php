@@ -133,9 +133,13 @@ class MomoController extends Controller
                 ? $momo->orderId($request->all())
                 : null;
 
+            $failureMessage = (int) $request->input('resultCode') === 1002 && $failedOrderId
+                ? $this->issuerDeclineMessage()
+                : 'Giao dịch MoMo thất bại hoặc đã bị huỷ.';
+
             return $failedOrderId
-                ? redirect()->route('orders.show', $failedOrderId)->with('error', 'Giao dịch MoMo thất bại hoặc đã bị huỷ. Bạn có thể thanh toán lại ngay tại đây, hoặc bấm "Huỷ đơn & trả về giỏ hàng".')
-                : redirect()->route('orders.history')->with('error', 'Giao dịch MoMo thất bại hoặc đã bị huỷ.');
+                ? redirect()->route('orders.show', $failedOrderId)->with('error', $failureMessage.' Bạn có thể thanh toán lại ngay tại đây, hoặc bấm "Huỷ đơn & trả về giỏ hàng".')
+                : redirect()->route('orders.history')->with('error', $failureMessage);
         }
 
         $result = $this->completePayment($request->all(), $ghnOrders, $momo);
@@ -225,7 +229,22 @@ class MomoController extends Controller
 
         $this->markFailed($result, $momo);
 
+        if ($resultCode === 1002) {
+            return back()->with('error', $this->issuerDeclineMessage());
+        }
+
         return back()->with('error', 'MoMo báo giao dịch thất bại hoặc đã bị huỷ ('.($result['message'] ?? 'không rõ lý do').'). Vui lòng thử thanh toán lại.');
+    }
+
+    private function issuerDeclineMessage(): string
+    {
+        $message = 'MoMo báo thẻ hoặc ngân hàng phát hành từ chối giao dịch (mã 1002). Vui lòng kiểm tra tình trạng thẻ hoặc chọn phương thức thanh toán khác.';
+
+        if (str_starts_with((string) config('services.momo.endpoint'), 'https://test-payment.momo.vn/')) {
+            $message .= ' Cổng hiện đang ở môi trường thử nghiệm. Hãy đối chiếu thẻ ATM test ca thành công (đuôi 0018); nếu đã dùng đúng mà vẫn bị từ chối, hãy gửi mã giao dịch cho MoMo để kiểm tra sandbox.';
+        }
+
+        return $message;
     }
 
     // MoMo gọi thẳng máy chủ (server-to-server) để báo kết quả thanh toán thật sự.

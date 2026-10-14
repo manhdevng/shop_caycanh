@@ -174,6 +174,12 @@
                     </label>
                 </div>
                 @error('momo_card_type') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                @if(str_starts_with((string) config('services.momo.endpoint'), 'https://test-payment.momo.vn/'))
+                    <p class="mt-3 text-sm text-pink-800">
+                        MoMo đang ở môi trường thử nghiệm. Với thẻ ATM nội địa, hãy dùng thẻ test cho ca thành công (đuôi 0018) theo
+                        <a href="https://developers.momo.vn/v3/vi/docs/payment/onboarding/test-instructions/" target="_blank" rel="noopener noreferrer" class="underline">hướng dẫn của MoMo</a>.
+                    </p>
+                @endif
             </div>
 
             @php
