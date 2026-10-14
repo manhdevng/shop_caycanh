@@ -3,18 +3,12 @@
 @section('title', 'Chi tiết đơn hàng #' . $order->id . ' · Cây Cảnh Shop')
 
 @php
-    $statusLabels = [
-        'pending' => 'Chờ thanh toán',
-        'paid' => 'Đã thanh toán',
-        'cod_ordered' => 'COD - Đã đặt',
-        'awaiting_transfer' => 'Chờ chuyển khoản',
-    ];
-    $shippingStatusLabels = [
-        'awaiting_confirmation' => 'Chờ shop xác nhận',
-        'not_shipped' => 'Chưa giao vận',
-        'ready_to_pick' => 'Chờ lấy hàng',
-        'delivering' => 'Đang giao',
-        'delivered' => 'Đã giao',
+    // Nhãn trạng thái đơn/vận chuyển lấy từ Order (status_label, shipping_label)
+    // để không thiếu trạng thái; ở đây chỉ còn nhãn cho bảng giao dịch.
+    $transactionStatusLabels = [
+        'pending' => 'Chờ thanh toán', 'initiated' => 'Đang chờ MoMo', 'paid' => 'Đã thanh toán',
+        'failed' => 'Thanh toán thất bại', 'cancelled' => 'Đã hủy',
+        'refund_pending' => 'Chờ hoàn tiền', 'refunded' => 'Đã hoàn tiền',
     ];
 @endphp
 
@@ -93,14 +87,14 @@
         <div class="mb-5">
             <div class="text-sm font-semibold text-text-secondary mono mb-2">Thanh toán</div>
             <span class="px-3 py-1 bg-green-background border border-green-border/50 text-text-primary rounded-pill text-xs mono font-semibold">
-                {{ $statusLabels[$order->status] ?? $order->status }}
+                {{ $order->status_label }}
             </span>
         </div>
 
         <div class="mb-5">
             <div class="text-sm font-semibold text-text-secondary mono mb-2">Vận chuyển</div>
             <span class="px-3 py-1 bg-green-background border border-green-border/50 text-text-primary rounded-pill text-xs mono font-semibold">
-                {{ $shippingStatusLabels[$order->shipping_status] ?? $order->shipping_status }}
+                {{ $order->shipping_label }}
             </span>
         </div>
 
@@ -111,6 +105,7 @@
             </span>
         </div>
 
+        @if($order->canAdminChangeShipping())
         <div class="pt-4 border-t border-green-border/20 mb-5">
             <p style="font-size:12px;line-height:1.5;color:#5C2323;margin:0 0 12px">Trạng thái vận chuyển do GHN cập nhật tự động — chỉ đổi tay khi có ngoại lệ.</p>
             <form method="POST" action="{{ route('admin.orders.updateStatus', $order) }}" style="display:grid;gap:10px">
@@ -128,6 +123,7 @@
                 <button type="submit" style="background:#5C2323;color:#FFFFFF;border:0;border-radius:999px;padding:10px 16px;font-size:12px;cursor:pointer">Cập nhật trạng thái</button>
             </form>
         </div>
+        @endif
 
         <div class="pt-4 border-t border-green-border/20">
             <div class="text-sm font-semibold text-text-secondary mono mb-1">Ngày tạo</div>
@@ -251,6 +247,12 @@
                 <span>Phí vận chuyển (GHN)</span>
                 <span class="text-text-primary font-medium">{{ number_format($order->ghn_total_fee, 0, ',', '.') }}đ</span>
             </div>
+            @if((float) $order->discount_amount > 0)
+            <div class="flex justify-between text-sm text-text-secondary">
+                <span>Giảm giá @if($order->voucher)({{ $order->voucher->code }})@endif</span>
+                <span class="text-red-700 font-medium">-{{ number_format($order->discount_amount, 0, ',', '.') }}đ</span>
+            </div>
+            @endif
             <div class="flex justify-between pt-2 border-t border-green-border/30 text-base">
                 <span class="font-semibold text-text-primary mono uppercase text-sm tracking-wider">Tổng cộng</span>
                 <span class="text-text-primary font-bold text-lg">{{ number_format($order->total_price, 0, ',', '.') }}đ</span>
@@ -297,11 +299,11 @@
             <tbody>
                 @foreach ($order->paymentTransactions as $transaction)
                 <tr class="border-b border-green-border/20">
-                    <td class="py-4 pr-4 text-text-primary font-medium mono uppercase text-sm">{{ $transaction->gateway }}</td>
+                    <td class="py-4 pr-4 text-text-primary font-medium text-sm">{{ \App\Models\Order::PAYMENT_LABELS[$transaction->gateway] ?? $transaction->gateway }}</td>
                     <td class="py-4 pr-4 text-text-primary">{{ number_format($transaction->amount, 0, ',', '.') }}đ</td>
                     <td class="py-4 pr-4">
                         <span class="px-3 py-1 bg-green-background border border-green-border/50 text-text-primary rounded-pill text-xs mono font-semibold">
-                            {{ $transaction->status }}
+                            {{ $transactionStatusLabels[$transaction->status] ?? $transaction->status }}
                         </span>
                     </td>
                     <td class="py-4 pr-4 text-text-secondary text-sm">{{ $transaction->message ?: '—' }}</td>

@@ -195,7 +195,8 @@ class Order extends Model
      * - Đơn đã hủy (status hoặc shipping_status = cancelled): không đổi gì nữa.
      * - Đơn đã "delivered": trạng thái cuối, không đổi gì nữa (hoàn hàng của
      *   GHN xảy ra trước khi giao thành công nên không cần mở ngoại lệ).
-     * - Chỉ đơn đã thanh toán / COD (PAID_OR_COD_STATUSES) mới được đặt "delivered".
+     * - Chỉ đơn đã thanh toán / COD (PAID_OR_COD_STATUSES) mới được đổi
+     *   trạng thái vận chuyển (đơn chưa trả tiền không được đi giao).
      * - Không lùi giai đoạn trong SHIPPING_STAGE_GROUPS; đang ở luồng hoàn
      *   hàng thì không quay lại các giai đoạn giao đi (chỉ đổi qua lại giữa
      *   các trạng thái hoàn hàng).
@@ -223,8 +224,10 @@ class Order extends Model
             return 'Đơn hàng đã giao thành công, không thể thay đổi trạng thái vận chuyển.';
         }
 
-        if ($newStatus === 'delivered' && ! in_array($this->status, self::PAID_OR_COD_STATUSES, true)) {
-            return 'Đơn hàng chưa được thanh toán, không thể đánh dấu giao hàng thành công.';
+        // Đơn chưa thanh toán (MoMo chờ trả tiền, chờ chuyển khoản) chưa được
+        // phép đi giao nên không có trạng thái vận chuyển nào để đổi tay.
+        if (! in_array($this->status, self::PAID_OR_COD_STATUSES, true)) {
+            return 'Đơn hàng chưa được thanh toán, không thể thay đổi trạng thái vận chuyển.';
         }
 
         $currentStage = self::SHIPPING_STAGE_GROUPS[$current] ?? null;
@@ -239,6 +242,17 @@ class Order extends Model
         }
 
         return null;
+    }
+
+    /**
+     * Admin còn đổi tay được trạng thái vận chuyển hay không — dùng để ẩn
+     * form/nút ở view; luật đầy đủ vẫn nằm ở shippingTransitionError().
+     */
+    public function canAdminChangeShipping(): bool
+    {
+        return $this->status !== 'cancelled'
+            && ! in_array($this->shipping_status, ['cancelled', 'delivered'], true)
+            && in_array($this->status, self::PAID_OR_COD_STATUSES, true);
     }
 
     /**

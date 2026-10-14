@@ -173,7 +173,8 @@ class AdminReportController extends Controller
             ->whereColumn('order_id', 'orders.id')->where('status', 'paid')->orderByDesc('id')->limit(1);
         $paid = $this->sales->qualifiedOrders($period->from, $period->untilExclusive)
             ->select('orders.total_price')->selectSub($gateway, 'gateway')
-            ->selectRaw("CASE WHEN orders.status = 'cod_paid' THEN 'cod' ELSE 'momo' END as legacy_gateway");
+            // Đơn cũ chưa có giao dịch: lấy theo hình thức khách đã chọn (orders.payment_method).
+            ->selectRaw("COALESCE(orders.payment_method, CASE WHEN orders.status = 'cod_paid' THEN 'cod' ELSE 'momo' END) as legacy_gateway");
         $methodRevenue = DB::query()->fromSub($paid, 'paid_orders')
             ->selectRaw('COALESCE(gateway, legacy_gateway) as method, SUM(total_price) as revenue')
             ->groupByRaw('COALESCE(gateway, legacy_gateway)')->pluck('revenue', 'method');

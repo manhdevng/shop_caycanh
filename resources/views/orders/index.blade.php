@@ -195,7 +195,9 @@
                             @endif
 
                             @if(in_array($order->shipping_status, $pendingShippingStatuses, true))
-                                <a href="{{ route('admin.orders.show', $order->id) }}" class="px-3 py-2 rounded-pill border border-green-border text-xs text-text-primary" title="Đổi trạng thái và ghi chú">Đổi trạng thái</a>
+                                @if($order->canAdminChangeShipping())
+                                    <a href="{{ route('admin.orders.show', $order->id) }}" class="px-3 py-2 rounded-pill border border-green-border text-xs text-text-primary" title="Đổi trạng thái và ghi chú">Đổi trạng thái</a>
+                                @endif
                                 <form id="adminCancelForm{{ $order->id }}" action="{{ route('admin.orders.cancel', $order->id) }}" method="POST" class="inline-block">
                                     @csrf
                                     <button type="button" class="js-admin-cancel p-2 text-text-secondary hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" data-form="adminCancelForm{{ $order->id }}" title="Hủy đơn">

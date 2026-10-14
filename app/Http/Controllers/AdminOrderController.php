@@ -21,11 +21,14 @@ class AdminOrderController extends Controller
 {
     private const TABS = [
         'all' => ['label' => 'Tất cả', 'color' => 'blue', 'statuses' => []],
+        // Đơn chưa trả tiền (MoMo chờ thanh toán, chờ chuyển khoản) tách riêng:
+        // chưa được đi giao nên không được lẫn vào các tab vận chuyển bên dưới.
+        'unpaid' => ['label' => 'Chờ thanh toán', 'color' => 'slate', 'statuses' => []],
         'confirm' => ['label' => 'Chờ xác nhận', 'color' => 'violet', 'statuses' => ['awaiting_confirmation']],
         'pending' => ['label' => 'Chờ xử lý', 'color' => 'slate', 'statuses' => ['pending', 'not_shipped', 'processing']],
         'ready' => ['label' => 'Chờ lấy hàng', 'color' => 'cyan', 'statuses' => ['ready_to_pick']],
         'picking' => ['label' => 'Đang lấy hàng', 'color' => 'cyan', 'statuses' => ['picking']],
-        'delivering' => ['label' => 'Đang giao', 'color' => 'amber', 'statuses' => ['delivering', 'picked', 'storing', 'transporting', 'sorting']],
+        'delivering' => ['label' => 'Đang giao', 'color' => 'amber', 'statuses' => ['delivering', 'picked', 'storing', 'transporting', 'sorting', 'delivery_fail']],
         'delivered' => ['label' => 'Thành công', 'color' => 'green', 'statuses' => ['delivered']],
         'return' => ['label' => 'Hoàn hàng', 'color' => 'orange', 'statuses' => ['return', 'returning', 'returned', 'return_transporting', 'return_sorting']],
         'cancelled' => ['label' => 'Đã hủy', 'color' => 'red', 'statuses' => ['cancelled']],
@@ -94,19 +97,29 @@ class AdminOrderController extends Controller
             $query->where('created_at', '<', Carbon::parse($filters['date_to'])->addDay()->startOfDay());
         }
 
-        $shippingCounts = (clone $query)->select('shipping_status')->selectRaw('COUNT(*) as total')
-            ->groupBy('shipping_status')->pluck('total', 'shipping_status');
+        $unpaidStatuses = Order::STAGE_AWAITING_PAYMENT_STATUSES;
+        $unpaidSql = "CASE WHEN status IN ('".implode("', '", $unpaidStatuses)."') THEN 1 ELSE 0 END";
 
-        $tabs = collect(self::TABS)->map(function ($tab, $key) use ($shippingCounts) {
-            $tab['count'] = $key === 'all' ? $shippingCounts->sum()
-                : collect($tab['statuses'])->sum(fn ($status) => $shippingCounts->get($status, 0));
+        $shippingCounts = (clone $query)->select('shipping_status')->selectRaw($unpaidSql.' as unpaid')
+            ->selectRaw('COUNT(*) as total')->groupByRaw('shipping_status, '.$unpaidSql)->get();
+        $paidCounts = $shippingCounts->where('unpaid', 0)->pluck('total', 'shipping_status');
+
+        $tabs = collect(self::TABS)->map(function ($tab, $key) use ($shippingCounts, $paidCounts) {
+            $tab['count'] = match ($key) {
+                'all' => $shippingCounts->sum('total'),
+                'unpaid' => $shippingCounts->where('unpaid', 1)->sum('total'),
+                default => collect($tab['statuses'])->sum(fn ($status) => $paidCounts->get($status, 0)),
+            };
 
             return $tab;
         });
 
         $activeTab = $filters['tab'] ?? 'all';
-        if ($activeTab !== 'all') {
-            $query->whereIn('shipping_status', self::TABS[$activeTab]['statuses']);
+        if ($activeTab === 'unpaid') {
+            $query->whereIn('status', $unpaidStatuses);
+        } elseif ($activeTab !== 'all') {
+            $query->whereNotIn('status', $unpaidStatuses)
+                ->whereIn('shipping_status', self::TABS[$activeTab]['statuses']);
         }
 
         if ($request->filled('shipping_status')) {
@@ -127,7 +140,7 @@ class AdminOrderController extends Controller
     // Chi tiết một đơn hàng: sản phẩm trong đơn + lịch sử các giao dịch thanh toán liên quan.
     public function show(Order $order)
     {
-        $order->load(['user', 'items.product', 'paymentTransactions', 'statusHistories.actor']);
+        $order->load(['user', 'voucher', 'items.product', 'paymentTransactions', 'statusHistories.actor']);
 
         return view('admin.orders.show', compact('order'));
     }

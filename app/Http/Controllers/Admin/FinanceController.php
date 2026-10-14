@@ -35,6 +35,18 @@ class FinanceController extends Controller
     // Ưu tiên giao dịch đã thu/hoàn tiền; lần thử thanh toán mới không che mất tiền đã thu.
     private const PAYMENT_PRIORITY = "CASE WHEN status IN ('paid', 'refund_pending', 'refunded') THEN 0 ELSE 1 END";
 
+    /**
+     * Đơn được tính doanh thu — cùng quy tắc với SalesMetricService (trang Báo
+     * cáo): giao dịch đã thu tiền, đơn không bị huỷ và không thuộc luồng hoàn
+     * hàng GHN. Nhờ vậy hai trang luôn ra cùng một con số doanh thu.
+     */
+    private static function revenueConditionSql(): string
+    {
+        $excluded = "'".implode("', '", array_merge(['cancelled'], Order::SHIPPING_RETURN_STATUSES))."'";
+
+        return "payment_status = 'paid' AND status != 'cancelled' AND (shipping_status IS NULL OR shipping_status NOT IN ($excluded))";
+    }
+
     private function ordersQuery()
     {
         $paymentId = DB::table('payment_transactions')->select('id')
@@ -128,19 +140,20 @@ class FinanceController extends Controller
         [$query, $filters] = $this->filteredOrders($request);
 
         // Thống kê toàn bộ kết quả lọc; mỗi đơn chỉ tính một lần.
-        // Doanh thu chỉ tính đơn đã thanh toán thành công (payment_status = 'paid');
-        // đơn hủy/thất bại/chưa thu tiền và đơn chờ hoàn/đã hoàn tiền không được tính.
+        // Doanh thu chỉ tính đơn đã thanh toán thành công (revenueConditionSql());
+        // đơn hủy/hoàn hàng/thất bại/chưa thu tiền và đơn chờ hoàn/đã hoàn tiền không được tính.
+        $revenue = self::revenueConditionSql();
         $summary = (clone $query)->selectRaw('COUNT(*) as order_count')
-            ->selectRaw("SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) as paid_count")
-            ->selectRaw("COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total_price ELSE 0 END), 0) as total_amount")
+            ->selectRaw("SUM(CASE WHEN $revenue THEN 1 ELSE 0 END) as paid_count")
+            ->selectRaw("COALESCE(SUM(CASE WHEN $revenue THEN total_price ELSE 0 END), 0) as total_amount")
             ->first();
         $statusTotals = (clone $query)->select('payment_status')
             ->selectRaw('COUNT(*) as order_count, SUM(total_price) as total_amount')
             ->groupBy('payment_status')->get()->keyBy('payment_status');
         $methodTotals = (clone $query)->select('gateway')
             ->selectRaw('COUNT(*) as order_count, SUM(total_price) as total_amount')
-            ->selectRaw("SUM(CASE WHEN payment_status = 'paid' THEN total_price ELSE 0 END) as paid_amount")
-            ->selectRaw("SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) as paid_count")
+            ->selectRaw("SUM(CASE WHEN $revenue THEN total_price ELSE 0 END) as paid_amount")
+            ->selectRaw("SUM(CASE WHEN $revenue THEN 1 ELSE 0 END) as paid_count")
             ->groupBy('gateway')->get()->keyBy('gateway');
 
         return view('admin.finance.index', [
@@ -196,6 +209,9 @@ class FinanceController extends Controller
             }
             if ($newStatus === $currentStatus) {
                 return;
+            }
+            if ($newStatus === 'paid' && $order->shipping_status !== 'delivered') {
+                throw ValidationException::withMessages(['payment_status' => 'Chỉ xác nhận đã thu tiền COD khi đơn đã giao hàng thành công.']);
             }
             if (in_array($newStatus, ['pending', 'paid'], true) && ($order->status === 'cancelled' || in_array($order->shipping_status, array_merge(['cancelled'], Order::SHIPPING_RETURN_STATUSES), true))) {
                 throw ValidationException::withMessages(['payment_status' => 'Không thể xác nhận thu tiền cho đơn đã hủy hoặc hoàn hàng.']);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Order;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -111,6 +112,13 @@ class AdminUserController extends Controller
         // Không cho admin tự xoá tài khoản của chính mình
         if ($user->is(auth()->user())) {
             return back()->with('error', 'Bạn không thể tự xóa tài khoản của chính mình.');
+        }
+
+        // orders.user_id là FK cascade: xoá khách sẽ xoá luôn đơn hàng, giao
+        // dịch và làm sai báo cáo doanh thu các kỳ trước -> chặn hẳn.
+        $orderCount = Order::where('user_id', $user->id)->count();
+        if ($orderCount > 0) {
+            return back()->with('error', "Không thể xóa người dùng đã có {$orderCount} đơn hàng (cần giữ lịch sử đơn và doanh thu).");
         }
 
         $error = DB::transaction(function () use ($user) {

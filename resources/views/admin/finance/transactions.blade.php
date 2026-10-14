@@ -114,6 +114,8 @@
                                 
                                 <select name="payment_status" class="text-sm border border-green-border rounded-lg px-2 py-1 outline-none focus:border-green-primary bg-white min-w-[140px]">
                                     @foreach($codTransitions[$order->payment_status] as $nextStatus)
+                                        {{-- COD chỉ thu tiền khi đã giao hàng thành công. --}}
+                                        @continue($nextStatus === 'paid' && $order->payment_status !== 'paid' && $order->shipping_status !== 'delivered')
                                         <option value="{{ $nextStatus }}" {{ $order->payment_status === $nextStatus ? 'selected' : '' }}>
                                             {{ $statuses[$nextStatus] ?? $nextStatus }}
                                         </option>
