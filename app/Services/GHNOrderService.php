@@ -48,7 +48,11 @@ class GHNOrderService
         }
 
         return $this->ghn->createOrder([
-            'payment_type_id' => 2,
+            // 1 = SHOP trả phí ship cho GHN. Phí ship đã được cộng vào
+            // total_price lúc đặt hàng (khách trả qua MoMo/chuyển khoản, hoặc
+            // nằm trong cod_amount với đơn COD) -> nếu để 2 (người nhận trả)
+            // thì GHN thu phí ship của khách thêm 1 lần nữa.
+            'payment_type_id' => 1,
             'note' => 'Đơn hàng #' . $order->id,
             'required_note' => 'KHONGCHOXEMHANG',
             'to_name' => $order->name,

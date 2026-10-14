@@ -146,10 +146,11 @@ class CartController extends Controller
         if ($withVoucher) {
             $this->applyBestVoucherForLine($product, $result['item'], $line, $user);
         } else {
-            // Nút "Mua ngay" thường: mã đang áp trong session có thể không hợp
-            // lệ với RIÊNG dòng hàng này (ví dụ mã chỉ áp cho danh mục khác)
-            // -> gỡ ra, để checkout không hiện giảm giá rồi lại bị từ chối.
-            $this->forgetVoucherIfInvalidFor($line, $user);
+            // Nút "Mua ngay" thường: luôn bắt đầu KHÔNG áp mã. Không giữ lại mã
+            // còn sót trong session (vd từ lần bấm "Mua với voucher" trước đó),
+            // vì "Mua ngay" và "Mua với voucher" phải cho 2 kết quả khác nhau.
+            // Khách muốn dùng mã thì tự chọn ở trang thanh toán.
+            session()->forget('voucher');
         }
 
         return redirect()->route('checkout', ['items' => [$key]]);
